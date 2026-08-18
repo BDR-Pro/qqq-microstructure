@@ -55,23 +55,81 @@ def record(day, **kw):
 
 
 def decide(open_px, entry_px):
-    """The whole strategy. Positive first hour -> long, negative -> short."""
+    """The sign rule. Positive first hour -> long, negative -> short."""
     ret_bps = (entry_px / open_px - 1) * 1e4
     return (1 if ret_bps > 0 else -1 if ret_bps < 0 else 0), ret_bps
+
+
+def load_model():
+    """The production LightGBM model (see momentum_ml.py --save-model)."""
+    import json, lightgbm as lgb
+    mp = os.path.join(ROOT, 'models', 'momentum_lgbm.txt')
+    man = json.load(open(os.path.join(ROOT, 'models', 'momentum_lgbm.json')))
+    return lgb.Booster(model_file=mp), man['features']
+
+
+def features_from_minutes(bars, day_et):
+    """Build the model's features from RTH 1-minute bars.
+
+    `bars`: DataFrame with columns [et, open, high, low, close] covering at least
+    yesterday's full session and today up to 10:30, ET-localized. Formulas mirror
+    hf_history.build_daily exactly -- same names, same definitions.
+    """
+    import numpy as np
+    b = bars.copy()
+    b['d'] = b.et.dt.strftime('%Y%m%d')
+    days = sorted(b.d.unique())
+    if len(days) < 2:
+        return None
+    prev, today = b[b.d == days[-2]], b[b.d == days[-1]]
+    prev_close = float(prev['close'].iloc[-1])
+    prev_oc = float(np.log(prev['close'].iloc[-1] / prev['open'].iloc[0]) * 1e4)
+    pmr = np.diff(np.log(prev['close'].values)) * 1e4
+    prev_rv = float(np.std(pmr)) if len(pmr) > 10 else np.nan
+    t = today.reset_index(drop=True)
+    o = float(t['open'].iloc[0])
+    f = {'gap_bps': float(np.log(o / prev_close) * 1e4),
+         'prev_oc_bps': prev_oc, 'prev_rv': prev_rv,
+         'dow': float(t.et.iloc[0].dayofweek)}
+    mfo = ((t.et.dt.hour - 9) * 60 + t.et.dt.minute - 30).astype(int)
+    for k in (1, 5, 10, 15, 30, 60):
+        idx = mfo[mfo <= k].index
+        px = float(t['open'].iloc[idx[-1]]) if len(idx) else o
+        f[f'ret{k}_bps'] = float(np.log(px / o) * 1e4)
+        w = t.loc[idx]
+        f[f'range{k}_bps'] = float(np.log(w['high'].max() / w['low'].min()) * 1e4) if len(w) else 0.0
+    return f
+
+
+def decide_ml(feats, model, feat_names):
+    """Model decision: sign of the predicted entry->close move, plus the value."""
+    import numpy as np, pandas as pd
+    X = pd.DataFrame([[feats[k] for k in feat_names]], columns=feat_names)
+    pred = float(model.predict(X)[0])
+    return (1 if pred > 0 else -1 if pred < 0 else 0), pred
 
 
 # ---------------------------------------------------------------- dry run
 
 def dry_run(args):
-    """Replay the most recent archive day through the live decision path."""
+    """Replay the most recent day through the live decision path."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import pandas as pd
-    daily = os.path.join(ROOT, 'data', 'daily.parquet')
+    daily = os.path.join(ROOT, 'data', 'daily_hf_QQQ.parquet')
     if not os.path.exists(daily):
-        raise SystemExit('run: python src/daily_bars.py 1')
+        daily = os.path.join(ROOT, 'data', 'daily.parquet')
+    if not os.path.exists(daily):
+        raise SystemExit('run: python src/hf_history.py --build')
     df = pd.read_parquet(daily).dropna(subset=['oc_bps'])
     row = df.iloc[-1]
-    side, ret_bps = decide(row['open'], row[f'p{ENTRY_MIN}'])
+    if args.rule:
+        side, ret_bps = decide(row['open'], row[f'p{ENTRY_MIN}'])
+    else:
+        model, fn = load_model()
+        feats = {k: float(row[k]) for k in fn}
+        side, pred = decide_ml(feats, model, fn)
+        ret_bps = (row[f'p{ENTRY_MIN}'] / row['open'] - 1) * 1e4
+        print(f'  model prediction      {pred:+.2f} bps for entry->close')
     qty = args.qty * side
     gross = (row['close'] / row[f'p{ENTRY_MIN}'] - 1) * 1e4 * side
     print(f'DRY RUN on {row["day"]} (no broker connection)\n')
@@ -136,7 +194,25 @@ def paper(args):
             print('no 09:30 reference recorded today; skipping (never guess the signal)')
         else:
             p = px()
-            side, ret_bps = decide(state['open_px'], p)
+            if args.rule:
+                side, ret_bps = decide(state['open_px'], p)
+            else:
+                bars = ib.reqHistoricalData(contract, endDateTime='', durationStr='2 D',
+                                            barSizeSetting='1 min', whatToShow='TRADES',
+                                            useRTH=True, formatDate=2)
+                import pandas as pd
+                bd = pd.DataFrame([dict(et=b.date, open=b.open, high=b.high,
+                                        low=b.low, close=b.close) for b in bars])
+                bd['et'] = pd.to_datetime(bd.et, utc=True).dt.tz_convert('America/New_York')
+                feats = features_from_minutes(bd, now)
+                if feats is None:
+                    print('not enough bar history; skipping today')
+                    ib.disconnect(); return
+                model, fn = load_model()
+                side, pred = decide_ml(feats, model, fn)
+                ret_bps = feats['ret60_bps']
+                record(day, model_pred_bps=pred,
+                       event={'what': 'model', 'pred_bps': pred, **feats})
             qty = args.qty * side
             if qty == 0:
                 print('signal flat; no trade')
@@ -180,6 +256,8 @@ def main():
     ap.add_argument('--port', type=int, default=7497)
     ap.add_argument('--client-id', type=int, default=17)
     ap.add_argument('--qty', type=int, default=DEFAULT_QTY)
+    ap.add_argument('--rule', action='store_true',
+                    help='use the plain sign rule instead of the ML model')
     a = ap.parse_args()
     (dry_run if a.dry_run else paper)(a)
 

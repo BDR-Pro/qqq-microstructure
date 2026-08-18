@@ -1,0 +1,20 @@
+{
+  "features": [
+    "gap_bps",
+    "ret1_bps",
+    "ret5_bps",
+    "ret10_bps",
+    "ret15_bps",
+    "ret30_bps",
+    "ret60_bps",
+    "range15_bps",
+    "range60_bps",
+    "prev_oc_bps",
+    "prev_rv",
+    "dow"
+  ],
+  "trained_on_days": 6647,
+  "first_day": "19990311",
+  "last_day": "20251031",
+  "note": "walk-forward OOS 2005-2025: ~3.1 bps/day t=2.4 Sharpe 0.53"
+}

@@ -61,12 +61,33 @@ def stats(r, label):
                 hit=(r > 0).mean() * 100)
 
 
+def save_production(df):
+    """Train on ALL history and persist for the live harness."""
+    import json
+    ds = lgb.Dataset(df[FEATS], df['y'], categorical_feature=['dow'], free_raw_data=True)
+    m = lgb.train(PARAMS, ds, num_boost_round=300)
+    os.makedirs(os.path.join(ROOT, 'models'), exist_ok=True)
+    mp = os.path.join(ROOT, 'models', 'momentum_lgbm.txt')
+    m.save_model(mp)
+    json.dump({'features': FEATS, 'trained_on_days': len(df),
+               'first_day': df.day.iloc[0], 'last_day': df.day.iloc[-1],
+               'note': 'walk-forward OOS 2005-2025: ~3.1 bps/day t=2.4 Sharpe 0.53'},
+              open(os.path.join(ROOT, 'models', 'momentum_lgbm.json'), 'w'), indent=2)
+    print(f'production model -> models/momentum_lgbm.txt '
+          f'({len(df)} days {df.day.iloc[0]}..{df.day.iloc[-1]})')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ticker', default='QQQ')
     ap.add_argument('--min-train-years', type=int, default=5)
+    ap.add_argument('--save-model', action='store_true',
+                    help='train on all history and write models/momentum_lgbm.txt')
     a = ap.parse_args()
     df = load(a.ticker)
+    if a.save_model:
+        save_production(df)
+        return
     print(f'{a.ticker}: {len(df)} days  {df.day.iloc[0]} .. {df.day.iloc[-1]}')
     print(f'walk-forward: first test year = {df.year.min() + a.min_train_years}\n')
 

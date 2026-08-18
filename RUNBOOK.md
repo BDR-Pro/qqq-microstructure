@@ -100,9 +100,16 @@ Signal validation, conditional distribution and the strike table (instant):
 python src/odte_strategy.py
 ```
 
-**Read the band, not the best cell.** The 60-minute entry scores 10.0 bps/day; the band
-mean across six entry times is 5.46. The honest estimate is ~5–6 bps/day at Sharpe ~0.9,
-which is *below* what 515 days can establish. See RESULTS §8b.
+**The 27-year numbers are the real ones** (RESULTS §11): the sign rule earns 2.1 bps/day
+out of sample; the walk-forward ML model 3.1–3.9 bps/day at Sharpe ~0.5–0.7 with the
+drawdown cut from −47% to −27%. The effect is regime-dependent — 2022–2025 ran 8–23
+bps/day, 2013–2017 ran ~0.
+
+Retrain and refresh the committed production model (instant, run monthly):
+
+```bash
+python src/momentum_ml.py --save-model
+```
 
 ### Paper trading
 
@@ -127,6 +134,11 @@ Then, with TWS running:
 ```bash
 python src/live_momentum.py --paper
 ```
+
+By default the entry decision comes from the **ML model** (`models/momentum_lgbm.txt`),
+which pulls two days of 1-minute bars from IBKR at 10:31, rebuilds the model's features
+exactly as the backtest defines them, and trades the sign of the prediction. Pass
+`--rule` to fall back to the plain first-hour sign rule.
 
 The script is **stateless and idempotent**. Each run reads the day's log and does only
 the step that is due, so schedule it three times a day, US Eastern:
