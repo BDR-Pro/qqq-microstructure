@@ -66,6 +66,17 @@ immediately *before* each trade:
 The relationship is **non-monotonic** — pushing imbalance past 0.8 breaks the edge.
 That is the honest argument for a learned model over a hand-written rule.
 
+**The edge is reachable.** That table assumes you were already resting in the book when
+the spread went wide, so it is worthless if wide states are microsecond flickers. They
+are not: the median ≥2-tick run lasts ~2 ms and 36.7% last longer than 10 ms. Requiring
+the state to have existed for 10 ms before the fill — a reaction window a well-built
+non-colocated system can meet — still leaves 7.8% of volume at +0.077 bps net.
+
+**But the magnitude is not yet established.** The same condition measured on two
+different day samples gave +0.048 bps (20 days) and +0.095 bps (12 days). Only the
+*sign* is currently supported; the size is sampling noise until the full 515 days are
+run. Treat every bps figure here as provisional.
+
 ### What it's worth
 
 The +0.048 bps is a **ceiling**: it assumes you are filled on every qualifying trade,
@@ -84,6 +95,7 @@ src/
   markout_day.py         markout + adverse selection, one day
   markout_multiday.py    size-weighted markout across sampled days
   selective_quoting.py   markout conditioned on spread state and imbalance
+  state_reachability.py  wide-spread durations; does the edge survive latency?
   build_bars.py          streaming ETL: zip -> 1-minute bars with features
   bar_alpha.py           longer-horizon IC, out-of-sample split, seasonality
 data/bars/               65 days of 1-minute bars (derived, 3.5 MB, committed)

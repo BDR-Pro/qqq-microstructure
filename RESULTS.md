@@ -236,3 +236,74 @@ Trading the opening half-hour costs ~0.72 bps against ~0.40 bps after 11:00 —
 Everything else needs `QQQ_DBN_ZIP` pointing at the Databento file. Sampling strides are
 hardcoded near the bottom of each script (`names[::8]`, `names[::22]`, `names[::26]`);
 set them to `1` for the full 515 days.
+
+---
+
+## 5. Latency reachability — `state_reachability.py`
+
+12 days (every 43rd), 1,338,246 wide-spread runs. This tests the biggest validity threat
+to section 3: the +0.048 bps assumes you were *already resting* in the book when the
+spread went wide. If wide states are microsecond flickers between quote updates, nobody
+outside a colocation cage could ever have been there and the edge is unreachable.
+
+### How long does a >=2-tick Nasdaq spread last?
+
+```
+  p25 :      0.181 ms
+  p50 :      1.925 ms
+  p75 :     44.078 ms
+  p90 :    238.981 ms
+  p95 :    524.116 ms
+  p99 :   1985.869 ms
+
+  runs lasting > 1 ms  :  54.6%
+  runs lasting > 10 ms :  36.7%
+  runs lasting > 100 ms:  17.5%
+  runs lasting > 1 s   :   2.4%
+```
+
+Not flickers. The median run is ~2 ms and over a third last longer than 10 ms.
+
+Note also that `spread >= 2t` covers **65.8% of book time** but only ~9% of traded
+volume — wide states are time-heavy and trade-light. Time-weighting the opportunity
+would badly overstate it; all edge figures here are volume-weighted.
+
+### Does the edge survive requiring the state to pre-date your quote?
+
+`L` is how long the wide state must already have existed before the fill — i.e. how much
+reaction time you had to be resting there.
+
+```
+       L  % of all vol  gross mo_1s  net+rebate   per 100sh
+0 (orig)         9.92%       0.0290      0.0945     +$0.4402
+  0.1 ms         9.33%       0.0260      0.0915     +$0.4264
+    1 ms         8.75%       0.0052      0.0706     +$0.3291
+    5 ms         8.16%       0.0037      0.0692     +$0.3223
+   10 ms         7.82%       0.0117      0.0771     +$0.3596
+   50 ms         6.94%       0.0304      0.0959     +$0.4468
+  100 ms         6.32%       0.0022      0.0676     +$0.3151
+     1 s         3.16%      -0.0501      0.0154     +$0.0716
+```
+
+**The edge survives.** At `L = 10 ms` — a reaction window a well-built non-colocated
+system can meet — 7.8% of volume still nets +0.077 bps. It only collapses at `L = 1 s`,
+which is the sensible direction: chronically wide spreads mark genuinely bad moments,
+not opportunities.
+
+### The caveat this exposes
+
+Compare the `L = 0` row here (+0.0945 bps net, 9.92% of volume) with the same condition
+in section 3 (+0.0481 bps, 8.5% of volume). Same test, different day samples — 12 days
+here vs 20 there — and the point estimate moved by a factor of two.
+
+That spread is not a contradiction, it is sampling noise, and it is the argument for
+running phase 2 before anything else. **Neither number should be trusted as the edge;
+only the sign is currently established.** Full 515-day replication with a per-year split
+is the next step.
+
+### Still open
+
+This does not address the NBBO question. A 2-tick spread on Nasdaq may be a genuinely
+wide market or merely a Nasdaq-local quote gap while another venue holds the inside.
+Those have very different economics and this dataset cannot tell them apart. Consolidated
+data is required, and it should gate any capital commitment.
