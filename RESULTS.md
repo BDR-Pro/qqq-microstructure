@@ -662,3 +662,84 @@ a single day, and drawdown scales with leverage while ruin does not scale back.
 Not more backtesting — 515 days cannot settle a Sharpe-0.9 effect, and every further
 variant tested on the same days makes it worse. Only forward testing adds information.
 That is the argument for paper trading this live rather than refining it further.
+
+---
+
+## 9. OPRA smoke test — one day, and it inverts §8's ranking
+
+`OPRA-20260818-A3GELRSYU5.zip` — one day (2026-07-15), `cbbo-1m`, `QQQ.OPT` parent.
+64 MB, 4.48 M rows, 11,530 instruments. Loader: `src/opra_load.py`.
+
+### Two things that make the data cheaper than planned
+
+**The `definition` schema is not needed.** A parent-symbology request embeds 11,530 OSI
+symbol mappings in the DBN metadata, and OSI encodes everything:
+`QQQ   260715C00718000` → 2026-07-15, call, $718 strike.
+
+**The underlying is not needed either.** Put-call parity recovers spot from the chain
+alone, `S = K + C − P`, read at the strike where call and put are closest in value:
+
+```
+  09:31  $723.77      first 60m  -76.4 bps  -> signal SHORT
+  10:30  $718.24      entry -> close  -7.9 bps
+  16:00  $717.67      signal-aligned  +7.9 bps
+```
+
+So an OPRA pull does **not** have to overlap the equity archive. It carries its own spot,
+and the momentum signal can be computed from options data alone. The date-range advice in
+§8 was over-constrained.
+
+### Quote quality — better than assumed
+
+```
+  ATM $718   call $2.20   put $1.96   straddle $4.15
+  straddle bid-ask $0.04            = 1.0% of premium
+  29 call strikes within +/-2%, median spread $0.03 = 2.8% of premium
+  0DTE chain: 184 strikes, 495-950, 406 minutes, 64.8% two-sided
+```
+
+### The number that matters
+
+**0DTE IV at 10:30 was 12.5% annualised**, not the 16% assumed throughout §8. The
+straddle cost 58 bps of spot against a historical mean |aligned move| of 58 bps — priced
+almost exactly at fair value versus the two-year realised distribution. **No variance
+risk premium on this day at all.**
+
+Re-ranking at the measured 12.5% inverts §8 completely:
+
+```
+                              EV $/contract
+  structure                   @16% (assumed)   @12.5% (measured)
+  Long call ATM                      -14.42            +23.65
+  Long call +0.5% OTM                -15.35            +16.29
+  Short straddle ATM                 +74.13             -4.01
+  Short strangle +/-0.5              +51.31            -13.75
+  Iron condor 0.5/1.0                +29.91             +0.69
+```
+
+Every short-vol structure that looked good at 16% is dead at 12.5%, and buying calls in
+the momentum direction becomes the best trade. This is exactly why the break-even IV
+table was the invariant output and the EV table was not.
+
+### But the long-call result is a bet on the signal, not on cheap options
+
+The aligned distribution carries a +10.34 bps drift, and §8b established that ~5.5 bps is
+the honest figure. Shrinking the drift:
+
+```
+  structure                 drift 10.3   drift 5.5   drift 0
+  Long call ATM                  23.65       11.35     -1.35
+  Long call +0.5% OTM            16.29       10.37     +4.28
+  Bull call spread 0/+0.5         4.36       -2.02     -8.63
+```
+
+At the honest drift the long-call edge roughly halves; at zero drift it is negative. The
+options are close to fairly priced, so **all of the edge comes from the momentum signal**
+— the option is leverage on it, not a source of edge in itself.
+
+### What one day cannot do
+
+12.5% is a single draw. IV varies enormously day to day and 2026-07-15 was quiet — the
+realised aligned move was 8 bps against a 58 bps breakeven, so short vol won handsomely
+that day *despite* IV being low. One observation establishes neither the level nor the
+premium. That is the argument for pulling the full range.
