@@ -1,0 +1,427 @@
+<title>Quoting QQQ</title>
+<style>
+:root{
+  --ground:#F6F7F9; --surface:#FFFFFF; --surface-2:#EDF1F4; --panel:#FBFCFD;
+  --ink:#141A22; --ink-2:#33404E; --muted:#5B6675; --faint:#8A95A2;
+  --rule:#D7DEE5; --rule-soft:#E7ECF1;
+  --accent:#1A6773; --accent-soft:#E0EFF1;
+  --loss:#A93226; --loss-soft:#F7E6E3;
+  --gain:#1A6E45; --gain-soft:#E2F0E8;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Consolas","Liberation Mono",monospace;
+  --serif:"Charter","Bitstream Charter","Iowan Old Style","Palatino Linotype",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F141A; --surface:#161C24; --surface-2:#1C232C; --panel:#131920;
+    --ink:#E7ECF1; --ink-2:#C3CDD7; --muted:#95A1AE; --faint:#6E7B89;
+    --rule:#2A333E; --rule-soft:#212932;
+    --accent:#57B4C0; --accent-soft:#16333A;
+    --loss:#E38377; --loss-soft:#3A211E;
+    --gain:#63C08D; --gain-soft:#173026;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F141A; --surface:#161C24; --surface-2:#1C232C; --panel:#131920;
+  --ink:#E7ECF1; --ink-2:#C3CDD7; --muted:#95A1AE; --faint:#6E7B89;
+  --rule:#2A333E; --rule-soft:#212932;
+  --accent:#57B4C0; --accent-soft:#16333A;
+  --loss:#E38377; --loss-soft:#3A211E;
+  --gain:#63C08D; --gain-soft:#173026;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.65;
+  margin:0; padding:0 24px 96px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto}
+.measure{max-width:65ch}
+a{color:var(--accent); text-decoration-thickness:1px; text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:2px}
+
+.mast{padding:64px 0 34px; border-bottom:2px solid var(--ink)}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 22px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+}
+.eyebrow .dot{width:4px;height:4px;border-radius:50%;background:var(--accent);flex:none}
+h1{
+  font-family:var(--mono); font-weight:600; font-size:clamp(34px,6vw,58px);
+  line-height:1.02; letter-spacing:-.025em; margin:0 0 20px; text-wrap:balance;
+}
+.standfirst{font-size:20px; line-height:1.55; color:var(--ink-2); margin:0; max-width:60ch}
+.standfirst b{color:var(--ink); font-weight:600}
+
+.strip{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:1px; background:var(--rule); border-bottom:1px solid var(--rule); margin-bottom:52px;
+}
+.strip div{background:var(--ground); padding:18px 16px 20px}
+.strip .k{
+  font-family:var(--mono); font-size:10px; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--faint); margin-bottom:7px;
+}
+.strip .v{font-family:var(--mono); font-size:21px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.strip .s{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:3px}
+
+section{padding:52px 0 0}
+h2{
+  font-family:var(--mono); font-weight:600; font-size:26px; letter-spacing:-.02em;
+  margin:0 0 6px; text-wrap:balance;
+}
+.dek{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:0 0 26px; letter-spacing:.01em}
+h3{font-family:var(--mono); font-weight:600; font-size:15px; letter-spacing:-.01em; margin:34px 0 10px}
+p{margin:0 0 17px}
+.rule{height:1px; background:var(--rule); border:0; margin:0}
+
+.verdict{
+  border-left:3px solid var(--accent); background:var(--panel);
+  padding:20px 24px; margin:26px 0; border-radius:0 3px 3px 0;
+}
+.verdict.bad{border-left-color:var(--loss)}
+.verdict.good{border-left-color:var(--gain)}
+.verdict .lab{
+  font-family:var(--mono); font-size:10px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:9px;
+}
+.verdict p{margin:0; font-size:17px}
+.verdict p + p{margin-top:12px}
+
+.tw{overflow-x:auto; margin:24px 0; border:1px solid var(--rule); background:var(--surface); border-radius:3px}
+table{border-collapse:collapse; width:100%; font-family:var(--mono); font-size:13px; font-variant-numeric:tabular-nums}
+caption{
+  caption-side:top; text-align:left; font-family:var(--mono); font-size:10.5px;
+  letter-spacing:.13em; text-transform:uppercase; color:var(--muted);
+  padding:14px 18px 12px; border-bottom:1px solid var(--rule-soft);
+}
+th,td{padding:9px 18px; text-align:right; border-bottom:1px solid var(--rule-soft); white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{
+  font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); font-weight:600; border-bottom:1px solid var(--rule);
+}
+tbody tr:last-child td{border-bottom:0}
+tr.hi td{background:var(--gain-soft)}
+tr.lo td{background:var(--loss-soft)}
+.neg{color:var(--loss)} .pos{color:var(--gain)}
+td.tag{font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
+
+figure{margin:30px 0; border:1px solid var(--rule); background:var(--surface); border-radius:3px; overflow:hidden}
+figure .cap{
+  padding:14px 18px 12px; border-bottom:1px solid var(--rule-soft);
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted);
+}
+figure .body{padding:18px 8px 6px; overflow-x:auto}
+figcaption{padding:2px 18px 18px; font-family:var(--mono); font-size:12px; color:var(--muted); line-height:1.55}
+svg{display:block; min-width:640px; width:100%; height:auto}
+.svg-lab{font-family:var(--mono); font-size:11px; fill:var(--muted)}
+.svg-val{font-family:var(--mono); font-size:11px; font-weight:600}
+
+.phase{
+  display:grid; grid-template-columns:56px 1fr; gap:0 22px;
+  padding:26px 0; border-top:1px solid var(--rule);
+}
+.phase:last-of-type{border-bottom:1px solid var(--rule)}
+.pnum{
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+  letter-spacing:.06em; padding-top:4px;
+}
+.phead{display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; margin-bottom:6px}
+.phase h3{margin:0; font-size:17px}
+.dur{font-family:var(--mono); font-size:11px; color:var(--faint); letter-spacing:.06em}
+.phase p{margin:0 0 12px; max-width:62ch}
+.deliv{
+  font-family:var(--mono); font-size:12px; color:var(--muted);
+  border-left:2px solid var(--rule); padding-left:14px; line-height:1.6;
+}
+.deliv b{color:var(--ink-2); font-weight:600}
+
+ul{margin:0 0 17px; padding-left:22px} li{margin-bottom:9px}
+ul.mono{font-family:var(--mono); font-size:13.5px; line-height:1.6; list-style:none; padding-left:0}
+ul.mono li{padding-left:20px; position:relative}
+ul.mono li::before{content:"\2014"; position:absolute; left:0; color:var(--accent)}
+code{font-family:var(--mono); font-size:.87em; background:var(--surface-2); padding:1.5px 5px; border-radius:2px}
+.kill{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:6px 24px 20px; margin:24px 0}
+.foot{margin-top:64px; padding-top:22px; border-top:1px solid var(--rule); font-family:var(--mono); font-size:11.5px; color:var(--faint); line-height:1.7}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:640px){
+  body{padding:0 18px 72px; font-size:16px}
+  .phase{grid-template-columns:1fr; gap:8px} .pnum{padding-top:0}
+}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow"><span class="dot"></span>Research memo<span>&middot;</span>18 August 2026<span>&middot;</span>XNAS.ITCH &middot; QQQ &middot; MBP-1</p>
+  <h1>Quoting QQQ</h1>
+  <p class="standfirst">515 days of Nasdaq tick data contain a real, repeatable edge &mdash; but <b>not the one the data looks like it offers.</b> Directional signal is strong and worthless. The money is in deciding <b>when not to quote.</b></p>
+</header>
+
+<div class="strip">
+  <div><div class="k">Archive</div><div class="v">37.9 GB</div><div class="s">zstd, 519 files</div></div>
+  <div><div class="k">Coverage</div><div class="v">515 days</div><div class="s">2023-09-20 &rarr; 2025-10-08</div></div>
+  <div><div class="k">Events</div><div class="v">~2.0 B</div><div class="s">&asymp;3.9 M / day</div></div>
+  <div><div class="k">Symbol</div><div class="v">QQQ</div><div class="s">single venue</div></div>
+  <div><div class="k">Nasdaq flow</div><div class="v">$2.10 B</div><div class="s">notional / day</div></div>
+  <div><div class="k">Avg spread</div><div class="v">0.462</div><div class="s">bps of mid</div></div>
+</div>
+
+<section class="measure">
+  <h2>What you actually have</h2>
+  <p class="dek">Read the manifest before trusting any backtest built on it</p>
+  <p>The archive is a single-symbol, single-venue, top-of-book feed: every change to the best bid and offer on <b>Nasdaq's own book</b>, timestamped to the nanosecond, with sizes, order counts and the trade tape. That is genuinely high-grade data. It is also narrower than it first appears, in three ways that each kill a category of strategy:</p>
+  <ul>
+    <li><b>One venue, not the market.</b> Nasdaq clears ~$2.1 B of QQQ a day against roughly $15&ndash;20 B consolidated. You are seeing 10&ndash;15% of the book and you have no NBBO. Any spread measured here is wider than the spread a real order faces.</li>
+    <li><b>One symbol.</b> No cross-section, so every classical statistical-arbitrage design &mdash; ranking, pairs, factor-neutral baskets &mdash; is off the table. You have a single time series.</li>
+    <li><b>No queue position.</b> MBP-1 gives aggregate size at the touch, not individual orders. For a passive strategy your position in the queue <em>is</em> the strategy, and this schema cannot see it.</li>
+  </ul>
+  <p>Everything below was measured on the real files &mdash; 65 days for bar-level tests, 20&ndash;24 days for event-level markouts, sampled evenly across the full two years so the results span two distinct volatility regimes.</p>
+</section>
+
+<hr class="rule" style="margin-top:52px">
+
+<section>
+  <div class="measure">
+    <h2>The finding</h2>
+    <p class="dek">Spread capture, and how fast it evaporates</p>
+    <p>The core question for any strategy that posts liquidity: you get filled at the touch, capturing half the spread &mdash; do you keep it? Measuring every passive fill against the mid at increasing horizons answers this directly.</p>
+    <p>You capture <b>+0.159 bps</b> at the moment of fill. It is gone in <b>under one millisecond.</b></p>
+  </div>
+
+  <figure>
+    <div class="cap">Passive markout &mdash; size-weighted mean P&amp;L per fill, 24 days sampled across 2023-09 &rarr; 2025-10</div>
+    <div class="body">
+      <svg viewBox="0 0 720 300" role="img" aria-label="Markout decay curve: passive fill P and L starts at plus 0.159 basis points, crosses zero within one millisecond, and settles near minus 0.074 basis points at one second, below the add-rebate line at plus 0.0645 basis points.">
+        <line x1="60" y1="162" x2="690" y2="162" stroke="var(--rule)" stroke-width="1"></line>
+        <text x="694" y="166" class="svg-lab">0</text>
+        <line x1="60" y1="114.7" x2="690" y2="114.7" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 4" opacity=".85"></line>
+        <text x="64" y="108" class="svg-lab" fill="var(--accent)">add rebate +0.0645 bps</text>
+        <path d="M60,45.6 L160,177.5 L260,201.9 L360,211.4 L460,216 L560,218.8 L660,230.9 L660,162 L60,162 Z" fill="var(--loss)" opacity=".10"></path>
+        <path d="M60,45.6 L92,45.6 L92,162 L60,162 Z" fill="var(--gain)" opacity=".16"></path>
+        <polyline points="60,45.6 160,177.5 260,201.9 360,211.4 460,216 560,218.8 660,230.9" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"></polyline>
+        <circle cx="60" cy="45.6" r="4.5" fill="var(--gain)"></circle>
+        <circle cx="160" cy="177.5" r="3.5" fill="var(--loss)"></circle>
+        <circle cx="260" cy="201.9" r="3.5" fill="var(--loss)"></circle>
+        <circle cx="360" cy="211.4" r="3.5" fill="var(--loss)"></circle>
+        <circle cx="460" cy="216" r="3.5" fill="var(--loss)"></circle>
+        <circle cx="560" cy="218.8" r="3.5" fill="var(--loss)"></circle>
+        <circle cx="660" cy="230.9" r="3.5" fill="var(--loss)"></circle>
+        <text x="60" y="34" class="svg-val" fill="var(--gain)" text-anchor="middle">+0.159</text>
+        <text x="160" y="196" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.021</text>
+        <text x="260" y="220" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.054</text>
+        <text x="360" y="229" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.067</text>
+        <text x="460" y="234" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.074</text>
+        <text x="560" y="237" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.077</text>
+        <text x="660" y="249" class="svg-val" fill="var(--loss)" text-anchor="middle">&minus;0.094</text>
+        <g text-anchor="middle">
+          <text x="60" y="284" class="svg-lab">fill</text>
+          <text x="160" y="284" class="svg-lab">1 ms</text>
+          <text x="260" y="284" class="svg-lab">10 ms</text>
+          <text x="360" y="284" class="svg-lab">100 ms</text>
+          <text x="460" y="284" class="svg-lab">1 s</text>
+          <text x="560" y="284" class="svg-lab">10 s</text>
+          <text x="660" y="284" class="svg-lab">60 s</text>
+        </g>
+        <line x1="60" y1="266" x2="690" y2="266" stroke="var(--rule)" stroke-width="1"></line>
+      </svg>
+    </div>
+    <figcaption>Negative on 24/24 days at 10 ms, 100 ms and 1 s. The trade that fills you is the same event that moves the book against you.</figcaption>
+  </figure>
+
+  <div class="measure">
+    <div class="verdict bad">
+      <div class="lab">Consequence</div>
+      <p>An <b>indiscriminate</b> passive quoter in QQQ loses <b>&minus;0.074 bps</b> per share at a one-second horizon. Nasdaq's top-tier add rebate ($0.00305/share &asymp; <b>+0.065 bps</b> at $473) does not close the gap: net <b>&minus;0.015 bps.</b></p>
+      <p>Read that as a structural fact, not a bad day. Market making the most competitive ETF in the world is a <b>rebate business with negative gross edge</b> &mdash; and at the naive level, the rebate is not enough.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="measure">
+    <h2>Why the obvious strategy fails</h2>
+    <p class="dek">Strong signal, smaller than the toll</p>
+    <p>Queue imbalance predicts the next mid move about as well as anything in the microstructure literature &mdash; a Pearson IC of <b>0.236</b> at 100 ms is a very strong number by the standards of this field. It is also unmonetizable here, and the arithmetic is short.</p>
+  </div>
+  <div class="tw measure">
+    <table>
+      <caption>Taking strategy &middot; 2025-10-08 &middot; spread = 1 tick &middot; 2.76 M observations</caption>
+      <tbody>
+        <tr><td>Predictive power (IC @ 100 ms)</td><td class="pos">0.236</td><td class="tag">strong</td></tr>
+        <tr><td>Edge per side, top vs bottom decile</td><td>0.069 bps</td><td class="tag">what you win</td></tr>
+        <tr class="lo"><td>Half-spread you must pay to act</td><td class="neg">0.082 bps</td><td class="tag">what it costs</td></tr>
+        <tr><td><b>Net</b></td><td class="neg"><b>&minus;0.013 bps</b></td><td class="tag">per round trip</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="measure">
+    <p>The signal is real and the toll is bigger. This is what an efficient market looks like from the inside: prediction is <em>almost</em> good enough to pay for the spread, and never quite is. Any strategy whose first move is to cross the spread starts a third of a tick behind and does not catch up.</p>
+
+    <h3>And the slower horizons are simply noise</h3>
+    <p>Aggregating to one-minute bars across 65 days (25,350 bars) and testing every microstructure feature against 5-, 15-, 30- and 60-minute forward returns produces nothing that survives contact with a holdout.</p>
+  </div>
+  <div class="tw measure">
+    <table>
+      <caption>Information coefficient &middot; 30-minute forward return &middot; train (39 d) vs holdout (26 d)</caption>
+      <thead><tr><th>Feature</th><th>In-sample</th><th>Out-of-sample</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>Queue imbalance</td><td class="neg">&minus;0.040</td><td class="pos">+0.004</td><td class="tag">sign flip</td></tr>
+        <tr><td>Order-flow imbalance</td><td class="neg">&minus;0.045</td><td class="pos">+0.003</td><td class="tag">sign flip</td></tr>
+        <tr><td>Signed trade volume</td><td class="pos">+0.014</td><td class="pos">+0.005</td><td class="tag">noise</td></tr>
+        <tr><td>Lagged return</td><td class="neg">&minus;0.017</td><td class="pos">+0.002</td><td class="tag">sign flip</td></tr>
+        <tr><td>Realized volatility</td><td class="pos">+0.053</td><td class="pos">+0.030</td><td class="tag">not directional</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="measure">
+    <p>Every directional feature reverses sign out of sample. Best-decile long/short spreads come in at &minus;2.0 to +0.3 bps gross against a 0.46 bps round-trip cost &mdash; mostly negative before you pay to trade. <b>There is no minutes-to-hours alpha in this dataset.</b> Any model that appears to find one has fitted the 39 training days.</p>
+  </div>
+</section>
+
+<section>
+  <div class="measure">
+    <h2>Where the edge actually is</h2>
+    <p class="dek">The same fills, sorted by whether you should have wanted them</p>
+    <p>The markout number above averages over every fill. But a quoter chooses when to be in the book &mdash; and the average hides a clean, economically sensible split. Sorting 1.12 M passive fills by the state of the book <em>immediately before</em> each trade, one variable dominates: <b>how wide the spread was when you quoted.</b></p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <caption>Selective quoting &middot; 1.12 M fills &middot; 20 days &middot; markout @1 s, net of +0.065 bps add rebate</caption>
+      <thead>
+        <tr><th>Quote only when&hellip;</th><th>Share of volume</th><th>Gross markout</th><th>Net + rebate</th><th>Per 100 shares</th></tr>
+      </thead>
+      <tbody>
+        <tr class="lo"><td>Always (no selection)</td><td>100.0%</td><td class="neg">&minus;0.080</td><td class="neg">&minus;0.015</td><td class="neg">&minus;$0.071</td></tr>
+        <tr class="lo"><td>Spread = 1 tick</td><td>69.2%</td><td class="neg">&minus;0.099</td><td class="neg">&minus;0.034</td><td class="neg">&minus;$0.161</td></tr>
+        <tr><td>Spread = 1 tick, imbalance &gt; 0.4</td><td>13.2%</td><td class="neg">&minus;0.085</td><td class="neg">&minus;0.020</td><td class="neg">&minus;$0.096</td></tr>
+        <tr class="hi"><td>Spread &ge; 2 ticks</td><td>30.8%</td><td class="neg">&minus;0.037</td><td class="pos">+0.028</td><td class="pos">+$0.129</td></tr>
+        <tr class="hi"><td><b>Spread &ge; 2 ticks, imbalance &gt; 0.4</b></td><td>8.5%</td><td class="neg">&minus;0.017</td><td class="pos"><b>+0.048</b></td><td class="pos"><b>+$0.226</b></td></tr>
+        <tr><td>Spread &ge; 2 ticks, imbalance &gt; 0.8</td><td>2.6%</td><td class="neg">&minus;0.081</td><td class="neg">&minus;0.016</td><td class="neg">&minus;$0.075</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="measure">
+    <div class="verdict good">
+      <div class="lab">The sign flip</div>
+      <p>Quote everything and you lose. Quote only into a <b>&ge; 2-tick spread with the queue leaning your way</b> and the same mechanical strategy turns <b>+0.048 bps &mdash; $0.226 per 100 shares.</b></p>
+    </div>
+    <p>The economics are intuitive once stated. At a one-tick spread you sit at the back of a deep queue behind faster participants; the only fills that reach you are the ones nobody faster wanted &mdash; you are being selected against, and that is exactly what the &minus;0.099 bps says. At two ticks and wider you can quote inside, capture a genuinely larger spread, and compete against far fewer counterparties.</p>
+    <p>Note the last row: pushing imbalance past 0.8 breaks the edge. The relationship is <b>non-monotonic</b>, not a threshold &mdash; extreme imbalance means the book is about to flip, not that it is safe. That non-monotonicity is precisely the kind of structure a model learns and a hand-written rule does not, and it is the honest argument for using one.</p>
+  </div>
+</section>
+
+<section>
+  <div class="measure">
+    <h2>What this is worth</h2>
+    <p class="dek">The number to decide on, before writing any model code</p>
+    <p>The +0.048 bps above is a <b>ceiling, not a forecast.</b> It assumes you are filled on every qualifying trade, with zero latency, at a top-tier rebate that requires institutional volume to earn. Strip those and the picture is sobering.</p>
+  </div>
+  <div class="tw measure">
+    <table>
+      <caption>Capacity arithmetic &middot; qualifying flow at 8.5% of Nasdaq QQQ volume</caption>
+      <tbody>
+        <tr><td>Nasdaq QQQ volume</td><td>4.0 M sh/day</td><td class="tag">measured</td></tr>
+        <tr><td>Qualifying (spread &ge; 2t, favourable)</td><td>340 k sh/day</td><td class="tag">addressable</td></tr>
+        <tr><td>Edge per share</td><td class="pos">$0.00226</td><td class="tag">ceiling</td></tr>
+        <tr><td>If you win 10% of it</td><td>$77/day</td><td class="tag">&asymp; $19 k/yr</td></tr>
+        <tr class="hi"><td>If you win 50% of it</td><td>$385/day</td><td class="tag">&asymp; $97 k/yr</td></tr>
+        <tr class="lo"><td>Colocation, feeds, membership, clearing</td><td class="neg">&minus;$100&ndash;250 k/yr</td><td class="tag">fixed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="measure">
+    <div class="verdict bad">
+      <div class="lab">Say it plainly</div>
+      <p>As a standalone business for one person, <b>this does not clear its own infrastructure cost.</b> Winning 50% of qualifying flow means beating Citadel and Virtu to the front of the queue, on their hardware budget. That is not a realistic entry point, and no model fixes it.</p>
+    </div>
+    <p>Which is why the plan below does not propose building a market-making firm. It proposes building the thing that is genuinely valuable, transferable and within reach &mdash; <b>an execution and adverse-selection engine</b> &mdash; and treating a live quoting strategy as an option you exercise only if the numbers earn it.</p>
+    <p>Two things here are worth real money without a single microsecond of colocation. First, the intraday cost curve is large and utterly stable: the Nasdaq spread runs <b>0.72 bps in the opening half-hour and 0.39&ndash;0.42 bps from 11:00 onward</b>. Trading the open costs nearly double. Any order you send benefits from that immediately. Second, the adverse-selection model &mdash; given the book right now, will a passive fill here hurt me? &mdash; improves the execution of <em>any</em> strategy you already run, and it is the one component here that generalizes beyond QQQ.</p>
+  </div>
+</section>
+
+<section>
+  <div class="measure">
+    <h2>The build</h2>
+    <p class="dek">Five phases, ordered so the cheapest disproof comes first</p>
+    <p>The sequence is deliberate: each phase is capable of killing the project, and the ones most likely to kill it are earliest. Nothing here requires trading capital until phase 5.</p>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">01</div>
+    <div>
+      <div class="phead"><h3>Data spine</h3><span class="dur">1&ndash;2 weeks</span></div>
+      <p>You have 45 GB of free disk and a 37.9 GB archive, so bulk extraction is impossible &mdash; the pipeline must stream. Read one day from the zip, decode, compute features, write a compact store, delete the raw file. This constraint is permanent; build for it now rather than discovering it at phase 3.</p>
+      <div class="deliv"><b>Deliver</b> &middot; Parallel day-level ETL (5 workers &asymp; 3 s/day) &rarr; Parquet feature store, ~390 bars/day plus an event-level fill table. Full 515-day run in under an hour.<br><b>Watch</b> &middot; <code>df['flags']</code> not <code>df.flags</code> (it collides with pandas' own <code>DataFrame.flags</code>); RTH is 390 minutes and shifts UTC offset across DST; filter to <code>F_LAST</code> rows for coherent book states.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">02</div>
+    <div>
+      <div class="phead"><h3>Replicate at full scale</h3><span class="dur">1 week</span></div>
+      <p>Re-run every number in this memo across all 515 days, split by year and by volatility regime. The markout sign flip is the entire thesis; if it is an artifact of the 20 sampled days, the project ends here and you have spent three weeks instead of three months.</p>
+      <div class="deliv"><b>Deliver</b> &middot; Regime-split markout tables; a per-day time series of the conditional edge; a stability chart of the +0.048 bps figure over two years.<br><b>Kill if</b> &middot; The wide-spread edge is not positive in <b>both</b> years independently.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">03</div>
+    <div>
+      <div class="phead"><h3>The model &mdash; and its target</h3><span class="dur">2&ndash;4 weeks</span></div>
+      <p>This is the phase where most attempts fail, and the failure is always the same: they train a model to predict the direction of the mid. Section two shows why that is a dead end &mdash; direction is predictable at IC 0.24 and still loses money, so a better directional model just loses more efficiently.</p>
+      <p><b>Predict the P&amp;L of an action, not the path of a price.</b> The label is the realized markout in bps of a passive fill posted in the current book state. It is economically denominated, directly decision-relevant, and you have roughly 25 million labelled fills to learn it from.</p>
+      <div class="deliv"><b>Features</b> &middot; spread state, microprice offset, queue imbalance and its non-monotone transforms, order-flow imbalance over 100 ms / 1 s / 10 s, trade intensity, time since last trade, top-of-book order counts, realized volatility, time of day.<br><b>Models</b> &middot; Gradient boosting as the baseline that must be beaten; a small temporal CNN over the raw event stream as the challenger.<br><b>Validation</b> &middot; Purged walk-forward by day with a one-day embargo. Score in <b>bps of P&amp;L</b>, never accuracy or AUC.<br><b>Kill if</b> &middot; The model cannot beat the two-line rule from the previous section out of sample. If a rule you can write on a napkin wins, ship the napkin.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">04</div>
+    <div>
+      <div class="phead"><h3>Honest fill simulation</h3><span class="dur">2&ndash;3 weeks</span></div>
+      <p>Every number in this memo assumes you were filled on each qualifying trade. You would not have been. MBP-1 cannot see your queue position, so the simulator must model it: enter at the back of the displayed size, advance on cancels ahead of you, and require traded volume at your level to exceed your inferred position before you fill.</p>
+      <p>Expect this phase to cut the edge substantially &mdash; that is the point of running it. Use the real fee schedule for the tier you would actually qualify for, not the top tier.</p>
+      <div class="deliv"><b>Deliver</b> &middot; Queue-position simulator with latency injection (0.5 ms, 5 ms, 50 ms); P&amp;L as a function of latency and rebate tier; a fill-rate sensitivity curve.<br><b>Kill if</b> &middot; The edge does not survive a realistic fill rate at a realistic rebate tier &mdash; the most likely outcome, and worth knowing in three months rather than three years.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">05</div>
+    <div>
+      <div class="phead"><h3>Decide</h3><span class="dur">1 week</span></div>
+      <p>Three honest outcomes, and only one of them is trade it.</p>
+      <div class="deliv"><b>A &middot; Ship the execution layer.</b> The likeliest and still genuinely valuable result: deploy the adverse-selection model as passive/aggressive order routing for whatever you already trade. Real bps, no colocation, no new risk.<br><b>B &middot; Buy the missing data.</b> If the edge survives phase 4, the binding constraint is data, not modelling &mdash; see below. Re-run before committing capital.<br><b>C &middot; Stop.</b> Write up the negative result. A measured, documented &ldquo;this market is efficient at my latency&rdquo; is a real research output, and it protects you from re-running this in a year.</div>
+    </div>
+  </div>
+</section>
+
+<section class="measure">
+  <h2>What you would have to buy</h2>
+  <p class="dek">The three gaps, in order of how much they matter</p>
+  <p>If phase 4 clears, do not scale on this dataset &mdash; its limits become binding well before capital does.</p>
+  <ul class="mono">
+    <li><b>MBO (full order book).</b> The critical one. Individual order add/cancel/execute messages give true queue position, which is the difference between a simulated fill and a real one. Without it, phase 4 is an estimate.</li>
+    <li><b>Consolidated / NBBO tape.</b> Turns a Nasdaq-local view into a market view, and lets you tell a genuinely wide market from a Nasdaq-only quote gap &mdash; which is what some of the &ldquo;spread &ge; 2 ticks&rdquo; opportunity may turn out to be.</li>
+    <li><b>More symbols.</b> The wide-spread edge should be <em>larger</em> in less-contested names. QQQ is the hardest venue you could have picked; the same model on mid-cap ETFs is where this thesis is genuinely worth testing.</li>
+  </ul>
+  <div class="kill">
+    <h3>Standing kill criteria</h3>
+    <p style="margin-bottom:0">Write these down before you start, so the decision is made while you are still objective:</p>
+    <ul class="mono" style="margin-top:12px;margin-bottom:0">
+      <li>The wide-spread edge fails to hold in both years independently &rarr; stop.</li>
+      <li>The learned model cannot beat the two-line rule out of sample &rarr; ship the rule, drop the model.</li>
+      <li>Realistic queue simulation at a realistic rebate tier turns the edge negative &rarr; stop, and keep the execution layer.</li>
+      <li>Any result that needs the top rebate tier to be positive &rarr; treat as negative. You will not have that tier.</li>
+    </ul>
+  </div>
+</section>
+
+<p class="foot">
+  Measured on the delivered archive: 65 days for bar-level tests (25,350 one-minute bars), 20&ndash;24 days for event-level markouts (1.12 M passive fills), sampled evenly across 2023-09-20 &rarr; 2025-10-08. All figures size-weighted, computed on <code>ts_recv</code> using <code>F_LAST</code> book states, regular trading hours only.<br>
+  Rebate assumption $0.00305/share at a $473 mean price. Research memo &mdash; not investment advice; no strategy here has been traded.
+</p>
+
+</div>

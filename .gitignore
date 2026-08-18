@@ -1,0 +1,15 @@
+# Data — the archive is 37.9 GB, never commit it
+*.zip
+*.dbn
+*.dbn.zst
+data/_work_*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local
+*.log
+.DS_Store
