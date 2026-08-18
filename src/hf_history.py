@@ -67,10 +67,13 @@ def fetch_month(m):
                                           'volume', 'ticker'],
                             filters=[('ticker', 'in', TICKERS)])
         out = {}
-        for tk, g in t.groupby('ticker'):
-            os.makedirs(os.path.join(OUT, str(tk)), exist_ok=True)
-            g.drop(columns=['ticker']).to_parquet(dests[str(tk)], index=False)
-            out[str(tk)] = len(g)
+        for tk in TICKERS:
+            g = t[t.ticker == tk]
+            os.makedirs(os.path.join(OUT, tk), exist_ok=True)
+            # write even when empty: the file marks "this month was checked and the
+            # ticker was absent", so resume converges instead of re-fetching forever
+            g.drop(columns=['ticker']).to_parquet(dests[tk], index=False)
+            out[tk] = len(g)
         return out
     finally:
         if os.path.exists(tmp):
@@ -84,7 +87,8 @@ def build_daily(tk='QQQ'):
     fs = sorted(f for d in dirs for f in glob.glob(os.path.join(OUT, d, '*.parquet')))
     if not fs:
         raise SystemExit(f'nothing downloaded for {tk}')
-    df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
+    parts = [pd.read_parquet(f) for f in fs]
+    df = pd.concat([x for x in parts if len(x)], ignore_index=True)
     df['et'] = df.timestamp.dt.tz_convert('America/New_York')
     df = df[(df.et.dt.time >= dt.time(9, 30)) & (df.et.dt.time < dt.time(16, 0))]
     df['day'] = df.et.dt.strftime('%Y%m%d')

@@ -20,3 +20,5 @@ reports/portfolio_state.json
 data/hf_qqq/
 data/daily_hf.parquet
 data/_work_hf/
+data/hf_bars/
+data/daily_hf_*.parquet

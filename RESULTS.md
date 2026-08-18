@@ -833,3 +833,57 @@ state that §3's result depends on) and excluded the closing hour. The scripts a
 the numbers in those sections are not. Phase 4's verdict is unlikely to reverse — it
 lost by a wide margin at every latency and tier — but §3's magnitudes should be treated
 as unreliable until re-run.
+
+---
+
+## 11. The 27-year verdict: real, half the size, and ML doubles it honestly
+
+Full history from the validated HF minute bars (QQQ stitched across the QQQQ era):
+QQQ 6,285 days, SPY 6,273, IWM 5,188, DIA 5,855.
+
+### The sign rule replicates -- and shrinks
+
+```
+ ticker   days  bps/day      t  Sharpe   CAGR%   maxDD%
+    QQQ   6285     3.94   2.55    0.51    8.38   -46.18
+    SPY   6273     2.30   2.19    0.44    5.03   -43.68
+    IWM   5188     3.15   2.24    0.49    6.87   -36.57
+    DIA   5855     0.99   0.96    0.20    1.72   -58.36
+```
+
+Three of four instruments clear t=2 independently, 18/27 QQQ years positive. The effect
+is real and market-wide. It is also HALF the 515-day estimate (3.94 vs ~8), and heavily
+regime-dependent: +21 to +30 bps/day in 2001/2002/2008/2022, near zero 2013-2017. The
+recent sample sat in a hot regime.
+
+### A lookahead bug worth recording
+
+First ML run printed Sharpe 2.42 out of sample -- the tell, not a result. Top feature
+was `rv_1m_bps`, which build_daily computes over the WHOLE session: at 10:30 it leaks
+the afternoon's volatility, and vol-return asymmetry converts that into the sign of the
+remaining move. Removed.
+
+### The honest model (walk-forward, each year predicted only from prior years)
+
+LightGBM, 12 features observable at 10:30. Tried and REJECTED, recorded so they are not
+re-tried: trailing-vol features (cut OOS from 3.85 to 2.08 -- vol says how big, not
+which way), vol-targeted sizing (0.47 vs 0.66), 3-ETF equal-weight portfolio (IWM's 0.28
+drags more than the 0.13 correlations help).
+
+```
+ QQQ, 4,836 OOS days (2005-2025)   bps/day      t  Sharpe   CAGR%   maxDD%
+ sign rule (baseline)                 2.07   1.56    0.36    4.23   -46.18
+ ML sign                              3.85   2.91    0.66    9.02   -26.86
+ SPY replication (untouched)          3.12   2.82    0.63    7.35   -28.16
+```
+
+IC +0.084 QQQ, +0.094 SPY. The model roughly doubles the rule's Sharpe and halves its
+drawdown, and does it again on an instrument it was never developed on.
+
+### Against the stated goal (1%+/month)
+
+ML-sign QQQ averages **0.72%/month** unleveraged (Sharpe 0.66, maxDD -27%). ~55% of
+months are positive; the worst are -5 to -8%. Reaching a 1%/month AVERAGE needs ~1.4x
+leverage (maxDD ~-37%), or the current hot regime persisting (2022-2025 OOS ran 8-23
+bps/day = 2-6%/month). "Positive every month" is not achievable at any realistic Sharpe
+and no honest backtest will promise it.
