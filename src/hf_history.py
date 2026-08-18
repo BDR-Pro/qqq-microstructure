@@ -28,6 +28,10 @@ OUT = os.path.join(ROOT, 'data', 'hf_bars')
 # result used (Gao, Han, Li & Zhou, JFE 2018), so it is the direct replication target;
 # IWM and DIA test whether the effect is a market phenomenon or a QQQ artefact.
 TICKERS = ['QQQ', 'SPY', 'IWM', 'DIA']
+# The Nasdaq-100 Trust moved from AMEX to Nasdaq in Dec 2004 and traded as QQQQ until
+# it reverted in Mar 2011. Six and a half years of QQQ history -- including all of 2008
+# -- sit under that ticker, so the two series have to be stitched.
+ALIAS = {'QQQQ': 'QQQ'}
 TMP = os.path.join(ROOT, 'data', '_work_hf')
 DAILY = os.path.join(ROOT, 'data', 'daily_hf_{tk}.parquet')
 URL = ('https://huggingface.co/datasets/mito0o852/OHLCV-1m/resolve/main/'
@@ -50,7 +54,7 @@ def fetch_month(m):
     dests = {tk: os.path.join(OUT, tk, f'{m}.parquet') for tk in TICKERS}
     if all(os.path.exists(d) for d in dests.values()):
         return -1                              # already done
-    tmp = os.path.join(TMP, f'{m}.parquet')
+    tmp = os.path.join(TMP, f'{m}.{os.getpid()}.parquet')   # PID-tagged: passes may run in parallel
     req = urllib.request.Request(URL.format(m=m), headers={'User-Agent': 'Mozilla/5.0'})
     try:
         with urllib.request.urlopen(req, timeout=300) as r, open(tmp, 'wb') as f:
@@ -76,9 +80,10 @@ def fetch_month(m):
 def build_daily(tk='QQQ'):
     """Collapse the minute bars into the same daily schema as daily.parquet."""
     import glob
-    fs = sorted(glob.glob(os.path.join(OUT, tk, '*.parquet')))
+    dirs = [tk] + [a for a, canon in ALIAS.items() if canon == tk]
+    fs = sorted(f for d in dirs for f in glob.glob(os.path.join(OUT, d, '*.parquet')))
     if not fs:
-        raise SystemExit('nothing downloaded yet')
+        raise SystemExit(f'nothing downloaded for {tk}')
     df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
     df['et'] = df.timestamp.dt.tz_convert('America/New_York')
     df = df[(df.et.dt.time >= dt.time(9, 30)) & (df.et.dt.time < dt.time(16, 0))]
@@ -123,7 +128,13 @@ def main():
     ap.add_argument('--start', default='1999-03')     # QQQ inception
     ap.add_argument('--end', default='2025-10')
     ap.add_argument('--build', action='store_true', help='skip download, build the spine')
+    ap.add_argument('--tickers', default=None,
+                    help='override the ticker set, comma separated (e.g. QQQQ)')
     a = ap.parse_args()
+    if a.tickers:
+        global TICKERS
+        TICKERS = [t.strip().upper() for t in a.tickers.split(',')]
+        print('ticker set overridden ->', TICKERS)
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(TMP, exist_ok=True)
     if a.build:
