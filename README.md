@@ -112,6 +112,9 @@ docs/strategy-plan.html  the five-phase build plan
 
 ## Running it
 
+Operational detail — every command, runtime, the paper-trading setup and the options
+workflow — is in **[RUNBOOK.md](RUNBOOK.md)**. Quick start:
+
 ```bash
 pip install -r requirements.txt
 ```
