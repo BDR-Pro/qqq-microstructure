@@ -1,0 +1,43 @@
+==================================================================
+  END OF DAY REPORT  --  20250930                                 
+==================================================================
+
+  ACCOUNT
+    Starting capital        $    100,000.00
+    Balance                 $    100,070.31
+    Cumulative P&L          $         70.31
+    ROI                              0.0703 %
+    Days traded                           6
+
+  SESSION
+    P&L                     $          5.89
+    Fills taken                      56,861  of 78,343 (72.6%)
+    Shares                           48,918
+    Notional                $ 29,263,893.23
+    Share of venue volume              1.07 %  (participation 2.0%)
+    Edge per share                   0.0020 bps
+
+  ACCURACY
+    Sign accuracy                     52.19 %  (baseline 51.65 %)
+    Profitable of taken               49.06 %
+    IC (pred vs realised)            0.0315
+    RMSE                             0.5201 bps
+
+  VS QUOTING EVERYTHING
+    Baseline P&L            $        -31.43
+    Model edge              $         37.31
+
+  ASSUMPTIONS
+    - Fills are assumed on every quoted trade; queue position is n
+      ot modelled (MBP-1 cannot see it). This is the largest sourc
+      e of optimism here.
+    - You are assumed to win 2.0% of each qualifying print. At 100
+      % the sim takes ~47% of all Nasdaq QQQ volume, which is not 
+      reachable; check pct_of_venue_volume before believing any P&
+      L here.
+    - Position unwound at mid 1s after the fill (the markout horiz
+      on).
+    - Add rebate $0.00305/share earned on every filled share.
+    - Single venue (Nasdaq), single symbol. No NBBO.
+
+==================================================================

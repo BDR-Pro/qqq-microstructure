@@ -98,7 +98,15 @@ src/
   state_reachability.py  wide-spread durations; does the edge survive latency?
   build_bars.py          streaming ETL: zip -> 1-minute bars with features
   bar_alpha.py           longer-horizon IC, out-of-sample split, seasonality
+  dataset.py             labelled fills: 18 features + markout label per passive fill
+  model.py               model definition, checkpoint save/load, decision rule
+  train.py               train or resume; regression-guarded
+  evaluate.py            score unseen days, write EOD portfolio reports
 data/bars/               65 days of 1-minute bars (derived, 3.5 MB, committed)
+data/fills/              labelled training fills (~250 MB, gitignored, regenerable)
+models/                  the checkpoint + manifest (committed)
+eval_data/               drop new .dbn.zst files here to score them
+reports/                 eod_YYYYMMDD.json / .txt, running account state
 docs/strategy-plan.html  the five-phase build plan
 ```
 
@@ -146,6 +154,81 @@ python src/selective_quoting.py
   14:30 in EST). The scripts detect it by activity.
 - All figures use `ts_recv` (what you would actually have observed), not `ts_event`.
 - Markouts are **size-weighted**. Equal-weighting flatters small fills.
+
+## The model
+
+Predicts the **maker's markout in bps** if a passive quote resting here were filled —
+the P&L of an action, not the path of a price. Direction is predictable in this data at
+IC 0.24 and still loses money, so a better directional model would only lose more
+efficiently. LightGBM over 18 book-state features, ~3.4 M labelled fills.
+
+```bash
+python src/dataset.py 6      # extract labelled fills (stride 6; ~7 min for 84 days)
+python src/train.py          # train, or resume from the existing checkpoint
+python src/evaluate.py       # score whatever is in eval_data/
+```
+
+Held-out validation (10 days the model never saw, threshold calibrated on a separate
+earlier half so it is not scored on its own tuning data):
+
+| | share of fills | bps/share |
+|---|---|---|
+| Quote everything | 100% | −0.0032 |
+| Hand-written rule (spread ≥ 2t, imb > 0.4) | 3.1% | −0.0222 |
+| **Model-gated** | **71.4%** | **+0.0138** |
+
+IC +0.0965. Note the rule *loses* on this window while the model holds positive — the
+same sample-instability the rest of this repo documents. Note also that **sign accuracy
+is 52.9% against a 52.9% always-one-class baseline**: the model has essentially no edge
+at calling the sign of an individual fill. All of its value is in the economics, which
+is why bps/share is the metric that matters and accuracy is reported but not relied on.
+
+### Checkpoints and resuming
+
+`models/adverse_selection.txt` is the LightGBM model; the `.manifest.json` beside it
+records the features, every day already trained on, a SHA of the model, the calibrated
+decision threshold and a full session history. Both are committed, so a clone starts
+from a trained model rather than from zero. Saves are atomic.
+
+Two honest caveats, because the resume path did not behave the way it was designed to:
+
+- **Appending trees to a converged model never improved it.** Resuming on 8 new days cost
+  0.0138 → 0.0075 bps/share. Adding replay (750 k rows resampled from seen days) and
+  shrinking the step to 25 rounds reduced the damage but never reversed it — the ensemble
+  was already at its validation optimum, so extra capacity only overfits.
+- `train.py` therefore ships a **regression guard**: a checkpoint that scores worse than
+  the one it replaces is rejected and the previous model kept. It fires on exactly this
+  case, which is the correct outcome rather than a bug.
+
+So the thing that genuinely avoids starting from zero is the **cached extraction** in
+`data/fills/` — the expensive step, never repeated. Once days are cached, a full rebuild
+(`--fresh`) takes about a minute and is the refresh that actually works. Incremental
+training is implemented and guarded; use it, but read the verdict it prints.
+
+## Evaluation and EOD reports
+
+`eval_data/` is a drop folder for Databento files. The archive ends **2025-10-08**, so
+anything dated later is genuinely out of sample. Evaluation reuses `features_from_dbn()`,
+the same code path as training, so eval cannot drift from training.
+
+Each day writes `reports/eod_YYYYMMDD.json` and `.txt` with balance, ROI, per-share edge,
+accuracy and the running account.
+
+On the 12 days held out of training entirely:
+
+```
+balance $100,135.02   P&L $+135.02   ROI +0.1350%   over 12 days
+9 of 12 days profitable   |   ~1.0% of Nasdaq QQQ volume
+```
+
+**Read that ROI carefully.** The first version of this simulation assumed a fill on every
+quoted trade and reported +7.94% over 12 days — while trading 2.46 M shares against a
+venue that traded 5.29 M, i.e. **47% of all Nasdaq QQQ volume**. That is not a strategy,
+it is an impossibility. The `--participation` flag (default 2% of each qualifying print)
+fixes it, and every report now carries `pct_of_venue_volume` so the assumption stays
+visible. The remaining +0.135% over 12 days is ~$11/day on $100 k — consistent with the
+capacity arithmetic above, and still resting on assumed fills that phase 4 exists to
+demolish.
 
 ## Method
 

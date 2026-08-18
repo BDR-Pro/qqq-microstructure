@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-08-18T11:47:48+03:00",
+  "model": {
+    "checkpoint": "adverse_selection.txt",
+    "sha256": "4aad7a8cc6552567",
+    "trees": 200,
+    "trained_days": 84,
+    "threshold_bps": -0.055
+  },
+  "session": {
+    "day": "20250924",
+    "fills_available": 77933,
+    "fills_taken": 55087,
+    "share_of_fills": 0.7068507564189753,
+    "shares": 47877.56,
+    "notional_usd": 28551286.027575687,
+    "venue_volume_shares": 4697121.0,
+    "pct_of_venue_volume": 1.019295862295223,
+    "participation_assumed": 0.02,
+    "pnl_usd": -2.374794782183069,
+    "bps_per_share": -0.0008382907482023466,
+    "baseline_quote_everything_pnl_usd": -44.76461014093495,
+    "edge_vs_baseline_usd": 42.38981535875188,
+    "accuracy": {
+      "sign_accuracy": 0.5302118486392158,
+      "baseline_sign_accuracy": 0.5330347862907883,
+      "precision_profitable": 0.4734147802566849,
+      "ic_pearson": 0.05151040958852083,
+      "rmse_bps": 0.4460160664231878
+    },
+    "risk": {
+      "max_clip_shares": 100.0,
+      "peak_notional_per_fill_usd": 1199.800048828125,
+      "worst_fill_usd": -0.7438874770207156,
+      "best_fill_usd": 0.5761048133811506
+    }
+  },
+  "account": {
+    "starting_capital_usd": 100000.0,
+    "balance_usd": 100036.4841263377,
+    "cumulative_pnl_usd": 36.48412633769814,
+    "roi_pct": 0.036484126337698146,
+    "days_traded": 2,
+    "total_fills_taken": 112497,
+    "total_shares": 105042.4,
+    "total_notional_usd": 62812688.33392578
+  },
+  "assumptions": [
+    "Fills are assumed on every quoted trade; queue position is not modelled (MBP-1 cannot see it). This is the largest source of optimism here.",
+    "You are assumed to win 2.0% of each qualifying print. At 100% the sim takes ~47% of all Nasdaq QQQ volume, which is not reachable; check pct_of_venue_volume before believing any P&L here.",
+    "Position unwound at mid 1s after the fill (the markout horizon).",
+    "Add rebate $0.00305/share earned on every filled share.",
+    "Single venue (Nasdaq), single symbol. No NBBO."
+  ]
+}

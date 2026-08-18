@@ -13,3 +13,7 @@ venv/
 # Local
 *.log
 .DS_Store
+data/fills/
+data/extract.log
+eval_data/*.dbn*
+reports/portfolio_state.json

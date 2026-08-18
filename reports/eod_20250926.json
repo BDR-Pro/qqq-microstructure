@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-08-18T11:47:49+03:00",
+  "model": {
+    "checkpoint": "adverse_selection.txt",
+    "sha256": "4aad7a8cc6552567",
+    "trees": 200,
+    "trained_days": 84,
+    "threshold_bps": -0.055
+  },
+  "session": {
+    "day": "20250926",
+    "fills_available": 94373,
+    "fills_taken": 68529,
+    "share_of_fills": 0.7261504879573607,
+    "shares": 61534.219999999994,
+    "notional_usd": 36567508.14788574,
+    "venue_volume_shares": 5604054.0,
+    "pct_of_venue_volume": 1.098030461519464,
+    "participation_assumed": 0.02,
+    "pnl_usd": -14.254569782948252,
+    "bps_per_share": -0.003897559898249884,
+    "baseline_quote_everything_pnl_usd": -18.424882315814685,
+    "edge_vs_baseline_usd": 4.170312532866433,
+    "accuracy": {
+      "sign_accuracy": 0.5165142572557829,
+      "baseline_sign_accuracy": 0.519195108770517,
+      "precision_profitable": 0.4832260794700054,
+      "ic_pearson": 0.024229894238568455,
+      "rmse_bps": 0.6352713798894692
+    },
+    "risk": {
+      "max_clip_shares": 100.0,
+      "peak_notional_per_fill_usd": 1192.5999755859375,
+      "worst_fill_usd": -1.2438895837373567,
+      "best_fill_usd": 1.0461086837154348
+    }
+  },
+  "account": {
+    "starting_capital_usd": 100000.0,
+    "balance_usd": 100035.3941560687,
+    "cumulative_pnl_usd": 35.39415606868711,
+    "roi_pct": 0.03539415606868711,
+    "days_traded": 4,
+    "total_fills_taken": 262760,
+    "total_shares": 254818.42,
+    "total_notional_usd": 151638184.56315187
+  },
+  "assumptions": [
+    "Fills are assumed on every quoted trade; queue position is not modelled (MBP-1 cannot see it). This is the largest source of optimism here.",
+    "You are assumed to win 2.0% of each qualifying print. At 100% the sim takes ~47% of all Nasdaq QQQ volume, which is not reachable; check pct_of_venue_volume before believing any P&L here.",
+    "Position unwound at mid 1s after the fill (the markout horizon).",
+    "Add rebate $0.00305/share earned on every filled share.",
+    "Single venue (Nasdaq), single symbol. No NBBO."
+  ]
+}
