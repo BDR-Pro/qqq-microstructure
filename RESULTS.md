@@ -372,3 +372,63 @@ edge simply loses money faster.
 
 The only positive-expectancy result anywhere in this repo remains the passive one in
 section 3, where you are *paid* the spread instead of paying it.
+
+---
+
+## 7. Phase 4 — the honest fill simulation — `queue_sim.py`
+
+9 most recent archive days, 100-share quotes on both sides, model-gated, explicit queue
+position tracked through every event. Fills only occur once traded volume at our level
+exceeds the size resting ahead of us.
+
+### P&L per day, by latency and rebate tier
+
+```
+  latency            top            mid          entry           base           none
+    0.5ms        -804.95      -1,467.50      -1,994.83      -2,469.19      -3,566.18
+    5.0ms      -1,373.76      -1,950.00      -2,407.35      -2,786.56      -3,545.00
+   50.0ms      -2,372.58      -2,767.39      -3,122.07      -3,342.49      -3,753.66
+```
+
+**Zero of fifteen cells is profitable.** The best case is not merely unprofitable but
+unreachable: the top tier requires >0.9% of consolidated US volume, and it still loses
+$805/day at −0.009 bps/share.
+
+Latency orders correctly — 0.5 ms beats 5 ms beats 50 ms — and each tier beats the one
+below it. Both gradients being the right way round is the main evidence the simulator is
+behaving.
+
+### A bug worth recording
+
+The first version of this ran the opposite way: 50 ms latency *beat* 0.5 ms, and two
+cells came out profitable. The cause was in the posting logic —
+
+```python
+j = L_arr[i]                       # index at t + latency
+lp = L_bp[j] if s == 0 else L_ap[j]   # <- price at ARRIVAL
+```
+
+The order was placed at the price that would exist once it arrived. That is foresight,
+and the more latency the more of it, which is precisely why slower looked better. Fixed
+by aiming at the price visible at the decision (`t - latency`) and handling the three
+outcomes on arrival: still the touch (join the back), improving on it (empty queue, and
+the adverse selection of being alone at a stale price), or left behind (a miss).
+
+After the fix, the profitable cells disappear.
+
+### What killed it
+
+Per-share edge under realistic fills is **−0.009 to −0.083 bps** depending on tier and
+latency. Compare with section 3, where the same model gating the same decisions but
+*assuming* fills produced +0.048 bps. The gap between those two numbers is the whole
+content of phase 4: **when you have to wait in a queue, you do not get the fills you
+chose — you get the ones nobody faster wanted.**
+
+Note also that the sim quotes on 14–25% of venue volume. It is not being selective, and
+the model's threshold was calibrated on assumed fills, not queued ones.
+
+### Verdict against the stated kill criterion
+
+> Kill if: the edge does not survive a realistic fill rate at a realistic rebate tier.
+
+It does not survive at *any* tier or *any* latency. Phase 4 fired.
