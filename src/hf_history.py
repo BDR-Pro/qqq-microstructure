@@ -148,8 +148,12 @@ def main():
         got = ' '.join(f'{k}:{v:,}' for k, v in sorted(n.items())) if isinstance(n, dict) else 'cached'
         print(f'  [{i}/{len(todo)}] {m}  {got}   '
               f'elapsed {el/60:.0f}m  eta {eta/60:.0f}m', flush=True)
-    print('\ndownload done; building the daily spine', flush=True)
-    build_daily()
+    print('\ndownload done; building the daily spines', flush=True)
+    for tk in TICKERS:
+        try:
+            build_daily(tk)
+        except Exception as ex:
+            print(f'  {tk}: {ex}')
 
 
 if __name__ == '__main__':
