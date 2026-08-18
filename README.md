@@ -239,6 +239,64 @@ So the thing that genuinely avoids starting from zero is the **cached extraction
 (`--fresh`) takes about a minute and is the refresh that actually works. Incremental
 training is implemented and guarded; use it, but read the verdict it prints.
 
+## The 0DTE pivot — and what actually came out of it
+
+Competing with HFTs on microstructure is the one game where a retail account is
+structurally disadvantaged. Moving to a daily horizon changes the arena. It also cuts the
+sample from 2 billion events to **515 days**, where the minimum detectable Sharpe is
+**1.40** — most of what a daily strategy could earn is smaller than the noise here.
+
+One signal survived: **intraday momentum**. Sign of the first N minutes, held to the
+close, traded in shares. Every other feature — overnight gap, prior-day return, prior
+realised vol — flipped sign between train and test.
+
+```
+  entry    5m   10m   15m   30m   60m  120m
+  bps/d  2.99  1.37  6.78  4.00 10.00  5.17
+  t      0.66  0.31  1.54  0.95  2.56  1.49
+```
+
+**Quote the band, not the best cell.** 60m is an outlier, not the centre of a robust
+hump — 30m scores below 15m, and only 60m clears t=2. Dropping the best 10 days takes it
+from 10.00 to 4.23 bps/day. The honest estimate is **~5–6 bps/day, roughly 13–15%/yr at
+Sharpe ~0.9** — below what this sample can establish. What supports it is that all six
+cells are positive, all three years are positive, and it is a published effect
+(Gao, Han, Li & Zhou, *Market Intraday Momentum*, JFE 2018) rather than something sifted
+out of this archive.
+
+It trades in **shares** — no colocation, no rebate tier, no queue. That is what makes it
+categorically different from §1–§7.
+
+**Buying 0DTE options on this signal gives the edge back.** Break-even IV is 14.8%
+annualised and QQQ 0DTE rarely prints below 15%; the premium charged for leverage is
+almost exactly the size of the edge. Selling the wing captures a different edge (+8.3
+bps/day at the −0.5% strike, from the variance risk premium) but the worst day in this
+crash-free sample is −5.87%, which is 65 days of credit. Defined-risk spreads only, and
+none of it is evaluable without an OPRA feed — every option figure here assumes an IV.
+
+## Forward testing — `live_momentum.py`
+
+More backtesting cannot settle a Sharpe-0.9 effect on 515 days, and every extra variant
+tried on the same days makes the estimate worse. Only new days add information.
+
+```bash
+python src/live_momentum.py --dry-run
+```
+
+```bash
+python src/live_momentum.py --paper
+```
+
+Fixed rules, set in advance so there is nothing to tune while it runs: record the price
+at 09:30 ET, enter at 10:30 (long if the first hour is up, short if down), flatten at
+15:58 unconditionally. Each day writes `reports/live/YYYYMMDD.json`.
+
+**It will not trade a live account.** `--paper` is the only broker mode, the port is
+checked against IBKR's paper ports, and the account code must start with `DU`. Default
+size is 10 shares — sizing up an unproven edge is how a marginal strategy becomes an
+expensive one. Opening and funding an account is yours to do; this connects to one that
+already exists.
+
 ## Evaluation and EOD reports
 
 `eval_data/` is a drop folder for Databento files. The archive ends **2025-10-08**, so
