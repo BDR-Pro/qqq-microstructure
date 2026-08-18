@@ -12,10 +12,25 @@
 # that in mind -- it is four orders of magnitude less data than the microstructure work.
 
 import os, sys, zipfile
+import datetime as dt
+from zoneinfo import ZoneInfo
 import numpy as np, pandas as pd, databento as db
 from concurrent.futures import ProcessPoolExecutor
 
 np.seterr(all='ignore')
+
+def session_start_ns(first_ts_ns):
+    """UTC nanoseconds of 09:30 America/New_York on the day containing `first_ts_ns`.
+
+    Deriving this from event counts is unsafe and was wrong here for 169 of 515 days.
+    Under EST a 13:30-20:00 UTC window still clears any activity threshold while
+    actually spanning 08:30-15:00 ET -- silently trading an hour of pre-market for the
+    closing hour. Compute it from the calendar instead.
+    """
+    d = dt.datetime.fromtimestamp(first_ts_ns / 1e9, dt.timezone.utc).date()
+    et = dt.datetime.combine(d, dt.time(9, 30), ZoneInfo('America/New_York'))
+    return int(et.astimezone(dt.timezone.utc).timestamp()) * 10**9
+
 
 ZIP = os.environ.get("QQQ_DBN_ZIP",
     os.path.expanduser("~/Downloads/XNAS-20251009-UVUB86RLRM.zip"))
@@ -37,14 +52,9 @@ def one_day(name):
         d = d[(d['flags'].values.astype(np.uint8) & 128) != 0]
         ts = d.ts_recv.values.astype('datetime64[ns]').astype(np.int64)
         d0 = (ts[0] // 86_400_000_000_000) * 86_400_000_000_000
-        s_ns = None
-        for off in (13, 14):
-            cand = d0 + (off * 3600 + 30 * 60) * 10**9
-            m = (ts >= cand) & (ts < cand + 390 * 60 * 10**9)
-            if m.sum() > 100_000:
-                s_ns = cand
-                break
-        if s_ns is None:
+        s_ns = session_start_ns(ts[0])
+        m = (ts >= s_ns) & (ts < s_ns + 390 * 60 * 10**9)
+        if m.sum() < 10_000:
             return None
         # pre-market, for the overnight gap as it was observable at the bell
         pre = ts < s_ns

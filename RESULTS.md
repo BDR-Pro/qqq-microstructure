@@ -743,3 +743,93 @@ options are close to fairly priced, so **all of the edge comes from the momentum
 realised aligned move was 8 bps against a 58 bps breakeven, so short vol won handsomely
 that day *despite* IV being low. One observation establishes neither the level nor the
 premium. That is the argument for pulling the full range.
+
+---
+
+## 10. A one-hour session-offset bug — 169 of 515 days were wrong
+
+Cross-validating against a free HuggingFace minute-bar dataset (`mito0o852/OHLCV-1m`)
+exposed a bug in this repo that had contaminated every result above.
+
+Every extraction script located the session open by *searching* for it:
+
+```python
+for off in (13, 14):                     # 09:30 ET under EDT / EST
+    s_ns = d0 + (off * 3600 + 30 * 60) * 10**9
+    if ((ts >= s_ns) & (ts < s_ns + 390*60*10**9)).sum() > 100_000:
+        break                            # <-- 13 always wins
+```
+
+Under **EDT**, 13:30 UTC is 09:30 ET and the first branch is right. Under **EST**,
+13:30 UTC is 08:30 ET — but that window still contains 5.5 hours of regular trading, so
+it clears the 100,000-event threshold and the loop stops there. The result: on every EST
+day the "session" ran **08:30–15:00 ET**, silently swapping an hour of thin pre-market
+for the closing hour.
+
+**169 of 515 days (33%)** — roughly November–March in both years.
+
+Caught by comparing one day against the HF bars:
+
+```
+my "open"  518.09  =  HF 08:30  (diff $0.01)
+my "p60"   523.02  =  HF 09:30  (diff $0.17)
+my "close" 522.24  =  HF 15:00  (diff $0.01)
+```
+
+An exact match, shifted one hour. The prices were never wrong; the clock was.
+
+Fixed by computing the open from the calendar rather than from activity:
+
+```python
+d = dt.datetime.fromtimestamp(first_ts_ns / 1e9, dt.timezone.utc).date()
+et = dt.datetime.combine(d, dt.time(9, 30), ZoneInfo('America/New_York'))
+return int(et.astimezone(dt.timezone.utc).timestamp()) * 10**9
+```
+
+Applied to all seven affected scripts: `dataset.py`, `daily_bars.py`, `build_bars.py`,
+`markout_multiday.py`, `selective_quoting.py`, `state_reachability.py`,
+`win_rate_study.py`.
+
+### After the fix, the two sources agree exactly
+
+```
+  d_open    |mean| 0.39 bps   max 3.25
+  d_entry   |mean| 0.28 bps   max 1.34
+  d_close   |mean| 0.15 bps   max 0.40
+  signal agrees 41/41 days (100%)     [44% before the fix]
+```
+
+Sub-tick agreement between Databento tick mids and HF trade bars. **The HF dataset is
+validated** — free, minute bars back to 1992, and accurate to a fraction of a basis
+point against paid tick data.
+
+### The momentum result got stronger
+
+Pre-market contamination was adding noise, not signal:
+
+```
+  entry   bps/day      t  Sharpe   CAGR%   maxDD%   hit%
+     5m      1.45   0.32    0.22    2.34   -18.18   51.7
+    10m      5.64   1.29    0.91   13.88   -10.71   52.0
+    15m     13.95   3.22    2.25   40.39    -9.11   57.5
+    30m      6.33   1.54    1.08   16.01    -9.27   53.6
+    60m      9.62   2.52    1.76   26.23    -6.57   55.5
+   120m      4.99   1.42    1.00   12.51    -9.53   53.4
+
+  band mean 8.10 bps/day (was 5.46), 5/5 positive
+  yearly at 15m: +17.43 / +9.22 / +18.87   at 60m: +17.11 / +8.38 / +8.47
+```
+
+The same discipline still applies: **15m is now the best cell and should not be quoted
+as the result.** The band is still not a smooth hump, which is what noise looks like.
+Honest estimate is the band mean, **~8 bps/day**, Sharpe ~1.3 — still near the 1.40 this
+sample can resolve.
+
+### What remains contaminated
+
+Sections 1–7 were all produced with the buggy window and have **not** been re-run. On
+EST days they included thin pre-market (wide spreads, inflating the `spread >= 2 ticks`
+state that §3's result depends on) and excluded the closing hour. The scripts are fixed;
+the numbers in those sections are not. Phase 4's verdict is unlikely to reverse — it
+lost by a wide margin at every latency and tier — but §3's magnitudes should be treated
+as unreliable until re-run.

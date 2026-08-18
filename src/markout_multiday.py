@@ -4,6 +4,20 @@ import os
 import databento as db, pandas as pd, numpy as np, os, zipfile
 from concurrent.futures import ProcessPoolExecutor
 np.seterr(all='ignore')
+
+def session_start_ns(first_ts_ns):
+    """UTC nanoseconds of 09:30 America/New_York on the day containing `first_ts_ns`.
+
+    Deriving this from event counts is unsafe and was wrong here for 169 of 515 days.
+    Under EST a 13:30-20:00 UTC window still clears any activity threshold while
+    actually spanning 08:30-15:00 ET -- silently trading an hour of pre-market for the
+    closing hour. Compute it from the calendar instead.
+    """
+    d = dt.datetime.fromtimestamp(first_ts_ns / 1e9, dt.timezone.utc).date()
+    et = dt.datetime.combine(d, dt.time(9, 30), ZoneInfo('America/New_York'))
+    return int(et.astimezone(dt.timezone.utc).timestamp()) * 10**9
+
+
 ZIP = os.environ.get("QQQ_DBN_ZIP",
     os.path.expanduser("~/Downloads/XNAS-20251009-UVUB86RLRM.zip"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); WORK=SP+'/work2'; os.makedirs(WORK,exist_ok=True)
@@ -16,9 +30,8 @@ def one(name):
         d=d[(d['flags'].values.astype(np.uint8)&128)!=0]
         ts=d.ts_recv.values.astype('datetime64[ns]').astype(np.int64)
         d0=(ts[0]//86_400_000_000_000)*86_400_000_000_000
-        for off in (13,14):
-            s_ns=d0+(off*3600+1800)*10**9; m=(ts>=s_ns)&(ts<s_ns+390*60*10**9)
-            if m.sum()>100_000: break
+        s_ns = session_start_ns(ts[0])
+        m = (ts >= s_ns) & (ts < s_ns + 390*60*10**9)
         d,ts=d[m],ts[m]
         bp,ap=d.bid_px_00.values,d.ask_px_00.values
         bs,as_=d.bid_sz_00.values.astype(float),d.ask_sz_00.values.astype(float)
