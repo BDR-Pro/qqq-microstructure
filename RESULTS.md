@@ -501,3 +501,109 @@ colocation, market data and membership that 0.5 ms latency requires. The configu
 that is arguably profitable is one that cannot pay for the infrastructure it depends on.
 
 Phase 4's verdict stands.
+
+---
+
+## 8. 0DTE pivot — the underlying half — `daily_bars.py`, `odte_study.py`, `odte_strategy.py`
+
+Daily spine built over all **515 days**. No options data exists in this archive, so
+nothing here prices a contract. It settles the two questions upstream of any option.
+
+### Power first
+
+```
+open-to-close sd            106.1 bps/day
+standard error of the mean    4.67 bps/day
+minimum detectable Sharpe     1.40 annualised
+```
+
+A Sharpe 1.0 strategy is 1.43 sigma in this sample. Below that threshold, absence of
+evidence is not evidence of absence. 515 days is four orders of magnitude less data than
+the microstructure work and everything below inherits that weakness.
+
+### One signal survives: intraday momentum
+
+Sign of the first 60 minutes, held to the close, trading shares:
+
+```
+full sample  n=515   +10.00 bps/day   t=2.56   Sharpe 1.79   hit 54.2%
+
+  year     n   bps/day      t   Sharpe   hit%
+  2023    71     15.00   1.91     3.60   54.9
+  2024   252      9.78   2.13     2.13   53.2
+  2025   192      8.43   1.05     1.20   55.2
+
+walk-forward (direction fitted on the past only)
+  train 206d -> test 309d   +11.46 bps/day  t=2.01
+  train 283d -> test 232d    +9.50 bps/day  t=1.36
+  train 360d -> test 155d   +11.19 bps/day  t=1.20
+  train 437d -> test  78d    +7.14 bps/day  t=1.57
+```
+
+Positive in every year and every walk-forward split. It is also a **published effect**
+(Gao, Han, Li & Zhou, *Market Intraday Momentum*, JFE 2018), which matters at this sample
+size — it was not found by sifting this archive. Note the decay, 15.0 → 9.78 → 8.43,
+consistent with a known effect being competed away. Every other feature tested — overnight
+gap, previous day's return, previous realised vol — **flipped sign** between train and test.
+
+~10 bps/day is roughly 25%/year unleveraged, and it is executable in **shares**, with no
+colocation, no rebate tier and no queue. That is a categorically different proposition
+from everything in §1–§7.
+
+### Buying 0DTE options gives the edge straight back
+
+The realised signal-aligned entry-to-close distribution has mean +10.34 bps, sd 88.5 bps.
+An ATM call struck at entry is worth **0.342% of spot** against that distribution. What
+the market charges:
+
+```
+  0DTE IV   sigma 5.5h   mkt ATM call   our fair   edge
+     12%        0.695%         0.277%     0.342%   +6.5 bps
+     14%        0.811%         0.324%     0.342%   +1.8
+     15%        0.869%         0.347%     0.342%   -0.5
+     16%        0.927%         0.370%     0.342%   -2.8
+     20%       1.159%          0.462%     0.342%  -12.0
+     25%       1.449%          0.578%     0.342%  -23.6
+```
+
+**Break-even IV is 14.8% annualised.** QQQ 0DTE IV rarely prints below ~15%. The
+directional edge is real and the premium charged for leverage is very close to exactly
+the same size — so the shares keep the +10 bps and the long-option version hands it back.
+
+### Selling the wing captures a different edge
+
+Same distribution, valuing puts struck below entry against a 16% IV market:
+
+```
+   strike   P(breach)   our fair   mkt@16%   edge
+   -0.50%       17.9%     0.090%    0.172%   +8.3 bps
+   -0.75%       10.7%     0.055%    0.110%   +5.5
+   -1.00%        6.2%     0.033%    0.066%   +3.3
+   -1.50%        1.2%     0.016%    0.021%   +0.5
+```
+
++8.3 bps/day at the −0.5% strike ≈ 20.8% of spot per year — comparable to the momentum
+edge, from an unrelated source (the variance risk premium). Selling *in the momentum
+direction* collects both.
+
+### The tail this sample does not contain
+
+```
+worst aligned entry-to-close moves (%):  -5.87  -3.15  -2.71  -2.07  -1.73  -1.64
+
+sell -0.5% put: worst day costs 5.37% of spot =  65 days of credit
+sell -1.0% put: worst day costs 4.87% of spot = 146 days of credit
+```
+
+And a 2020-03-16 style −12% day, which is **not in these 515 days**, costs ~11% of spot
+on a −1% put: **329 days of credit, about 1.3 years**. Naked short premium is not
+survivable. Anything built here must be a defined-risk spread, and the long wing will eat
+a large share of the credits above.
+
+### What is still missing
+
+Every option number on this page assumes an IV. That is the single most important input
+and it is invented. It needs an OPRA feed (Databento sell `OPRA.PILLAR`) with per-strike
+quotes, priced at the **ask when buying and the bid when selling**, never the mid. Until
+then the momentum result stands on its own in shares, and the option overlay is a
+hypothesis.
