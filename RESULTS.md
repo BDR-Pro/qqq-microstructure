@@ -432,3 +432,32 @@ the model's threshold was calibrated on assumed fills, not queued ones.
 > Kill if: the edge does not survive a realistic fill rate at a realistic rebate tier.
 
 It does not survive at *any* tier or *any* latency. Phase 4 fired.
+
+### 7b. Selectivity sweep — the verdict reverses
+
+The §7 grid used the threshold calibrated in training (−0.055 bps), which quotes on
+14–25% of venue volume. That is not a selective strategy. Sweeping the quoting threshold
+under the same queue mechanics (5 days, 0.5 ms latency):
+
+```
+     lat/thr            top            mid          entry           base           none
+  0.5ms -0.06        -963.17      -1,652.48      -2,183.51      -2,611.11      -3,683.30
+  0.5ms +0.02        -614.85        -945.10      -1,205.62      -1,321.95      -1,387.50
+  0.5ms +0.05        -372.37        -595.42        -660.90        -636.40        -640.56
+  0.5ms +0.10         -15.66         -91.60        -161.88        -213.56        -147.48
+  0.5ms +0.20         +93.93         +73.33         +62.81         +56.81         +52.55
+  0.5ms +0.40         +42.76         +39.22         +34.17         +34.43         +33.85
+```
+
+At a +0.20 bps threshold **every tier turns positive**, including `none` — no rebate at
+all, +$52.55/day. That is a materially stronger result than anything earlier in this
+repo, because it does not depend on a rebate tier you cannot get. It quotes on **0.45%
+of venue volume**: roughly 1/50th the activity of the §7 configuration.
+
+Best cell: top tier, +$93.93/day, ROI 23.7%/yr on $100 k nominal. At the realistic entry
+tier, +$62.81/day ≈ 15.8%/yr.
+
+**Do not trust these numbers yet.** Six thresholds were swept on five days and the best
+was reported — precisely the search that manufactures spurious results. The threshold
+must be validated on days that were not used to choose it, and at latencies a real system
+would actually have. Both are open.

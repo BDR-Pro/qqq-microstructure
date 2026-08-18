@@ -198,6 +198,9 @@ def _worker(job):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=int, default=8, help='most recent archive days to simulate')
+    ap.add_argument('--skip', type=int, default=0,
+                    help='skip this many of the most recent days first (out-of-sample check)')
+    ap.add_argument('--tiers', default=None, help='subset of rebate tiers, comma separated')
     ap.add_argument('--size', type=float, default=100.0, help='our quote size, shares')
     ap.add_argument('--cancel-ahead', type=float, default=1.0,
                     help='1.0 = cancels uniform through the queue, 0.0 = all behind us')
@@ -216,7 +219,12 @@ def main():
     cfg = dict(size=a.size, threshold=thr, thresholds=thrs, cancel_ahead=a.cancel_ahead,
                latencies_ms=[float(x) for x in a.latencies.split(',')], tiers=REBATE_TIERS)
 
-    names = dataset.day_names()[-a.days:]
+    alln = dataset.day_names()
+    names = alln[-(a.days + a.skip):-a.skip] if a.skip else alln[-a.days:]
+    if a.tiers:
+        want = [t.strip() for t in a.tiers.split(',')]
+        cfg['tiers'] = {k: v for k, v in REBATE_TIERS.items()
+                        if any(k.startswith(w) for w in want)}
     print(f'phase 4 queue simulation | {len(names)} days | quote {a.size:.0f} sh '
           f'| threshold {thr:+.3f} bps | cancels {"uniform" if a.cancel_ahead else "behind us"}')
     print(f'latencies {cfg["latencies_ms"]} ms x {len(REBATE_TIERS)} rebate tiers\n')
@@ -248,11 +256,11 @@ def main():
     print(f'\n{"":=<92}')
     print('  P&L PER DAY BY LATENCY AND REBATE TIER')
     print(f'{"":=<92}')
-    print(f'{"lat/thr":>12}' + ''.join(f'{t.split(" ")[0]:>15}' for t in REBATE_TIERS))
+    print(f'{"lat/thr":>12}' + ''.join(f'{t.split(" ")[0]:>15}' for t in cfg['tiers']))
     for lat in cfg['latencies_ms']:
         for th in cfg['thresholds']:
             cells = []
-            for t in REBATE_TIERS:
+            for t in cfg['tiers']:
                 r = g[(g.latency_ms == lat) & (g.threshold == th) & (g.tier == t)]
                 cells.append(f'{r.pnl_per_day.iloc[0]:>15,.2f}' if len(r) else f'{"-":>15}')
             print(f'{lat:>5.1f}ms {th:>+5.2f}' + ''.join(cells))

@@ -155,12 +155,46 @@ python src/selective_quoting.py
 - All figures use `ts_recv` (what you would actually have observed), not `ts_event`.
 - Markouts are **size-weighted**. Equal-weighting flatters small fills.
 
+## Phase 4 killed it — read this first
+
+The queue simulator (`src/queue_sim.py`) is the step that decides whether anything above
+is real. It tracks an explicit position in the queue and fills you only once traded
+volume exceeds the size resting ahead of you.
+
+```
+ P&L/day      top       mid     entry      base      none
+  0.5ms   -804.95  -1467.50  -1994.83  -2469.19  -3566.18
+  5.0ms  -1373.76  -1950.00  -2407.35  -2786.56  -3545.00
+ 50.0ms  -2372.58  -2767.39  -3122.07  -3342.49  -3753.66
+```
+
+**Zero of fifteen cells is profitable.** The best cell is also unreachable — the top
+rebate tier requires >0.9% of consolidated US volume — and still loses $805/day.
+
+The same model, gating the same decisions but *assuming* fills, produced +0.048 bps.
+Under real queue mechanics it produces −0.009 bps. That gap is the whole lesson: when you
+wait in a queue you do not get the fills you chose, you get the ones nobody faster wanted.
+
+This trips the kill criterion written down before the phase began. Everything below is
+still accurate, and none of it survives contact with a real queue. See RESULTS.md §7,
+including the lookahead bug that made the first run of this look profitable.
+
 ## The model
 
 Predicts the **maker's markout in bps** if a passive quote resting here were filled —
 the P&L of an action, not the path of a price. Direction is predictable in this data at
 IC 0.24 and still loses money, so a better directional model would only lose more
 efficiently. LightGBM over 18 book-state features, ~3.4 M labelled fills.
+
+**It is the baseline, not the challenger.** The plan called for gradient boosting as the
+bar and *"a small temporal CNN over the raw event stream"* as the model that has to beat
+it. Only the baseline was built. LightGBM sees 18 hand-engineered features at a single
+instant and discards the sequence — the shape of how the book moved over the preceding
+few hundred milliseconds — which is the natural thing to model on an event stream.
+
+That gap is real. It is also probably not the binding constraint: gross edge is +0.077
+bps against a 0.338 bps round trip (§6), so a challenger would need to be roughly **4x
+better**, not incrementally better. Untested either way.
 
 ```bash
 python src/dataset.py 6      # extract labelled fills (stride 6; ~7 min for 84 days)
