@@ -461,3 +461,43 @@ tier, +$62.81/day ≈ 15.8%/yr.
 was reported — precisely the search that manufactures spurious results. The threshold
 must be validated on days that were not used to choose it, and at latencies a real system
 would actually have. Both are open.
+
+### 7c. Out-of-sample validation — it does not hold up
+
+The +0.20 threshold was chosen on the five days in §7b. Re-run on **six earlier days that
+played no part in choosing it**, across three latencies:
+
+```
+     lat/thr          entry           none
+  0.5ms +0.10         -77.14         -94.13
+  0.5ms +0.20         +15.37         +28.41
+  0.5ms +0.40          +5.68          +4.40
+  5.0ms +0.10        -162.93        -155.81
+  5.0ms +0.20          -6.37         -21.46
+  5.0ms +0.40         +12.41          +3.27
+ 50.0ms +0.10        -209.53        -133.84
+ 50.0ms +0.20         -12.06         +14.15
+ 50.0ms +0.40         +17.15         +17.18
+```
+
+Three things to read here, none of them encouraging:
+
+1. **Shrinkage.** At 0.5 ms / +0.20 the entry tier falls from **+$62.81 to +$15.37/day**
+   and `none` from +$52.55 to +$28.41. A 2–4x haircut is the signature of a threshold
+   fitted to the days it was chosen on.
+2. **Latency inconsistency.** The configuration that survives at 0.5 ms is *negative* at
+   5 ms (−$6.37 entry). A real edge should decay with latency, not flip sign and then
+   recover at 50 ms.
+3. **Tier ordering inverts.** At +0.20 / 0.5 ms, `none` (+$28.41) beats `entry`
+   (+$15.37). More rebate produced *less* P&L. The two runs quote different fill sets, so
+   this is not impossible, but a higher rebate scoring worse is a noise signature, not an
+   edge.
+
+9 of 18 cells positive is a coin flip, and the magnitudes are $5–28/day.
+
+**Verdict: not established.** The §7b result does not survive out-of-sample. And even
+taking the best cell at face value, $28.41/day is ~$7 k/yr, against the $100–250 k/yr of
+colocation, market data and membership that 0.5 ms latency requires. The configuration
+that is arguably profitable is one that cannot pay for the infrastructure it depends on.
+
+Phase 4's verdict stands.
