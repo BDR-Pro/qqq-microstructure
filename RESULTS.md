@@ -307,3 +307,68 @@ This does not address the NBBO question. A 2-tick spread on Nasdaq may be a genu
 wide market or merely a Nasdaq-local quote gap while another venue holds the inside.
 Those have very different economics and this dataset cannot tell them apart. Consolidated
 data is required, and it should gate any capital commitment.
+
+---
+
+## 6. Can a directional strategy hit a 75% win rate? — `win_rate_study.py`
+
+6 days, 12,000 entries/day, direction from queue imbalance (|imbalance| >= 0.30), entries
+crossing the spread. Triple-barrier exits: profit target T ticks, stop S ticks, time
+limit H. 90 configurations.
+
+Two rates, and the gap between them is the whole point:
+
+- `hit_rate` — target barrier reached before the stop
+- `win_rate` — trade made money **after** paying the spread and fees
+
+### Answer: yes, and it does not help
+
+```
+  H    T   S   hit_rate   win_rate   expectancy_bps
+300    5  20     0.7960     0.7680          -0.5777
+```
+
+**One of 90 cells clears 75%. It loses 0.58 bps per trade.** Of the cells reaching a
+75%+ win rate, the number that are profitable after costs is **zero**.
+
+The geometry that produces the high win rate is what destroys it: a 5-tick target with a
+20-tick stop wins four times out of five and pays 4:1 when it loses. Before costs that is
+`0.796 x 5 - 0.204 x 20 = -0.10` ticks — already negative. Costs then take another
+0.59 bps.
+
+The best-expectancy cell in the grid runs the opposite geometry — a 10-tick target with a
+1-tick stop, **12.3% win rate**, and it is the *least* bad configuration at -0.51 bps.
+Win rate and profitability point in opposite directions here.
+
+### Why every cell is negative
+
+```
+best gross edge anywhere in the grid   +0.0768 bps
+round-trip cost charged in this study   0.5863 bps
+```
+
+Gross is *positive* — the signal genuinely works, which matches the IC 0.236 in section 1.
+It is simply 7.6x too small to pay the toll.
+
+That 0.586 bps cost is inflated by this being single-venue data: Nasdaq-local spreads
+average 2.18c, while consolidated QQQ is ~1 tick. Against a realistic NBBO round trip:
+
+```
+1c spread + 2 x $0.0030/share fees at $473   0.3383 bps
+gross edge                                  +0.0768 bps
+net                                         -0.2615 bps   (short by 4.4x)
+```
+
+Still negative, by a factor of four. Correcting the cost narrows the gap and does not
+close it.
+
+### What this rules out
+
+No model changes a 4x cost shortfall. The constraint is not prediction quality — the
+signal is real and was never the problem — it is that QQQ's spread is wider than the
+information content of its order book at these horizons. Leverage does not help either:
+it scales expectancy per dollar without changing its sign, so leveraging a -0.26 bps
+edge simply loses money faster.
+
+The only positive-expectancy result anywhere in this repo remains the passive one in
+section 3, where you are *paid* the spread instead of paying it.
