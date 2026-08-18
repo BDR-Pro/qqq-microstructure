@@ -22,9 +22,14 @@ from zoneinfo import ZoneInfo
 import numpy as np, pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'data', 'hf_qqq')
+OUT = os.path.join(ROOT, 'data', 'hf_bars')
+# Extracting several ETFs costs nothing extra -- the monthly file is downloaded either
+# way and holds every US ticker. SPY is the instrument the published intraday-momentum
+# result used (Gao, Han, Li & Zhou, JFE 2018), so it is the direct replication target;
+# IWM and DIA test whether the effect is a market phenomenon or a QQQ artefact.
+TICKERS = ['QQQ', 'SPY', 'IWM', 'DIA']
 TMP = os.path.join(ROOT, 'data', '_work_hf')
-DAILY = os.path.join(ROOT, 'data', 'daily_hf.parquet')
+DAILY = os.path.join(ROOT, 'data', 'daily_hf_{tk}.parquet')
 URL = ('https://huggingface.co/datasets/mito0o852/OHLCV-1m/resolve/main/'
        'data/ohlcv_{m}.parquet')
 SNAPS = [1, 5, 10, 15, 30, 60, 120]
@@ -41,9 +46,9 @@ def months(start, end):
 
 
 def fetch_month(m):
-    """Download one monthly file, keep only QQQ, delete the file. Returns row count."""
-    dest = os.path.join(OUT, f'{m}.parquet')
-    if os.path.exists(dest):
+    """Download one monthly file, keep the wanted tickers, delete it. Returns counts."""
+    dests = {tk: os.path.join(OUT, tk, f'{m}.parquet') for tk in TICKERS}
+    if all(os.path.exists(d) for d in dests.values()):
         return -1                              # already done
     tmp = os.path.join(TMP, f'{m}.parquet')
     req = urllib.request.Request(URL.format(m=m), headers={'User-Agent': 'Mozilla/5.0'})
@@ -56,19 +61,22 @@ def fetch_month(m):
                 f.write(chunk)
         t = pd.read_parquet(tmp, columns=['timestamp', 'open', 'high', 'low', 'close',
                                           'volume', 'ticker'],
-                            filters=[('ticker', '==', 'QQQ')])
-        if len(t):
-            t.drop(columns=['ticker']).to_parquet(dest, index=False)
-        return len(t)
+                            filters=[('ticker', 'in', TICKERS)])
+        out = {}
+        for tk, g in t.groupby('ticker'):
+            os.makedirs(os.path.join(OUT, str(tk)), exist_ok=True)
+            g.drop(columns=['ticker']).to_parquet(dests[str(tk)], index=False)
+            out[str(tk)] = len(g)
+        return out
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
 
 
-def build_daily():
+def build_daily(tk='QQQ'):
     """Collapse the minute bars into the same daily schema as daily.parquet."""
     import glob
-    fs = sorted(glob.glob(os.path.join(OUT, '*.parquet')))
+    fs = sorted(glob.glob(os.path.join(OUT, tk, '*.parquet')))
     if not fs:
         raise SystemExit('nothing downloaded yet')
     df = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
@@ -103,9 +111,10 @@ def build_daily():
     out['prev_oc_bps'] = out['oc_bps'].shift(1)
     out['prev_rv'] = out['rv_1m_bps'].shift(1)
     out['dow'] = pd.to_datetime(out.day, format='%Y%m%d').dt.dayofweek
-    out.to_parquet(DAILY, index=False)
-    print(f'{len(out)} trading days  {out.day.iloc[0]} .. {out.day.iloc[-1]}'
-          f'  -> {os.path.relpath(DAILY, ROOT)}')
+    path = DAILY.format(tk=tk)
+    out.to_parquet(path, index=False)
+    print(f'{tk}: {len(out)} trading days  {out.day.iloc[0]} .. {out.day.iloc[-1]}'
+          f'  -> {os.path.relpath(path, ROOT)}')
     return out
 
 
@@ -118,10 +127,14 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(TMP, exist_ok=True)
     if a.build:
-        build_daily()
+        for tk in TICKERS:
+            try: build_daily(tk)
+            except Exception as ex: print(f'  {tk}: {ex}')
         return
     ms = months(a.start, a.end)
-    todo = [m for m in ms if not os.path.exists(os.path.join(OUT, f'{m}.parquet'))]
+    todo = [m for m in ms
+            if not all(os.path.exists(os.path.join(OUT, tk, f'{m}.parquet'))
+                       for tk in TICKERS)]
     print(f'{len(ms)} months requested, {len(todo)} still to fetch', flush=True)
     t0 = time.time()
     for i, m in enumerate(todo, 1):
@@ -132,7 +145,8 @@ def main():
             continue
         el = time.time() - t0
         eta = el / i * (len(todo) - i)
-        print(f'  [{i}/{len(todo)}] {m}: {n:>6,} QQQ rows   '
+        got = ' '.join(f'{k}:{v:,}' for k, v in sorted(n.items())) if isinstance(n, dict) else 'cached'
+        print(f'  [{i}/{len(todo)}] {m}  {got}   '
               f'elapsed {el/60:.0f}m  eta {eta/60:.0f}m', flush=True)
     print('\ndownload done; building the daily spine', flush=True)
     build_daily()
