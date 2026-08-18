@@ -17,3 +17,6 @@ data/fills/
 data/extract.log
 eval_data/*.dbn*
 reports/portfolio_state.json
+data/hf_qqq/
+data/daily_hf.parquet
+data/_work_hf/
