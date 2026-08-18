@@ -607,3 +607,58 @@ and it is invented. It needs an OPRA feed (Databento sell `OPRA.PILLAR`) with pe
 quotes, priced at the **ask when buying and the bid when selling**, never the mid. Until
 then the momentum result stands on its own in shares, and the option overlay is a
 hypothesis.
+
+### 8b. Momentum robustness — the headline was the best cell, not the effect
+
+§8 quoted +10.00 bps/day for a 60-minute entry. That was **one of six entry times tested**,
+and it is the outlier:
+
+```
+  entry   bps/day      t  Sharpe   CAGR%   maxDD%   hit%
+     5m      2.99   0.66    0.46    6.43   -16.89   51.8
+    10m      1.37   0.31    0.22    2.24   -16.75   49.5
+    15m      6.78   1.54    1.07   17.15   -14.52   53.8
+    30m      4.00   0.95    0.66    9.34   -13.83   51.3
+    60m     10.00   2.56    1.79   27.39    -9.70   54.2   <- the quoted cell
+   120m      5.17   1.49    1.04   13.04    -8.62   52.2
+
+  band mean (10m-120m): 5.46 bps/day, 5/5 positive
+```
+
+A robust effect gives a smooth hump around its best value. This is not that: 30m (4.00)
+scores *below* 15m (6.78), and only the 60m cell clears t=2. That shape is what noise
+looks like when you sample it six times.
+
+Two more checks in the same direction:
+
+```
+  all 515 days          10.00 bps/day   t=2.56
+  drop best  5 days      6.29           t=1.90
+  drop best 10 days      4.23           t=1.32
+  median day             5.93 bps
+```
+
+**Honest estimate: ~5–6 bps/day, not 10.** That is roughly 13–15%/yr unleveraged at a
+Sharpe near 0.9 — *below* the 1.40 minimum this sample can detect (§8, power). The
+direction of the effect is supported (all six cells positive, positive in all three
+years, and it is a published result), but the magnitude quoted in §8 was inflated
+about twofold by picking the best cell.
+
+### Leverage
+
+```
+  leverage    CAGR%   maxDD%  worst day%
+        1x    27.39    -9.70      -5.87
+        3x    95.15   -26.74     -17.61
+       10x   373.60   -66.68     -58.71
+```
+
+Computed on the inflated 60m series, so treat even these as optimistic. And the worst day
+in the sample is −5.87% in a window containing no crash: at 3x a −12% session is −35% in
+a single day, and drawdown scales with leverage while ruin does not scale back.
+
+### What resolves this
+
+Not more backtesting — 515 days cannot settle a Sharpe-0.9 effect, and every further
+variant tested on the same days makes it worse. Only forward testing adds information.
+That is the argument for paper trading this live rather than refining it further.
