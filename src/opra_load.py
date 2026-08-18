@@ -23,8 +23,9 @@ from math import sqrt
 import numpy as np, pandas as pd, databento as db
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ZIP = os.environ.get('QQQ_OPRA_ZIP',
-    os.path.expanduser('~/Downloads/OPRA-20260818-A3GELRSYU5.zip'))
+ZIP = os.environ.get('QQQ_OPRA_ZIP', os.path.join(
+    os.path.expanduser("~"), "OneDrive", "المستندات",
+    "Trading", "OPRA-20260818-A3GELRSYU5.zip"))
 WORK = os.path.join(ROOT, 'data', '_work_opra')
 OUT = os.path.join(ROOT, 'data', 'opra_daily.parquet')
 

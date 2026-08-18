@@ -19,7 +19,8 @@ Read [README.md](README.md) first if you want the findings. This file is operati
 pip install -r requirements.txt
 ```
 
-Point the scripts at your copy of the archive. Everything reads this one variable:
+The archives live in `~/OneDrive/المستندات/Trading/` and the scripts default there.
+To keep them elsewhere, set:
 
 ```bash
 export QQQ_DBN_ZIP=/path/to/XNAS-20251009-UVUB86RLRM.zip

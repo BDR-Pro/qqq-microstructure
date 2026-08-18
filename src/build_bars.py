@@ -4,8 +4,9 @@ import os
 import databento as db, pandas as pd, numpy as np, sys, os, subprocess, zipfile
 from concurrent.futures import ProcessPoolExecutor
 np.seterr(all='ignore')
-ZIP = os.environ.get("QQQ_DBN_ZIP",
-    os.path.expanduser("~/Downloads/XNAS-20251009-UVUB86RLRM.zip"))
+ZIP = os.environ.get("QQQ_DBN_ZIP", os.path.join(
+    os.path.expanduser("~"), "OneDrive", "المستندات",
+    "Trading", "XNAS-20251009-UVUB86RLRM.zip"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK, OUT = os.path.join(ROOT,'data','_work_bars'), os.path.join(ROOT,'data','bars')
 os.makedirs(WORK, exist_ok=True); os.makedirs(OUT, exist_ok=True)

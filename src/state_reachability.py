@@ -18,8 +18,9 @@ def session_start_ns(first_ts_ns):
     return int(et.astimezone(dt.timezone.utc).timestamp()) * 10**9
 
 
-ZIP = os.environ.get("QQQ_DBN_ZIP",
-    os.path.expanduser("~/Downloads/XNAS-20251009-UVUB86RLRM.zip"))
+ZIP = os.environ.get("QQQ_DBN_ZIP", os.path.join(
+    os.path.expanduser("~"), "OneDrive", "المستندات",
+    "Trading", "XNAS-20251009-UVUB86RLRM.zip"))
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = ROOT+'/data/_work_reach'; os.makedirs(WORK,exist_ok=True)
 def one(name):
