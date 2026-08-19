@@ -36,6 +36,12 @@
 #     unlisted funds may survive; the per-month exclusion count is printed.
 #   - B's short leg assumes borrow on ~30 liquid names every night; the deployable
 #     form is the long tilt (top quintile instead of QQQ), reported separately.
+#   - Prices are first/last minute-bar TRADES, not auction prints or midpoints. A
+#     first-bar trade at the ask against a close near the bid manufactures a fake
+#     persistent overnight gain with an offsetting fake intraday loss -- the same
+#     signature as a real tug-of-war. B therefore also reports the same quintiles
+#     SOLD AT 09:45 (the p15 column), which does not capture the opening print:
+#     collapse there means bounce, modest decay means a real, holdable premium.
 #
 #   python src/xsec_backtest.py            # needs data/xsec/ from xsec_extract.py
 
@@ -63,8 +69,8 @@ BACKSTOP = np.log(1.40) # any |overnight| beyond this is dropped
 # the universe slot they consumed in those months is lost, which is noted, not
 # repaired. The regex covers the Z*ZZ* NASDAQ test family in either dot notation.
 TEST_RE = r'^Z[A-Z]?ZZ'
-TEST_SYM = {'ZTEST', 'TEST', 'ZBZX', 'IGZ', 'CBX', 'CBO', 'ATEST', 'CTEST',
-            'MTEST', 'NTEST', 'PTEST'}
+TEST_SYM = {'ZTEST', 'TEST', 'TESTA', 'TESTB', 'TESTC', 'ZBZX', 'IGZ', 'CBX',
+            'CBO', 'ATEST', 'CTEST', 'MTEST', 'NTEST', 'PTEST'}
 
 _r = [1.5, 4 / 3] + list(range(2, 9)) + [10, 12, 15, 20, 25, 30, 40, 50]
 SPLIT_LOGR = np.array([np.log(x) for x in _r] + [-np.log(x) for x in _r])
@@ -145,6 +151,15 @@ def load_panel():
     df['on_bps'] = np.where(ok, on * 1e4, np.nan)
     df['id_bps'] = np.log(df.close.values / df.open.values) * 1e4
     df['cc_bps'] = df.on_bps + df.id_bps
+    # close -> 09:45 instead of the 09:30 print. The opening first-bar trade can
+    # print at the ask while the close prints near the bid, manufacturing a fake
+    # persistent overnight gain with an exactly offsetting fake intraday loss --
+    # the same signature as a real tug-of-war. Selling at the 15-minute mark does
+    # not capture the opening print; if B's spread collapses here, the "overnight
+    # premium" was bid-ask bounce, not a holdable return. Modest decay is expected
+    # even if real (early intraday reversal); collapse toward zero is the tell.
+    df['on15_bps'] = np.where(ok, np.log(df.p15.values / df.prev_close.values)
+                              * 1e4, np.nan)
 
     n_gap = int((~adjacent & df.prev_close.notna()).sum())
     print(f'panel: {len(files)} months  {len(df):,} ticker-days  '
@@ -192,7 +207,7 @@ def main():
     agg = df.groupby(['ticker', 'month']).agg(
         cc_sum=('cc_bps', 'sum'), cc_n=('cc_bps', 'count'),
         on_mean=('on_bps', 'mean'), on_n=('on_bps', 'count')).to_dict('index')
-    bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'id_bps']]
+    bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'on15_bps', 'id_bps']]
            for m, g in df.groupby('month')}
 
     attr = [1 - len(uni[months[i - 1]] & uni[months[i]]) / len(uni[months[i - 1]])
@@ -276,11 +291,14 @@ def main():
         q1 = {elig[j] for j in order[:k]}
         q5 = {elig[j] for j in order[-k:]}
         sub = bym[T]
+        g5, g1 = sub[sub.ticker.isin(q5)], sub[sub.ticker.isin(q1)]
         out = pd.DataFrame({
-            'q1': sub[sub.ticker.isin(q1)].groupby('day')['on_bps'].mean(),
-            'q5': sub[sub.ticker.isin(q5)].groupby('day')['on_bps'].mean(),
-            'q5id': sub[sub.ticker.isin(q5)].groupby('day')['id_bps'].mean(),
-            'q1id': sub[sub.ticker.isin(q1)].groupby('day')['id_bps'].mean(),
+            'q1': g1.groupby('day')['on_bps'].mean(),
+            'q5': g5.groupby('day')['on_bps'].mean(),
+            'q5x': g5.groupby('day')['on15_bps'].mean(),
+            'q1x': g1.groupby('day')['on15_bps'].mean(),
+            'q5id': g5.groupby('day')['id_bps'].mean(),
+            'q1id': g1.groupby('day')['id_bps'].mean(),
             'qqq': sub[sub.ticker.isin({'QQQ', 'QQQQ'})].groupby('day')['on_bps'].mean()})
         B.append(out)
 
@@ -296,6 +314,10 @@ def main():
         if B.qqq.notna().sum() > 200:
             d2 = B.dropna(subset=['q5', 'qqq'])
             stats((d2.q5 - d2.qqq).values, 'Q5 - QQQ (tilt)')
+        # the bounce discriminator: same quintiles, sell at 09:45 not the open
+        # print. Collapse toward zero = the premium was the opening print.
+        stats((B.q5x - B.q1x).dropna().values, 'L/S exit 09:45')
+        stats(B.q5x.dropna().values, 'Q5 exit 09:45')
         tug = (B.q5id - B.q1id).dropna()
         print(f'  tug-of-war check: Q5-Q1 INTRADAY {tug.mean():+.2f} bps/day '
               f'(t={tug.mean()/(tug.std()/np.sqrt(len(tug))):.2f}; '
