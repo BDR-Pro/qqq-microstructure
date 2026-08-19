@@ -1148,3 +1148,64 @@ QQQ's own +5.1. Correlation with the momentum leg is +0.07.
 
 Until (1), every bps figure in this section is a range, not a number, and the floor
 of the range is the only one that should be underwritten.
+
+### 15b. The discriminators fire — in favor of the ceiling
+
+Both tests from "what would settle it" were run the same day. First, official
+prices: `xsec_auction_check.py` fetches Yahoo's official daily open/close (the
+primary-exchange auction prints) for the 79 most-frequent Q5/Q1 members since
+2012-01 and compares overnight RETURNS on identical name-days, so Yahoo's split
+back-adjustment cancels. The script was validated against a stub price source with
+a planted +8 bps opening-print inflation, which it recovered at +7.6. On the real
+thing (75 names resolved, 208,197 matched name-days):
+
+```
+  corr(panel, yahoo overnight)  0.9905     |gap| mean 4.40  median 2.10 bps
+  signed gap (panel - yahoo):   Q5-frequent -0.04   Q1-frequent -0.26
+  bounce loading (Q5-Q1):       +0.23 bps/day
+
+  B on identical name-days (3,472 days):
+    L/S panel prices     +5.64 bps/d   t=4.23
+    L/S yahoo official   +5.73 bps/d   t=4.29     print component -0.08 bps/day
+```
+
+**The bounce hypothesis is refuted.** The first-bar open IS the auction cross for
+these names, and the premium is identical at official prices: what Q5-Q1 gives
+back by 09:45 is genuine post-auction reversion — overpricing a market-on-open
+order sells INTO, not a print it cannot have. The ceiling is the tradeable number.
+(The +5.6 on this sample vs +10.0 full-history is the window, not the source: 2012+
+spans the 2016-2023 trough in the era table. Caveats: listed names only — 4 of 79
+including renames failed to resolve — and one mapping quirk, CMCS.A.)
+
+Second, the model at the floor anyway: `xsec_ml.py` block C re-targets the same
+pipeline on the 09:45 exit (features, params, canary unchanged; on the synthetic
+panel, where p15 equals the open, block C prints bit-for-bit identical to block B):
+
+```
+                       bps/day      t   Sharpe    maxDD%
+  rule on_1m L/S         +2.46   2.21     0.46     -39.8
+  ML L/S                 +7.29   6.61     1.37     -36.2
+  canary (shuffled)      +0.04   0.05     0.01
+
+  IC +0.108 (t=9.2); eras 2003-2026: +7.7 +7.2 +6.2 +11.6 +5.1 +6.6 +6.6
+```
+
+The rule keeps 40% of its spread at the floor; the model keeps 60% — and is
+**positive in all seven 4-year eras**, including 2016-2019 where the rule went
+negative. The floor model leans on a broader feature mix (mom_12_2, rng_3m, dvol
+~11-12% each) where the ceiling model leans on on_12m at 29%: predicting the
+post-reversion residual takes more than persistence alone, and the model finds it.
+
+One number reported rather than reasoned away: the ceiling-target canary repeats
+at +1.6 to +1.8 bps/day across runs (this run +1.79, t=2.85) while the cc and
+floor canaries sit at zero. Treat ~+1.8 as that construction's achievable-by-
+chance floor; the live +12.23 clears it by 7x, and the honest subtraction still
+doubles the rule.
+
+**Revised bottom line.** At MOO/MOC execution the ceiling stands: rule L/S +10.0
+(t=9.1), tilt over QQQ +7.1 (t=9.0), ML L/S +12.2 (Sharpe 2.6, break-even one-way
+cost ~3.1 bps), with the floor's +7.3 at t=6.6 as the robustness margin if
+execution slips 15 minutes. What remains before any capital discussion is what
+§12 demanded of the QQQ stack: the frozen-model forward replay as each month's
+file lands — `xsec_ml.py --save-model` freezes production models, and
+`xsec_replay.py` evaluates every month that postdates the freeze.

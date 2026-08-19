@@ -172,14 +172,42 @@ def monthly_ic(t, score, ycol):
     return pd.Series(ic)
 
 
+def save_production(t):
+    """Freeze production models for xsec_replay.py: train on everything supplied.
+    The frozen targets are the two that survived RESULTS 15/15b -- the overnight
+    ceiling (MOO/MOC execution) and the 09:45 floor. cc was a null; not frozen."""
+    import json
+    md = os.path.join(ROOT, 'models')
+    os.makedirs(md, exist_ok=True)
+    meta = {'features': FEATS, 'last_tmonth': str(t.tmonth.max()),
+            'name_months': int(len(t))}
+    for tag, ycol in (('on', 'yon_r'), ('on15', 'yon15_r')):
+        tr = t[t[ycol].notna()]
+        m = lgb.train(PARAMS, lgb.Dataset(tr[FEATS], tr[ycol], free_raw_data=True),
+                      num_boost_round=ROUNDS)
+        m.save_model(os.path.join(md, f'xsec_{tag}_lgbm.txt'))
+        meta[f'{tag}_rows'] = int(len(tr))
+    json.dump(meta, open(os.path.join(md, 'xsec_lgbm.json'), 'w'), indent=2)
+    print(f'production models -> models/xsec_on_lgbm.txt + models/xsec_on15_lgbm.txt')
+    print(f'trained through {meta["last_tmonth"]}  ({len(t):,} name-months)')
+
+
 def main():
-    argparse.ArgumentParser().parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--save-model', action='store_true',
+                    help='train on all history and write models/xsec_*_lgbm.txt')
+    ap.add_argument('--through', default=None,
+                    help='with --save-model: train only on trade months <= YYYY-MM')
+    a = ap.parse_args()
     df = load_panel()
     bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'on15_bps']]
            for m, g in df.groupby('month')}
     t = build_table(df)
     print(f'\nfeature table: {len(t):,} name-months, '
           f'{t.tmonth.nunique()} trade months {t.tmonth.min()} .. {t.tmonth.max()}')
+    if a.save_model:
+        save_production(t[t.tmonth <= a.through] if a.through else t)
+        return
 
     runs = {}
     for tag, ycol, col in (('cc', 'ycc_r', 'cc_bps'), ('on', 'yon_r', 'on_bps'),
