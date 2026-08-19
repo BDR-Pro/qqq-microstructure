@@ -988,3 +988,19 @@ repo that reaches the stated goal on the full history rather than on a hot regim
   the most recent era in this data.
 - Practicalities: two trades every day, all gains short-term for tax purposes, and
   ~500 spread-crossings/yr are modeled at 0.34 bps each.
+
+---
+
+## 14. Signal #3 candidates: two calendar effects, two honest nulls
+
+Two pre-declared published effects, one pass each, no sweeps. Both point the direction
+the literature says; neither clears any evidence bar on 6,747 QQQ days.
+
+```
+  turn-of-month (last + first 3):  TOM +6.95 vs other +2.56 bps/day, diff t=+0.83
+    -> and INVERTED in the newest era (2023+: TOM +6.05 vs other +10.46)
+  pre-holiday:                     +8.81 vs +3.14 bps/day, diff t=+0.55 (256 days)
+```
+
+Rejected, recorded so they are not re-tried. The stack stays two legs. Calendar effects
+at ETF level are too small relative to ~100 bps/day noise for this sample to confirm.
