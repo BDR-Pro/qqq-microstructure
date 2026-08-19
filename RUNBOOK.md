@@ -140,8 +140,22 @@ which pulls two days of 1-minute bars from IBKR at 10:31, rebuilds the model's f
 exactly as the backtest defines them, and trades the sign of the prediction. Pass
 `--rule` to fall back to the plain first-hour sign rule.
 
-The script is **stateless and idempotent**. Each run reads the day's log and does only
-the step that is due, so schedule it three times a day, US Eastern:
+**Simplest way to run it — one command, no scheduler:**
+
+```bash
+python src/live_momentum.py --daemon
+```
+
+It computes the ET event times itself (your machine's timezone and US daylight-saving
+shifts are irrelevant), sleeps between them, and performs each step at the right moment.
+If the laptop reboots, just start it again — each step re-reads the day's log, so it
+resumes where the day left off. Keep TWS running alongside it.
+
+**Alternative — a scheduler instead of a daemon.** A scheduler survives reboots
+unattended, at the cost of one footgun on a non-US-timezone machine: Task Scheduler
+fires at *local* times, and the ET equivalents shift twice a year with US daylight
+saving. The script is **stateless and idempotent** — each run reads the day's log and
+does only the step that is due — so schedule it three times a day, US Eastern:
 
 | Time (ET) | What it does |
 |---|---|

@@ -247,11 +247,45 @@ def paper(args):
     print(f'log -> {os.path.relpath(log_path(day), ROOT)}')
 
 
+def daemon(args):
+    """One long-running process instead of three scheduled runs.
+
+    Computes the ET event times itself (so the host machine's timezone and US
+    daylight-saving shifts are irrelevant), sleeps until each one, and invokes the same
+    idempotent step logic the scheduled path uses. Trade-off vs a scheduler: this dies
+    with a reboot or laptop sleep -- restart it and, because each step re-reads the
+    day's log, it resumes exactly where the day left off."""
+    import time as _t
+    EVENTS = [dt.time(9, 31), ENTRY_T.replace(minute=ENTRY_T.minute + 1), FLAT_T]
+    print(f'daemon mode: acting at {", ".join(str(e) for e in EVENTS)} ET; Ctrl+C to stop')
+    while True:
+        now = dt.datetime.now(ET)
+        todays = [dt.datetime.combine(now.date(), e, ET) for e in EVENTS]
+        nxt = next((t for t in todays if t > now), None)
+        if nxt is None or now.weekday() >= 5:
+            nxt = dt.datetime.combine(now.date() + dt.timedelta(days=1), EVENTS[0], ET)
+            while nxt.weekday() >= 5:
+                nxt += dt.timedelta(days=1)
+        wait = (nxt - dt.datetime.now(ET)).total_seconds()
+        print(f'  next action {nxt:%a %H:%M} ET ({wait/3600:.1f}h from now)', flush=True)
+        _t.sleep(max(wait, 1))
+        try:
+            paper(args)
+        except SystemExit as ex:
+            print(f'  step refused: {ex}', flush=True)
+        except Exception as ex:
+            print(f'  step failed: {type(ex).__name__}: {ex} -- will retry at the '
+                  f'next event', flush=True)
+        _t.sleep(90)          # step past the minute so the same event does not refire
+
+
 def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument('--dry-run', action='store_true', help='no broker; replay one archive day')
     g.add_argument('--paper', action='store_true', help='IBKR paper account only')
+    g.add_argument('--daemon', action='store_true',
+                   help='stay running and do all three daily steps at the right ET times')
     ap.add_argument('--host', default='127.0.0.1')
     ap.add_argument('--port', type=int, default=7497)
     ap.add_argument('--client-id', type=int, default=17)
@@ -259,7 +293,7 @@ def main():
     ap.add_argument('--rule', action='store_true',
                     help='use the plain sign rule instead of the ML model')
     a = ap.parse_args()
-    (dry_run if a.dry_run else paper)(a)
+    (dry_run if a.dry_run else daemon if a.daemon else paper)(a)
 
 
 if __name__ == '__main__':
