@@ -887,3 +887,57 @@ months are positive; the worst are -5 to -8%. Reaching a 1%/month AVERAGE needs 
 leverage (maxDD ~-37%), or the current hot regime persisting (2022-2025 OOS ran 8-23
 bps/day = 2-6%/month). "Positive every month" is not achievable at any realistic Sharpe
 and no honest backtest will promise it.
+
+---
+
+## 12. The frozen-model holdout: Nov 2025 - Mar 2026, and it failed
+
+Before any broker deployment, the production model (trained through 2025-10-31) was run
+over 102 days it had never seen in any form -- HF bars 2025-11-03 .. 2026-03-31.
+
+```
+                 bps/day   total%   hit%      t
+  ML (frozen)      -9.01    -9.19   45.1  -1.13
+  sign rule        -5.86    -5.98   51.0  -0.73
+
+  by month (ML):  Nov +0.75%  Dec -1.69%  Jan -0.69%  Feb +2.01%  Mar -9.58%
+```
+
+Holdout IC was **-0.148** against a walk-forward average of +0.08.
+
+### Diagnosis
+
+Not a data problem: the same files over the same window give SPY **+0.41 bps/day** with
+the same frozen model, and March 2026 volatility is unremarkable (sd 115 vs 105
+reference). March QQQ was a reversal regime -- 03-03: first hour -72 bps, rest of day
++161; 03-09: -13 then +238; 03-31 the model faded a +79 first hour and the market ran
++147. The model was wrong-footed on QQQ specifically while being fine on SPY, which is
+regime plus instrument-level noise, not a broken pipeline.
+
+Statistically the miss is ~1.4 sigma: at Sharpe 0.5, five-month stretches this bad have
+~10% probability, so the holdout neither kills the 27-year result nor comes close to
+confirming it. But you only live one path.
+
+### The one pre-declared rescue, tested and rejected
+
+Stand aside when the strategy's own trailing quarter (60 trading days, chosen in
+advance, no sweep) is negative:
+
+```
+  27-year OOS:  always-on 2.94 bps/day Sharpe 0.50  ->  filtered 1.31 / 0.27   WORSE
+  holdout:      always-on -9.19%       ->  filtered -3.59%                     less bad
+```
+
+It would have sat out March entirely and still halves the long-run edge. Rejected.
+
+### Deployment verdict
+
+- **Do not fund anything.** The recent five months were net losing and the 1-2%/month
+  goal is unsupported in the current regime.
+- **IBKR paper is optional, not urgent.** The strategy trades at two fixed timestamps,
+  so monthly HF bar updates replay it exactly -- a free, zero-infrastructure forward
+  test. Re-run the holdout evaluation as each month lands; consider paper/live only if
+  the trailing 6-12 months turn positive again.
+- The 27-year edge remains statistically real (t=2.3-2.9 across variants and
+  instruments). What the holdout shows is its cost: Sharpe ~0.5 means years like this,
+  and no filter tested honestly removes them without removing the edge too.
