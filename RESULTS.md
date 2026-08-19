@@ -1004,3 +1004,147 @@ the literature says; neither clears any evidence bar on 6,747 QQQ days.
 
 Rejected, recorded so they are not re-tried. The stack stays two legs. Calendar effects
 at ETF level are too small relative to ~100 bps/day noise for this sample to confirm.
+
+---
+
+## 15. The cross-section: momentum is a null, and the overnight premium is half an opening print — `xsec_extract.py`, `xsec_backtest.py`, `xsec_ml.py`
+
+Panel: the top 150 US tickers per month by **that month's** dollar volume, 1999-03 →
+2026-03, minute bars collapsed to daily rows at extraction. 325 months, 1,014,170
+ticker-days, 1,348 names. The universe is lagged one month (month T trades on file
+T-1's list), and a name must also appear in month T's file to be priceable — that
+still-liquid-next-month conditioning runs 14.1%/month attrition (worst 22.0%) and is
+measured, not hidden. ETFs/ETNs are excluded by a frozen list (28/month). Two signals,
+pre-declared, one pass each, no sweeps: Jegadeesh-Titman 12-2 momentum and
+Lou-Polk-Skouras overnight persistence, quintiles, equal weight.
+
+### The panel had landmines, and the diagnostics existed to find them
+
+- **Exchange test symbols** (ZVZZ.T and seven relatives, plus TESTA/B/C) bought their
+  way into the top-150 on fake dollar volume — 2,539 ticker-days of test prints
+  gapping ×50/×0.02, found because they were the entire top of the detected-split
+  list on the first run. Now dropped from the panel at load.
+- **Splits are excluded, not adjusted**, and the tolerance had to learn that a
+  split-day gap is ratio × that day's real overnight move: AAPL's 4:1 printed ×0.256,
+  AMZN's 20:1 ×0.051, SHOP's 10:1 ×0.098. At 3.5% log tolerance the verifier reads
+  **9/9 known splits detected**, and the detector independently caught BRK.B 50:1,
+  SOXL 15:1, TVIX 1:10, NUGT 1:10, LRCX 10:1, NFLX 10:1 — and one decimal-shift
+  glitch (CTXS ×10.1 on 2000-02-29), which the same mechanism removes.
+- All multi-period returns are sums of valid daily log returns, so an excluded day's
+  level break cannot leak into any window. Dividends land as negative overnight price
+  moves the holder actually receives, so every overnight number below is understated.
+
+### A. Cross-sectional momentum — an honest null in mega-caps
+
+```
+                       bps/day      t   Sharpe    CAGR%   maxDD%
+  L/S Q5-Q1              +3.05   1.26     0.25     2.82    -71.8
+  long tilt Q5-EW        +1.17   0.89     0.18     1.54    -49.5
+  turnover 26%/month/leg; net at 5 bps one-way: +2.80 bps/day
+
+  eras: 2000-03 +1.8  04-07 +2.3  08-11 +3.4  12-15 +5.0  16-19 +1.1
+        20-23 +7.1  24-26 -1.5
+  worst months: 2001-10 -29.8%  2009-04 -28.9%  2000-11 -23.4%
+```
+
+The direction matches the literature and so does everything else about it: half the
+canonical magnitude (momentum lives in mid/small caps, this universe is the megacap
+top-150), and the worst months are *the* momentum-crash dates — Oct 2001, Apr 2009,
+the 2000-01 unwind — recovered blind by the machinery. t=1.26 over 26 years does not
+clear any bar. The walk-forward ML on the same trade (below) is a clean null too:
+monthly rank IC **-0.002**, L/S -1.45 bps/day against its own canary at -1.18. The
+monthly total-return cross-section of the most liquid 150 names is efficient.
+Recorded so it is not re-tried.
+
+### B. Overnight persistence — strong, and then the discriminator fires
+
+Rank on last month's mean overnight return, hold close→open, refresh monthly:
+
+```
+                       bps/day      t   Sharpe    CAGR%   maxDD%
+  L/S Q5-Q1             +10.01   9.10     1.75    27.35    -34.6
+  Q5 overnight          +11.92   8.50     1.64    32.76    -44.0
+  Q5 - QQQ (tilt)        +7.14   8.90     1.72    19.05    -32.1
+
+  tug-of-war: Q5-Q1 INTRADAY -12.22 bps/day (t=-6.39)
+  eras: 1999 +61.3  2000-03 +17.7  04-07 +15.6  08-11 +9.5  12-15 +5.9
+        16-19 -0.4  20-23 +1.2  24-26 +11.4
+```
+
+t=9.1 over 26 years, and the tug-of-war is exactly as Lou-Polk-Skouras predict — so
+exact that close-to-close the spread is ~zero (+10.01 − 12.22 ≈ −1 with the momentum
+skip). The whole effect is *when* returns arrive, not *which* names go up. That is
+either a pure timing anomaly or **bid-ask bounce at the opening print**: a first-bar
+trade at the ask against a close near the bid manufactures the same persistent fake
+overnight gain and the same offsetting intraday loss. Trade-price data cannot tell
+those apart from the table above, so the discriminator was pre-declared: sell the
+same quintiles at 09:45, which does not capture the opening print.
+
+```
+  L/S exit 09:45         +4.81   3.83     0.74    11.37    -51.1
+  Q5  exit 09:45         +7.28   4.93     0.95    17.90    -49.5
+```
+
+**52% of the spread is the opening print; 48% survives as a holdable return at
+t=3.8.** Q5-Q1 gives back 5.2 bps in the first 15 minutes — 43% of the entire day's
+reversal — and then fades slowly for six hours. Where the truth sits between +4.81
+and +10.01 depends on what the 09:30 bar's open actually is: if it is the official
+auction cross, a market-on-open sell captures it and the overpricing is real and
+sellable; if it is an ask-side print after the auction, it was never available.
+This dataset cannot say. **Underwrite the floor: +4.81 L/S, and a long tilt of
+roughly +2.5 bps/day over QQQ overnight** (7.28 vs the panel's 4.78 QQQ overnight).
+
+The era shape carries its own warning: the effect died in 2016-2019 — the window in
+which Lou-Polk-Skouras was published — and revived to +11.4 in 2024-2026. Whether
+the revival is regime or noise is not answerable in-sample.
+
+### The ML ranker doubles the rule, mechanism pre-registered
+
+`xsec_ml.py`: LightGBM over ten features per name-month (each a published effect),
+targets rank-transformed within month so the market component cancels, walk-forward
+by trade year, params inherited frozen from `momentum_ml.py`, and a leak canary
+(targets permuted within training months) built in. On a synthetic panel with
+planted truths the pipeline predicted, before touching real data, that the model
+would roughly double the 1-month rule by finding 12-month overnight persistence.
+On the real panel, 279 OOS months (2003-01 → 2026-03):
+
+```
+                       bps/day      t   Sharpe    maxDD%
+  rule on_1m L/S         +6.20   6.41     1.33     -26.4
+  ML L/S                +12.38  12.58     2.61     -20.5
+  canary (shuffled)      +1.60   2.54     0.53     -19.7
+
+  monthly rank IC +0.214 (t=17.5); top feature on_12m at 28% of gain;
+  positive in all six 4-year eras; one losing year (2022) in 24.
+```
+
+The doubling replicated with the predicted mechanism on top. The canary's +1.60 is
+inside the ±1.6 wobble observed across runs and configurations, an order of
+magnitude under the live number, and is reported rather than reasoned away. Two
+caveats: these ML rows ran on the panel one fix earlier (TESTB still present — 624
+of 1.0M rows, 2001-02 only, affecting nothing after 2003), and the target includes
+the opening print, so the model's floor — trained and evaluated on the 09:45 exit —
+is untested. Given the rule loses half its spread there, assume the ML does too
+until shown otherwise.
+
+### Costs, and what is actually deployable
+
+The L/S pays 4 crossings/day: break-even one-way cost is 2.50 bps at the open exit
+and 1.20 bps at the floor — thin against realistic single-name spreads, and the
+short leg assumes borrow on ~30 names every night. The deployable object is the
+**tilt**: the stack's overnight leg (§13) already pays its two crossings on QQQ, so
+switching it to the top quintile adds only the single-name-minus-QQQ spread
+difference, for +7.1 bps/day at the open exit and ~+2.5 at the floor, on top of
+QQQ's own +5.1. Correlation with the momentum leg is +0.07.
+
+### What would settle it
+
+1. **Official auction prices** (the opening/closing cross) in place of first/last
+   bar trades — this alone decides floor vs ceiling, and it is the same NBBO-class
+   caveat §5 left open for the microstructure edge.
+2. The **monthly HF replay** forward test, exactly as §12 runs it for the QQQ stack:
+   the extractor is resumable and the strategy trades at two fixed timestamps.
+3. If pursued, the ML re-targeted on the 09:45 exit, same pipeline, same canary.
+
+Until (1), every bps figure in this section is a range, not a number, and the floor
+of the range is the only one that should be underwritten.
