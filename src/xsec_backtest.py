@@ -19,7 +19,7 @@
 #   - Splits are handled by exclusion, not adjustment. Prices are unadjusted, so a
 #     split is a giant fake overnight gap. Any overnight gap that (a) spans a
 #     missing day, (b) matches a standard split ratio (3:2, 4:3, 2:1 .. 50:1, or
-#     inverse) within 1.5% in log space, or (c) exceeds +/-40% (backstop) is
+#     inverse) within 3.5% in log space, or (c) exceeds +/-40% (backstop) is
 #     NaN'd. Every multi-day return in this file is a sum of VALID daily log
 #     returns, so a level break on an excluded day cannot leak into any window.
 #     Momentum additionally requires presence in every formation month. Detected
@@ -49,8 +49,22 @@ MIN_NAMES = 40          # skip a month if fewer eligible names than this
 LOOKBACK = 11           # formation months T-12 .. T-2
 MIN_CC_DAYS = 10        # valid close-close days per formation month
 MIN_ON_DAYS = 12        # valid overnight obs in the ranking month for B
-SPLIT_TOL = 0.015       # log-space tolerance around a candidate ratio
+# A split-day gap is ratio x that day's REAL overnight move, so the tolerance must
+# admit normal drift. 1.5% was too tight: on the first full-panel run AAPL 4:1
+# printed x0.256, AMZN 20:1 x0.051 and SHOP 10:1 x0.098 -- each missed by ~2% and
+# saved only by the 40% backstop. 3.5% catches those; the false-positive cost is
+# real gaps inside a ratio band being dropped, which is counted and conservative.
+SPLIT_TOL = 0.035       # log-space tolerance around a candidate ratio
 BACKSTOP = np.log(1.40) # any |overnight| beyond this is dropped
+
+# Exchange TEST symbols print fake quotes at fake sizes and can buy their way into
+# a dollar-volume top-150 (ZVZZ.T did, 2007-2012, gapping x50/x0.02 -- it was the
+# entire top of the first full-panel split list). Dropped from the panel entirely;
+# the universe slot they consumed in those months is lost, which is noted, not
+# repaired. The regex covers the Z*ZZ* NASDAQ test family in either dot notation.
+TEST_RE = r'^Z[A-Z]?ZZ'
+TEST_SYM = {'ZTEST', 'TEST', 'ZBZX', 'IGZ', 'CBX', 'CBO', 'ATEST', 'CTEST',
+            'MTEST', 'NTEST', 'PTEST'}
 
 _r = [1.5, 4 / 3] + list(range(2, 9)) + [10, 12, 15, 20, 25, 30, 40, 50]
 SPLIT_LOGR = np.array([np.log(x) for x in _r] + [-np.log(x) for x in _r])
@@ -109,6 +123,11 @@ def load_panel():
         raise SystemExit(f'no files in {XSEC} -- run xsec_extract.py first')
     df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     df = df[(df.open > 0) & (df.close > 0)]
+    is_test = df.ticker.str.match(TEST_RE) | df.ticker.isin(TEST_SYM)
+    if is_test.any():
+        print(f'test symbols dropped from panel: '
+              f'{sorted(df.ticker[is_test].unique())} ({int(is_test.sum())} rows)')
+        df = df[~is_test]
     df = df.sort_values(['ticker', 'day']).reset_index(drop=True)
 
     cal = np.sort(df.day.unique())
@@ -149,12 +168,15 @@ def load_panel():
             continue
         seen = True
         g_ = gap[(tk, day)]
-        if flag[(tk, day)] and abs(g_ - np.log(ratio)) < 3 * SPLIT_TOL:
+        if flag[(tk, day)]:
             print(f'    OK   {tk:<6} {day}  x{np.exp(g_):.3f} detected')
+        elif abs(g_) > BACKSTOP:
+            print(f'    ok~  {tk:<6} {day}  x{np.exp(g_):.3f} excluded by backstop '
+                  f'(not ratio-flagged)')
         elif abs(g_) < 0.05:
             print(f'    --   {tk:<6} {day}  no gap (source pre-adjusted?)')
         else:
-            print(f'    MISS {tk:<6} {day}  gap x{np.exp(g_):.3f} NOT flagged')
+            print(f'    MISS {tk:<6} {day}  gap x{np.exp(g_):.3f} SURVIVED unflagged')
     if not seen:
         print('    (none of the known split dates are in this panel)')
     return df
@@ -186,7 +208,7 @@ def main():
         base = (uni[months[i - 1]] & uni[T]) - ETF
         look = months[i - 1 - LOOKBACK:i - 1]          # T-12 .. T-2
         elig, sig = [], []
-        for tk in base:
+        for tk in sorted(base):
             rows = [agg.get((tk, m)) for m in look]
             if any(r is None or r['cc_n'] < MIN_CC_DAYS for r in rows):
                 continue
@@ -241,7 +263,7 @@ def main():
         T = months[i]
         base = (uni[months[i - 1]] & uni[T]) - ETF
         elig, sig = [], []
-        for tk in base:
+        for tk in sorted(base):
             r_ = agg.get((tk, months[i - 1]))
             if r_ is None or r_['on_n'] < MIN_ON_DAYS or np.isnan(r_['on_mean']):
                 continue

@@ -79,7 +79,7 @@ def build_table(df):
         T = months[i]
         base = (uni[months[i - 1]] & uni[T]) - ETF
         look = [months[j] for j in range(i - 12, i)]        # T-12 .. T-1
-        for tk in base:
+        for tk in sorted(base):
             hist = [m.get((tk, mm)) for mm in look]
             if any(h is None or h['cc_n'] < MIN_CC_DAYS for h in hist):
                 continue
