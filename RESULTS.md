@@ -941,3 +941,50 @@ It would have sat out March entirely and still halves the long-run edge. Rejecte
 - The 27-year edge remains statistically real (t=2.3-2.9 across variants and
   instruments). What the holdout shows is its cost: Sharpe ~0.5 means years like this,
   and no filter tested honestly removes them without removing the edge too.
+
+---
+
+## 13. Signal #2: the overnight premium — stronger than momentum, uncorrelated
+
+The documented overnight/intraday split (Lou, Polk & Skouras), tested on the validated
+spines. Both unadjusted-price caveats are conservative: split days dropped, and
+dividends land as negative overnight price moves the holder actually receives.
+
+```
+ ticker   days |  overnight bps/d      t |  intraday bps/d      t
+    QQQ   6748 |             5.08   4.56 |           -1.43  -0.81
+    SPY   6775 |             2.28   2.65 |            0.15   0.13
+    IWM   5687 |             4.35   3.73 |           -1.28  -0.77
+    DIA   6355 |             1.53   1.76 |            0.82   0.71
+```
+
+All four instruments positive, QQQ at t=4.56 over 27 years, positive in 7 of 8
+four-year eras. Correlation with the momentum strategy: **+0.017**.
+
+### The stack
+
+The overnight leg holds 16:00 -> 09:30; the momentum leg trades 10:30 -> 16:00. They
+never overlap, so one pot of capital runs both:
+
+```
+  overnight only    +4.74 bps/d  t=4.25  Sharpe 0.82  CAGR 11.50%  maxDD -30.6%
+  momentum only     +3.67 bps/d  t=2.48  Sharpe 0.48  CAGR  7.67%  maxDD -47.0%
+  STACK             +8.42 bps/d  t=4.50  Sharpe 0.87  CAGR 20.00%  maxDD -43.9%
+```
+
+**The stack averages 1.53%/month over 27 years with no leverage**, positive in every
+4-year era (+11.4 bps/day in the current one). This is the first configuration in this
+repo that reaches the stated goal on the full history rather than on a hot regime.
+
+### The honest caveats
+
+- **The holdout was bad for both**: overnight −1.91%, stack −7.89% over Nov 2025 - Mar
+  2026. Zero long-run correlation did not prevent a jointly bad Feb-Mar 2026. For the
+  overnight leg alone the miss is only ~0.7 sigma — normal variation — but the stack
+  does not diversify away regime risk.
+- The momentum leg here is the full-history sign rule; the deployable ML leg's OOS rate
+  is similar (2.9-3.9 bps/day) but not identical.
+- The overnight anomaly is widely published. It has nonetheless stayed positive through
+  the most recent era in this data.
+- Practicalities: two trades every day, all gains short-term for tax purposes, and
+  ~500 spread-crossings/yr are modeled at 0.34 bps each.
