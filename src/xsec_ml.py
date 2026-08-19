@@ -28,6 +28,15 @@
 #     name-months. The still-liquid-next-month conditioning documented there
 #     applies here identically, to model and baseline alike.
 #
+# A third target answers RESULTS 15's open question: the FLOOR. The same features
+# and the same pipeline, but the target and holding are the 09:45 exit (on15) --
+# the return that does not capture the opening print. RESULTS 15 showed the rule
+# loses half its spread there (+10.0 -> +4.8); this measures whether the model's
+# doubling survives where the trade is actually collectable. Rule baseline for the
+# floor is the same on_1m ranking, evaluated on the 09:45 holding. On the
+# synthetic panel p15 equals the open by construction, so block C prints
+# identically to block B -- the structural check that only the exit differs.
+#
 # Validation on a synthetic panel with planted truths (persistent per-name drift
 # and overnight drift), recorded before any real-data run: both canaries ~0; the
 # overnight model DOUBLED its rule (+10.5 vs +5.3 bps/day) by finding the planted
@@ -69,6 +78,7 @@ def build_table(df):
     m = df.groupby(['ticker', 'month']).agg(
         cc_sum=('cc_bps', 'sum'), cc_n=('cc_bps', 'count'),
         on_mean=('on_bps', 'mean'), on_n=('on_bps', 'count'),
+        on15_mean=('on15_bps', 'mean'), on15_n=('on15_bps', 'count'),
         cc_std=('cc_bps', 'std'), fh_mean=('fh', 'mean'),
         rng_mean=('rng', 'mean'), dv=('dollar_vol', 'mean'),
         close_last=('close', 'last')).to_dict('index')
@@ -101,7 +111,8 @@ def build_table(df):
                          - np.mean([np.log10(h['dv']) for h in hist[:-1]]),
                 lprice=np.log10(hist[-1]['close_last']),
                 y_cc=cur['cc_sum'],
-                y_on=cur['on_mean'] if cur['on_n'] >= 8 else np.nan))
+                y_on=cur['on_mean'] if cur['on_n'] >= 8 else np.nan,
+                y_on15=cur['on15_mean'] if cur['on15_n'] >= 8 else np.nan))
     t = pd.DataFrame(rows).dropna(subset=FEATS)
     keep = t.groupby('tmonth')['ticker'].transform('size') >= MIN_NAMES
     t = t[keep].reset_index(drop=True)
@@ -109,6 +120,7 @@ def build_table(df):
         t[f] = rank_pm(t[f], t.tmonth)
     t['ycc_r'] = rank_pm(t.y_cc, t.tmonth)
     t['yon_r'] = rank_pm(t.y_on, t.tmonth)
+    t['yon15_r'] = rank_pm(t.y_on15, t.tmonth)
     t['year'] = t.tmonth.str[:4].astype(int)
     return t
 
@@ -163,14 +175,15 @@ def monthly_ic(t, score, ycol):
 def main():
     argparse.ArgumentParser().parse_args()
     df = load_panel()
-    bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps']]
+    bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'on15_bps']]
            for m, g in df.groupby('month')}
     t = build_table(df)
     print(f'\nfeature table: {len(t):,} name-months, '
           f'{t.tmonth.nunique()} trade months {t.tmonth.min()} .. {t.tmonth.max()}')
 
     runs = {}
-    for tag, ycol, col in (('cc', 'ycc_r', 'cc_bps'), ('on', 'yon_r', 'on_bps')):
+    for tag, ycol, col in (('cc', 'ycc_r', 'cc_bps'), ('on', 'yon_r', 'on_bps'),
+                           ('on15', 'yon15_r', 'on15_bps')):
         pred, model = walk_forward(t, ycol)
         canary, _ = walk_forward(t, ycol, shuffle=True)
         oos = pred.notna()
@@ -199,26 +212,39 @@ def main():
     print('  by 4-year era (ML L/S):')
     era_table(runs['on']['ls'].index, runs['on']['ls'].ls.values)
 
+    print('\nC. the floor: same trade sold at 09:45 -- does the model survive '
+          'without the opening print?')
+    stats(runs['on15']['rls'].ls.values, 'rule on_1m L/S')
+    stats(runs['on15']['ls'].ls.values, 'ML L/S')
+    stats(runs['on15']['cls'].ls.values, 'canary (shuffled)')
+    print('  by 4-year era (ML L/S):')
+    era_table(runs['on15']['ls'].index, runs['on15']['ls'].ls.values)
+
     icc, ico = runs['cc']['ic'], runs['on']['ic']
+    icf = runs['on15']['ic']
     print(f'\nmonthly rank IC: cc {icc.mean():+.3f} '
           f'(t={icc.mean()/(icc.std()/np.sqrt(len(icc))):.1f})   '
           f'on {ico.mean():+.3f} '
-          f'(t={ico.mean()/(ico.std()/np.sqrt(len(ico))):.1f})')
+          f'(t={ico.mean()/(ico.std()/np.sqrt(len(ico))):.1f})   '
+          f'on15 {icf.mean():+.3f} '
+          f'(t={icf.mean()/(icf.std()/np.sqrt(len(icf))):.1f})')
     j = runs['cc']['ls'].join(runs['on']['ls'], rsuffix='_on').dropna()
     if len(j) > 100:
         print(f'correlation(ML-cc L/S, ML-on L/S) = '
               f'{np.corrcoef(j.ls, j.ls_on)[0, 1]:+.3f}')
 
-    print(f'\n{"year":>6}{"ic_cc":>8}{"ic_on":>8}{"ml_cc":>9}{"ml_on":>9}   bps/day')
+    print(f'\n{"year":>6}{"ic_cc":>8}{"ic_on":>8}{"ml_cc":>9}{"ml_on":>9}'
+          f'{"ml_on15":>9}   bps/day')
     for y in sorted(t[runs['cc']['oos']].year.unique()):
         ys = str(y)
         a = runs['cc']['ls'][runs['cc']['ls'].index.str[:4] == ys].ls
         b = runs['on']['ls'][runs['on']['ls'].index.str[:4] == ys].ls
+        c = runs['on15']['ls'][runs['on15']['ls'].index.str[:4] == ys].ls
         print(f'{y:>6}{icc[icc.index.str[:4] == ys].mean():>8.3f}'
               f'{ico[ico.index.str[:4] == ys].mean():>8.3f}'
-              f'{a.mean():>9.2f}{b.mean():>9.2f}')
+              f'{a.mean():>9.2f}{b.mean():>9.2f}{c.mean():>9.2f}')
 
-    for tag in ('cc', 'on'):
+    for tag in ('cc', 'on', 'on15'):
         m = runs[tag]['model']
         imp = m.feature_importance(importance_type='gain')
         top = sorted(zip(FEATS, imp), key=lambda x: -x[1])[:5]
@@ -226,8 +252,10 @@ def main():
               + '  '.join(f'{f} {v/imp.sum()*100:.0f}%' for f, v in top))
 
     out = pd.DataFrame({'mlcc_ls': runs['cc']['ls'].ls, 'mlon_ls': runs['on']['ls'].ls,
+                        'mlon15_ls': runs['on15']['ls'].ls,
                         'rule_mom_ls': runs['cc']['rls'].ls,
-                        'rule_on_ls': runs['on']['rls'].ls})
+                        'rule_on_ls': runs['on']['rls'].ls,
+                        'rule_on15_ls': runs['on15']['rls'].ls})
     out.index.name = 'day'
     p = os.path.join(ROOT, 'data', 'xsec_ml_daily.csv')
     out.to_csv(p, float_format='%.3f')
