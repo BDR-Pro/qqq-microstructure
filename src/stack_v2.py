@@ -81,6 +81,16 @@ def main():
     else:
         print('missing data/xsec_intraday.csv -- run xsec_intraday.py (skipping XID)')
 
+    # RESULTS 18's momentum-direction credit spread, net of its two entry-leg
+    # commissions. It conditions on the same first-hour signal as MOM, so the
+    # correlation row here IS the integration question RESULTS 18 left open.
+    p = os.path.join(d, 'opra_daily.parquet')
+    if os.path.exists(p):
+        od = pd.read_parquet(p).set_index('day')
+        legs['OPT'] = (od.ev_sprd - 1.30 / (od.spot * 100) * 1e4).dropna()
+    else:
+        print('missing data/opra_daily.parquet -- run opra_value.py (skipping OPT)')
+
     L = pd.DataFrame(legs).sort_index()
     print(f'\nlegs at c={a.c} / c_intra={a.c_intra} bps one-way, net bps/day:')
     for k in L:
@@ -100,7 +110,8 @@ def main():
               ('v2  (ON+MOM)', ['ON', 'MOM']),
               ('v2n (NEU+MOM)', ['NEU', 'MOM']),
               ('v2x (ON+MOM+XID)', ['ON', 'MOM', 'XID']),
-              ('v2nx(NEU+MOM+XID)', ['NEU', 'MOM', 'XID'])]
+              ('v2nx(NEU+MOM+XID)', ['NEU', 'MOM', 'XID']),
+              ('v2o (ON+MOM+OPT)', ['ON', 'MOM', 'OPT'])]
     print('\ncombined (legs summed on common days -- one pot of capital, '
           'non-overlapping hours; XID is an L/S overlay;\n v1 is RESULTS 13 at '
           'panel prices, on each combo row\'s own window):')
@@ -119,7 +130,7 @@ def main():
         r = shown['v1'].loc[shown['v1'].index.intersection(shown['v2'].index)]
         stats(r.values, 'v1 @ v2 window')
         shown['v1@v2'] = r
-    for lab in [k for k in ('v1@v2', 'v2', 'v2x') if k in shown]:
+    for lab in [k for k in ('v1@v2', 'v2', 'v2o') if k in shown]:
         r = shown[lab]
         print(f'\n  by 4-year era ({lab}):')
         era_table(r.index, r.values)

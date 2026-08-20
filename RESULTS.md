@@ -1353,3 +1353,107 @@ defined-risk structure pays it twice; and the proxy has exactly one
 ground-truth point. Whatever survives the real chains must still be
 defined-risk and IV-gated — §8's tail rules are not relaxed by a thin average
 edge, and 2025 shows the gate must be able to say "stand aside" for a year.
+
+---
+
+## 18. The chains arrive: §8 priced at real premiums — `opra_pull.py`, `opra_value.py`
+
+The purchase §17 earned, made small: instead of the portal's $412 for 221 GB of
+the whole OPRA universe (or ~$110 filtered to QQQ full days), ten ET minutes per
+day around the 10:30 entry — QQQ.OPT parent, cbbo-1m, one parquet per day,
+resumable, the bill printed before the spend. **851 sessions for ~$21.** The
+valuer takes each day's minute closest to 10:30 ET (DST-correct; opra_load.py's
+fixed-UTC snapshot constants carry the §10 bug and were not reused), recovers
+spot by put-call parity and IV from the ATM straddle, and prices §8's
+pre-declared structures in the momentum direction at the quotes a real order
+faces — ask when buying, bid when selling. Signal and settlement come from the
+equity panel. 749 days valued (2023-04 → 2026-03); 5 holidays; 97 days beyond
+the panel's last month await `xsec_extract.py`.
+
+### Two vendors, sub-basis-point agreement
+
+```
+  parity spot vs panel p60:  |diff| mean 0.4 bps   p95 1.0 bps
+```
+
+Databento option chains and the HuggingFace equity bars have no common
+ancestor, and they agree at the level of rounding. This validates both
+pipelines end to end — the DST windows, the OSI parsing, the parity read, and
+retroactively the panel itself.
+
+### Measured IV — and the proxy fails its exam
+
+```
+  0DTE IV at 10:30, 749 days:  p10 8.3   median 12.1   p90 18.5
+  days above the 14.8 break-even:  25.5%      (§17's proxy said 63.3%)
+```
+
+§8's working assumption ("QQQ 0DTE IV rarely prints below ~15%") is measured
+FALSE at the 10:30 entry, and §17's proxy — right to the decimal on its one
+ground-truth day — was badly wrong in distribution. The wedge is the one §17's
+adj column partially flagged: ^VIX1D prices a full day including the overnight
+gap, while the 10:30 straddle prices the remaining session, and a realised-vol
+ratio does not map one onto the other. The selling season is a quarter of
+days, not two thirds. The proxy is retired for gating; measured IV now costs
+~$0.50/month to keep current via the same slice pull.
+
+### The verdict: the long side is dead, the defined-risk short side is not
+
+```
+  EV/day, bps of spot, GROSS      all days          IV<=14.8         IV>14.8
+  long ATM (momentum)         +0.4  t=0.2  37%   -0.3 t=-0.2 36%   +2.4 t=0.4 40%
+  put/call spread .5/1.5      +3.4  t=4.6  87%   +2.7 t= 3.9 90%   +5.4 t=2.7 81%
+  iron condor .5/1.0          +2.3  t=3.6  70%   +2.5 t= 3.8 76%   +1.5 t=1.0 53%
+
+  commissions ($0.65/contract/side, entry legs): long -0.14  spread -0.27  condor -0.54
+
+  full period:  spread +3.37 bps/d  t=4.65  Sharpe 2.70  maxDD -2.1%  = +0.71%/mo
+                condor +2.28 bps/d  t=3.57  Sharpe 2.07  maxDD -2.9%  = +0.48%/mo
+  by year (spread): 2023 +4.7   2024 +4.0   2025 +2.5   2026(Q1) +0.2
+```
+
+Three findings, none the expected one:
+
+- **Buying the momentum in options is dead.** +0.4 bps/day at t=0.2, 37% win
+  rate, negative even in its own supposed low-IV regime. §9's one-day +23.65
+  EV was one draw; over 749 days the ~5 bps honest drift (§8b) does not clear
+  ~2.8%-of-premium friction per leg. The §1 pattern for the third time: the
+  signal was never the problem.
+- **The momentum-direction credit spread survives contact with real quotes.**
+  +3.4 gross / +3.1 net bps/day, t=4.65, an 87% win rate with a −2.1% max
+  drawdown, positive every year. It monetises three things at once — the
+  premium, the skew, and the direction — which is why it clears the tolls that
+  killed the long side.
+- **The gate is not the discriminator.** Both IV cells are positive for the
+  spread. §17's whole framing — sell only when IV is high — turns out to
+  matter less than the structure itself. Reported, not tuned: the cells were
+  pre-declared and both are printed.
+
+### The tail check, finally at real prices
+
+```
+  worst 5 spread days:  -94  -94  -91  -91  -85 bps
+```
+
+That −94 is the cap by construction: (1% strike width − credit). §8's
+arithmetic — one −12% day costs 65 to 329 days of credit — was for NAKED
+shorts; the defined-risk wing §8 demanded bounds the same catastrophe at
+roughly **28 days of credit**, and the sample's worst days sat exactly on the
+cap and no further. The design survived its own worst case. The honest
+remainder: 2023-2026 contains no crash, so the cap has been touched, not
+stress-tested; an assignment on partial-ITM days is approximated as cash
+settlement and actually leaves overnight stock exposure (closing shorts at
+15:55 would remove it at the cost of a spread crossing); everything is
+held-to-expiry with no management.
+
+### What gates the overlay — unchanged rules, one new question
+
+The spread conditions on the same first-hour signal as the stack's MOM leg, so
+before it joins the v2 book its daily EV must be correlated against that leg —
+the one integration number this section does not contain. After that, the same
+probation as everything else: the monthly forward replay (a ~$0.50 slice pull
+plus the panel extension), no leverage before forward months, and §12's
+standing instruction to diagnose rather than filter when a month goes wrong.
+The options thread, opened by §8 on an invented IV, closes on 749 measured
+days with one dead hypothesis, one retired proxy, and one live, bounded,
++0.71%/month finding.
