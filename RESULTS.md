@@ -1297,3 +1297,59 @@ frozen 2026-08-20); the MOM leg remains under §12's monthly verdict, which
 currently says do not fund it. Nothing here shortens either probation: v2 is
 the configuration the forward test is now measuring, and no leverage decision
 precedes forward months.
+
+---
+
+## 17. Does selling premium have a season? — `iv_regime.py`
+
+§8 priced every 0DTE structure against an ASSUMED IV and showed the ranking
+pivots entirely on it; §9's one measured day (12.5%) flipped it. Before paying
+for the full OPRA pull, the free gate check: ^VIX1D (CBOE's 1-day SPX vol, the
+0DTE era's own gauge, live 2023-04) scaled by the QQQ/SPY realised-vol ratio
+measured on the proxy's own window — 1.309, against a dot-com-dominated 1.451
+full-history ratio that inflated a first draft and is kept in the output as a
+warning about window-matching.
+
+### The proxy hit the only ground truth exactly
+
+```
+  2026-07-15:  ^VIX1D 9.5 x 1.309 = 12.5%   vs 12.5% measured from the chain (§9)
+```
+
+One point is one point, but the check existed before the answer did.
+
+### The season, 735 days 2023-04 → 2026-03
+
+```
+  proxy: p10 11.8  p25 13.6  median 16.8  p75 21.4  p90 27.5
+  days above 12.5 / 14.8 (break-even) / 16.0:   84.8% / 63.3% / 54.1%
+
+  year  mean IV%  >14.8%   impl sd  real sd  impl/real    adj
+  2023      17.3     65%       101       66       1.53   1.23
+  2024      16.7     52%        97       72       1.34   1.08
+  2025      21.3     70%       123      106       1.16   0.93
+  2026      22.0     79%       128       72       1.78   1.42
+```
+
+`impl/real` is an upper bound — VIX1D prices the overnight gap the 10:30→close
+window never realises; `adj` nets out the measured intraday variance share
+(0.64). Read the adj column: **sellers were paid in three of four years (+8%
+to +42% over realised), and in 2025 premium was cheap** — a year of
+systematically selling would have collected less than the risk realised,
+before tails and friction.
+
+### Verdict
+
+The season exists and is **conditional**: the gate is open ~63% of days, the
+paid margin is thin on average and vanished for a full year. That supports
+exactly one next step and rules out another. It justifies pricing the OPRA
+date-range pull (`OPRA.PILLAR` `cbbo-1m`, `QQQ.OPT` parent, 2023→now) so the
+structures can be valued against per-day measured chains — and it rules out
+shipping any sell-premium overlay off this proxy alone. Three reasons the adj
+margin overstates what a seller keeps: mean-implied vs realised-std ignores
+the convex tail drag §8 quantified (one −12% day = 1.3 years of −1%-put
+credits); §9 measured option friction at ~2.8% of premium per leg and a
+defined-risk structure pays it twice; and the proxy has exactly one
+ground-truth point. Whatever survives the real chains must still be
+defined-risk and IV-gated — §8's tail rules are not relaxed by a thin average
+edge, and 2025 shows the gate must be able to say "stand aside" for a year.
