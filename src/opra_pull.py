@@ -139,6 +139,17 @@ def main():
                 stype_in='parent', start=t0, end=t1))
             df = data.to_df(map_symbols=True)
         except Exception as ex:
+            # A client-side rejection (BentoClientError) on a day the API has no
+            # session for -- a market holiday the plain-weekday calendar beyond
+            # the panel naively included. Save an empty marker so sweeps stop
+            # retrying it, but only once this store holds real pulls, so an
+            # auth failure can never masquerade as a holiday.
+            if 'Client' in type(ex).__name__ and any(
+                    os.path.getsize(os.path.join(OUT, f)) > 2000
+                    for f in os.listdir(OUT)):
+                pd.DataFrame().to_parquet(os.path.join(OUT, f'{d}.parquet'))
+                print(f'  {d}: no session (holiday?) -- marker saved', flush=True)
+                continue
             print(f'  {d}: {type(ex).__name__}', flush=True)
             fails += 1
             if fails == i and fails >= 3:
