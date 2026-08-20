@@ -84,11 +84,21 @@ def main():
         print('nothing to do')
         return
 
+    def _retry(fn, tries=2):
+        import time
+        for k in range(tries):
+            try:
+                return fn()
+            except Exception:
+                if k == tries - 1:
+                    raise
+                time.sleep(5 * (k + 1))
+
     def cost(day):
         t0, t1 = window_utc(day)
-        return float(client.metadata.get_cost(
+        return float(_retry(lambda: client.metadata.get_cost(
             dataset=DATASET, symbols=[SYM], stype_in='parent', schema=SCHEMA,
-            start=t0, end=t1))
+            start=t0, end=t1)))
 
     UNREACHABLE = (
         'cannot reach the Databento API ({}).\n'
@@ -124,9 +134,9 @@ def main():
         t0, t1 = window_utc(d)
         try:
             c = cost(d)
-            data = client.timeseries.get_range(
+            data = _retry(lambda: client.timeseries.get_range(
                 dataset=DATASET, schema=SCHEMA, symbols=[SYM],
-                stype_in='parent', start=t0, end=t1)
+                stype_in='parent', start=t0, end=t1))
             df = data.to_df(map_symbols=True)
         except Exception as ex:
             print(f'  {d}: {type(ex).__name__}', flush=True)
