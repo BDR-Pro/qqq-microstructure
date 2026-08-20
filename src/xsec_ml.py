@@ -176,11 +176,12 @@ def save_production(t):
     """Freeze production models for xsec_replay.py: train on everything supplied.
     The frozen targets are the two that survived RESULTS 15/15b -- the overnight
     ceiling (MOO/MOC execution) and the 09:45 floor. cc was a null; not frozen."""
-    import json
+    import json, datetime
     md = os.path.join(ROOT, 'models')
     os.makedirs(md, exist_ok=True)
     meta = {'features': FEATS, 'last_tmonth': str(t.tmonth.max()),
-            'name_months': int(len(t))}
+            'name_months': int(len(t)),
+            'frozen_on': datetime.date.today().isoformat()}
     for tag, ycol in (('on', 'yon_r'), ('on15', 'yon15_r')):
         tr = t[t[ycol].notna()]
         m = lgb.train(PARAMS, lgb.Dataset(tr[FEATS], tr[ycol], free_raw_data=True),
