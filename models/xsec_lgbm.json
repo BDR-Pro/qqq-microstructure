@@ -1,0 +1,19 @@
+{
+  "features": [
+    "mom_12_2",
+    "ret_1m",
+    "on_1m",
+    "on_12m",
+    "vol_3m",
+    "rng_3m",
+    "fh_3m",
+    "dvol",
+    "dvol_chg",
+    "lprice"
+  ],
+  "last_tmonth": "2026-03",
+  "name_months": 20341,
+  "frozen_on": "2026-08-20",
+  "on_rows": 20339,
+  "on15_rows": 20339
+}
