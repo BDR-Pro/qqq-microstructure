@@ -82,10 +82,27 @@ def main():
             dataset=DATASET, symbols=[SYM], stype_in='parent', schema=SCHEMA,
             start=t0, end=t1))
 
+    UNREACHABLE = (
+        'cannot reach the Databento API ({}).\n'
+        'This is a network-path problem, not a key problem -- it happens before\n'
+        'authentication. Check, in order:\n'
+        '  1. Test-NetConnection hist.databento.com -Port 443\n'
+        '     TcpTestSucceeded False means the host is blocked from this network;\n'
+        '     databento.com loading in a browser does NOT imply the API host does.\n'
+        '  2. https://status.databento.com in a browser.\n'
+        '  3. Retry over a VPN or from another network -- the pull is small and\n'
+        '     resumable, so one session anywhere finishes it.\n'
+        'Fallback without API access: a portal batch download of FULL days\n'
+        '(QQQ.OPT parent, cbbo-1m, 2023-04 -> now) costs ~40x more (~$110) and\n'
+        'opra_load.py can read the zip it produces.')
+
     if not a.yes:
         stride = max(1, len(todo) // 60)
         sample = todo[::stride]
-        cs = [cost(d) for d in sample]
+        try:
+            cs = [cost(d) for d in sample]
+        except Exception as ex:
+            raise SystemExit(UNREACHABLE.format(type(ex).__name__))
         est = float(np.mean(cs)) * len(todo)
         print(f'sampled {len(sample)} of {len(todo)} days: per-day '
               f'${min(cs):.4f} .. ${max(cs):.4f}, mean ${sum(cs)/len(cs):.4f}')
@@ -94,7 +111,7 @@ def main():
         print('this run spent nothing. re-run with --yes to pull.')
         return
 
-    spent, nbytes = 0.0, 0
+    spent, nbytes, fails = 0.0, 0, 0
     for i, d in enumerate(todo, 1):
         t0, t1 = window_utc(d)
         try:
@@ -104,8 +121,15 @@ def main():
                 stype_in='parent', start=t0, end=t1)
             df = data.to_df(map_symbols=True)
         except Exception as ex:
-            print(f'  {d}: {type(ex).__name__}: {ex}', flush=True)
+            print(f'  {d}: {type(ex).__name__}', flush=True)
+            fails += 1
+            if fails == i and fails >= 3:
+                raise SystemExit(UNREACHABLE.format(type(ex).__name__))
+            if fails >= 8:
+                raise SystemExit('8 consecutive failures -- network likely '
+                                 'dropped mid-run; re-run to resume')
             continue
+        fails = 0
         p = os.path.join(OUT, f'{d}.parquet')
         df.reset_index().to_parquet(p, index=False)
         spent += c
