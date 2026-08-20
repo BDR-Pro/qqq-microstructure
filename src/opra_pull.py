@@ -120,6 +120,14 @@ def main():
         try:
             cs = [cost(d) for d in sample]
         except Exception as ex:
+            if 'Client' in type(ex).__name__ and any(
+                    os.path.getsize(os.path.join(OUT, f)) > 2000
+                    for f in os.listdir(OUT)):
+                raise SystemExit(
+                    f'the store already holds real pulls and the API refuses '
+                    f'the {len(todo)} remaining day(s) -- they are almost '
+                    f'certainly market holidays with no session. Run --yes '
+                    f'once to save markers and be done.')
             raise SystemExit(UNREACHABLE.format(type(ex).__name__))
         est = float(np.mean(cs)) * len(todo)
         print(f'sampled {len(sample)} of {len(todo)} days: per-day '
