@@ -1209,3 +1209,91 @@ execution slips 15 minutes. What remains before any capital discussion is what
 §12 demanded of the QQQ stack: the frozen-model forward replay as each month's
 file lands — `xsec_ml.py --save-model` freezes production models, and
 `xsec_replay.py` evaluates every month that postdates the freeze.
+
+---
+
+## 16. Signal #6 and Stack v2 — `xsec_intraday.py`, `stack_v2.py`
+
+### Signal #6: cross-sectional intraday continuation — real, and the toll is bigger
+
+At 10:30, rank the universe by its own first hour, hold Q5−Q1 to the close.
+Pre-declared direction was continuation (the time-series version is §8/§11's
+signal; HKS 2010 is the cross-sectional prior), with the sign genuinely at risk —
+short-horizon cross-sections often reverse. Continuation won:
+
+```
+                       bps/day      t   Sharpe    CAGR%   maxDD%      6,787 days
+  L/S Q5-Q1              +7.70   5.90     1.14    19.65    -30.9
+  long tilt Q5-EW        +3.05   4.30     0.83     7.53    -31.9
+
+  eras: 1999 +40.0   2000-03 +21.0   04-07 +2.5   08-11 +11.2
+        12-15 +0.4   16-19 -0.2     20-23 +4.1   24-26 +9.6
+```
+
+The third real cross-sectional structure in this panel — and §1's verdict at
+daily frequency: the signal was never the problem, the toll is. Break-even is
+1.92 bps one-way and the 10:30 entries CROSS the spread (they are not auctions):
+at the pre-declared c=2.5 the L/S nets **−2.30 bps/day**. Its correlation with
+the QQQ momentum leg is +0.33 (same family) and ~0 with everything overnight.
+Recorded, not traded. The residual use is as a which-name tilt inside entries a
+book is already making, where it costs no new crossings.
+
+### A truncated-input incident, recorded
+
+The first stack run read the QQQ legs from `daily_hf_QQQ.parquet` rebuilt from
+the committed `data/hf_bars/` — which turn out to be a partial subset (the
+rebuilt QQQ spine ends 2005-01). The MOM leg silently covered 1999–2005, the
+hottest momentum era in the sample, and the combined rows printed +19.5 bps/day.
+Two rules now hold in `stack_v2.py`: the QQQ legs are derived from the xsec
+panel itself (QQQ/QQQQ sit in every month's top-150 with open/p60/close), and
+**every row prints its own date window and day count**. The panel-derived legs
+then reproduce the earlier results from an independent price path: MOM +3.72
+net vs §11's sign rule (3.94 gross − 0.34 cost), and v1 +8.26 vs §13's +8.42.
+
+### Stack v2: the same stack with one leg swapped, on identical days
+
+Legs net of stated costs (basket crossings c=1.0 bps one-way per §15b's MOO/MOC
+finding; QQQ legs at the house 0.34 round trip):
+
+```
+                       bps/day      t   Sharpe    %/mo        window
+  QQQ_ON                 +4.56   4.14     0.80   +0.87   1999-2026 (6,798d)
+  MOM                    +3.72   2.53     0.49   +0.63   1999-2026 (6,803d)
+  ON  (ML-Q5 basket)     +8.50   5.65     1.17   +1.66   2003-2026 (5,843d)
+  NEU (basket - QQQ)     +4.09   5.22     1.09   +0.82   2003-2026 (5,841d)
+
+  correlations: QQQ_ON/MOM +0.01 (the §13 stack's zero), ON/MOM +0.01,
+  ON/QQQ_ON +0.88 (the basket is market-overnight plus edge -- the gain below is
+  added edge, not diversification), NEU/QQQ_ON +0.39 (a 1:1 QQQ hedge
+  UNDER-hedges: Q5 names carry overnight beta > 1; a beta-scaled hedge is a
+  future pre-declared spec, not retrofitted here).
+```
+
+The comparison the exercise was for — v1 (§13's configuration) against v2 (same
+stack, overnight leg swapped to the ML-Q5 basket), on the identical 5,843 days:
+
+```
+                       bps/day      t   Sharpe    CAGR%   maxDD%    %/mo
+  v1 @ v2 window          +5.88   3.66     0.76    13.79    -43.7   +1.08
+  v2  (ON + MOM)         +10.65   5.45     1.13    27.14    -43.1   +2.02
+  v2n (NEU + MOM)         +6.24   4.27     0.89    15.21    -31.2   +1.19
+
+  v2 by era: 2000-03 +8.1  04-07 +13.5  08-11 +15.4  12-15 +8.5
+             16-19 +5.7   20-23 +7.0   24-26 +17.4     (positive in all seven)
+```
+
+**The stack's rate roughly doubles — +1.08%/mo to +2.02%/mo, Sharpe 0.76 to 1.13
+— by swapping one leg, at stated costs, with the max drawdown unchanged.** v2's
+worst era (+5.7, 2016-2019) is close to v1's average. At the pessimistic c=2.5
+the upgrade still holds: v2 ≈ +7.7 vs v1's +5.9. Adding Signal #6 (v2x) makes
+everything worse — its cost drag and −98% standalone drawdown contaminate every
+combination — so the book is v2, with v2n (Sharpe 0.89, maxDD −31%) as the base
+configuration if leverage is ever considered.
+
+### What gates deployment — unchanged
+
+The overnight leg answers to §15b's frozen-model replay (`xsec_replay.py`,
+frozen 2026-08-20); the MOM leg remains under §12's monthly verdict, which
+currently says do not fund it. Nothing here shortens either probation: v2 is
+the configuration the forward test is now measuring, and no leverage decision
+precedes forward months.
