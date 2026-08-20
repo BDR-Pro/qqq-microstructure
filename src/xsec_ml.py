@@ -158,10 +158,10 @@ def portfolio(t, score, bym, col):
         q1 = set(g.ticker.values[o[:k]])
         q5 = set(g.ticker.values[o[-k:]])
         sub = bym[T]
-        out.append(pd.DataFrame({
-            'ls': sub[sub.ticker.isin(q5)].groupby('day')[col].mean()
-                - sub[sub.ticker.isin(q1)].groupby('day')[col].mean()}))
-    return pd.concat(out).dropna() if out else pd.DataFrame(columns=['ls'])
+        q5d = sub[sub.ticker.isin(q5)].groupby('day')[col].mean()
+        q1d = sub[sub.ticker.isin(q1)].groupby('day')[col].mean()
+        out.append(pd.DataFrame({'ls': q5d - q1d, 'q5': q5d}))
+    return pd.concat(out).dropna() if out else pd.DataFrame(columns=['ls', 'q5'])
 
 
 def monthly_ic(t, score, ycol):
@@ -282,6 +282,8 @@ def main():
 
     out = pd.DataFrame({'mlcc_ls': runs['cc']['ls'].ls, 'mlon_ls': runs['on']['ls'].ls,
                         'mlon15_ls': runs['on15']['ls'].ls,
+                        'mlon_q5': runs['on']['ls'].q5,
+                        'mlon15_q5': runs['on15']['ls'].q5,
                         'rule_mom_ls': runs['cc']['rls'].ls,
                         'rule_on_ls': runs['on']['rls'].ls,
                         'rule_on15_ls': runs['on15']['rls'].ls})
