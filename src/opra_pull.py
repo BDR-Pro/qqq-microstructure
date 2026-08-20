@@ -60,7 +60,15 @@ def main():
     ap.add_argument('--start', default='2023-04-01')
     ap.add_argument('--end', default=dt.date.today().isoformat())
     ap.add_argument('--yes', action='store_true', help='actually pull (spends money)')
+    ap.add_argument('--ipv4', action='store_true',
+                    help='force IPv4 -- workaround when Python times out '
+                         'connecting while Test-NetConnection succeeds '
+                         '(broken IPv6 path, v6 address resolved first)')
     a = ap.parse_args()
+    if a.ipv4:
+        import socket
+        from urllib3.util import connection as _uc
+        _uc.allowed_gai_family = lambda: socket.AF_INET
     import databento as db
     if not os.environ.get('DATABENTO_API_KEY'):
         raise SystemExit('set DATABENTO_API_KEY first')
