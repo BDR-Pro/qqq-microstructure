@@ -98,18 +98,24 @@ def main():
               ('v2nx(NEU+MOM+XID)', ['NEU', 'MOM', 'XID'])]
     print('\ncombined (legs summed on common days -- one pot of capital, '
           'non-overlapping hours; XID is an L/S overlay):')
-    best = None
+    shown = None
     for lab, ks in combos:
-        if not all(k in L for k in ks):
+        miss = [k for k in ks if k not in L]
+        if miss:
+            print(f'  {lab:<18} skipped (missing {", ".join(miss)})')
             continue
-        s = L[ks].dropna()
-        r = s.sum(axis=1)
+        r = L[ks].dropna().sum(axis=1)
         stats(r.values, lab)
-        best = (lab, r)
-    if best is not None:
-        lab, r = best
-        print(f'\n  by 4-year era ({lab.split()[0]}):')
-        era_table(r.index, r.values)
+        shown = (lab, r)
+    if shown is None:
+        avail = [k for k in ('ON', 'MOM', 'XID') if k in L] or list(L.columns)[:1]
+        r = L[avail].dropna().sum(axis=1)
+        lab = '+'.join(avail)
+        stats(r.values, lab)
+        shown = (lab, r)
+    lab, r = shown
+    print(f'\n  by 4-year era ({lab.split()[0]}):')
+    era_table(r.index, r.values)
 
 
 if __name__ == '__main__':
