@@ -75,6 +75,10 @@ def main():
     client = db.Historical()
 
     s, e = a.start.replace('-', ''), a.end.replace('-', '')
+    # never attempt a session that has not completed: today's data is not
+    # published yet, the API refuses it, and the holiday-marker logic would
+    # then skip a real trading day forever
+    e = min(e, (dt.date.today() - dt.timedelta(days=1)).strftime('%Y%m%d'))
     days = trading_days(s, e)
     os.makedirs(OUT, exist_ok=True)
     todo = [d for d in days if not os.path.exists(os.path.join(OUT, f'{d}.parquet'))]
