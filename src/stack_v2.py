@@ -92,6 +92,8 @@ def main():
         print('missing data/opra_daily.parquet -- run opra_value.py (skipping OPT)')
 
     L = pd.DataFrame(legs).sort_index()
+    L.to_csv(os.path.join(d, 'stack_daily.csv'), float_format='%.3f',
+             index_label='day')
     print(f'\nlegs at c={a.c} / c_intra={a.c_intra} bps one-way, net bps/day:')
     for k in L:
         s = L[k].dropna()
