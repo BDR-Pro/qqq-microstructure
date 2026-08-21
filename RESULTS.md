@@ -1446,14 +1446,32 @@ settlement and actually leaves overnight stock exposure (closing shorts at
 15:55 would remove it at the cost of a spread crossing); everything is
 held-to-expiry with no management.
 
-### What gates the overlay — unchanged rules, one new question
+### The integration number, measured
 
 The spread conditions on the same first-hour signal as the stack's MOM leg, so
-before it joins the v2 book its daily EV must be correlated against that leg —
-the one integration number this section does not contain. After that, the same
-probation as everything else: the monthly forward replay (a ~$0.50 slice pull
-plus the panel extension), no leverage before forward months, and §12's
-standing instruction to diagnose rather than filter when a month goes wrong.
-The options thread, opened by §8 on an invented IV, closes on 749 measured
-days with one dead hypothesis, one retired proxy, and one live, bounded,
-+0.71%/month finding.
+its correlation against that leg decides whether it diversifies or doubles.
+`stack_v2.py` carries it as the OPT leg, and the answer is the honest middle:
+
+```
+  corr(OPT, MOM) +0.67    corr(OPT, ON) -0.01    corr(OPT, QQQ_ON) -0.04
+  OPT               +3.09 bps/d  t=4.26  Sharpe 2.47  maxDD  -2.2%   (749d)
+  v2o (ON+MOM+OPT) +19.90 bps/d  t=3.32  Sharpe 1.93  maxDD -24.9%  = +3.97%/mo
+                    (2023-04 .. 2026-03 only)
+```
+
+At +0.67 the spread is mostly THE SAME BET as the momentum leg — expressed
+better: Sharpe 2.47 against the stock leg's 0.49 on this window, with the tail
+capped by the wing — and uncorrelated with everything overnight. It joins the
+book as more momentum, not as diversification: sizing must treat MOM + OPT as
+one exposure family, and a regime that wrong-foots the first-hour signal
+(March 2026 was one; the spread's 2026 quarter ran +0.2) hits both at once.
+v2o's +3.97%/mo is a three-year hot-window number and is NOT comparable to
+v2's 23-year +2.02%/mo — the same-window read is that the overlay adds its
+~+3 bps/day nearly additively on top of the v2 book.
+
+Probation unchanged: the monthly forward replay (a ~$0.50 slice pull plus the
+panel extension), no leverage before forward months, and §12's standing
+instruction to diagnose rather than filter when a month goes wrong. The
+options thread, opened by §8 on an invented IV, closes on 749 measured days
+with one dead hypothesis, one retired proxy, and one live, bounded,
++0.71%/month finding that the book must size as momentum.
