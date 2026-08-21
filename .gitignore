@@ -28,3 +28,4 @@ data/xsec_ml_daily.csv
 data/xsec_intraday.csv
 data/opra/
 data/opra_daily.parquet
+data/stack_daily.csv
