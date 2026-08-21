@@ -1,27 +1,28 @@
 # Part of qqq-microstructure.
 #
-# The zero-capital live record. RESULTS 12's verdict for every strategy in this
-# repo is the same: backtests cannot settle what only forward months can. This
-# script starts that clock at daily granularity, with no broker and no capital:
-# run it before the close, it scores the FROZEN models on everything knowable
-# today, logs tonight's Q5/Q1 overnight basket to reports/xsec_paper.csv, and on
-# later runs grades every past entry against the official next-day open. The
-# log is the evidence; commit it.
+# The zero-capital live record -- monthly, because the strategy is monthly by
+# construction: features and universe are frozen per calendar month, so the Q5
+# basket computed tonight is identical every session of the month. One
+# pre-registration per month is therefore exactly as much evidence as a daily
+# run: emit the standing basket once, commit it, and the git timestamp makes it
+# tamper-evident for every session it covers. Grading fills daily outcomes in
+# retroactively from official open/close -- public history the selection never
+# saw. Days BEFORE their month's emission date never grade: no pre-registration
+# existed for them, so they are not evidence.
 #
-# Honesty rails, in code rather than in promises:
-#   - Feature parity check every run: the live feature builder is exercised
-#     against build_table's own rows for the last panel month and must agree to
-#     the decimal, so the live signal can never silently drift from the
-#     backtested one.
-#   - The live universe is the last complete month's top-150 (the lagged rule).
-#     The backtest's additional still-in-top-150-next-month conditioning is
-#     unknowable in real time; RESULTS 15 measured it as mild optimism, and
-#     live simply does not get it.
-#   - Nothing is retrained. Models come from models/xsec_*_lgbm.txt as frozen.
-#   - If the panel's last month is stale (xsec_extend.py not run), the script
-#     says so loudly -- features silently aging is how live records rot.
+# Honesty rails, in code rather than promises:
+#   - Feature parity check every run: the live feature builder must agree with
+#     build_table's own rows to the decimal, or the run aborts.
+#   - The live universe is the last complete month's top-150 (the lagged rule);
+#     the backtest's still-in-top-150-next-month conditioning is unknowable
+#     live, and live does not get it.
+#   - Nothing retrains; models load frozen. A stale panel is announced loudly.
 #
-#   python src/xsec_live.py            # grade past entries, then log tonight's basket
+# Files (commit both -- the log IS the evidence):
+#   reports/xsec_paper.csv        one row per month: the pre-registered basket
+#   reports/xsec_paper_daily.csv  one row per graded session
+#
+#   python src/xsec_live.py        # emit this month's basket if new, grade the rest
 
 import os, argparse, datetime as dt, json
 from zoneinfo import ZoneInfo
@@ -32,6 +33,7 @@ from xsec_ml import build_table, rank_pm, FEATS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, 'reports', 'xsec_paper.csv')
+DAILY = os.path.join(ROOT, 'reports', 'xsec_paper_daily.csv')
 ET = ZoneInfo('America/New_York')
 
 
@@ -47,8 +49,6 @@ def month_aggs(df):
 
 
 def features(agg, look, universe):
-    """The build_table feature block for one target month: `look` is its 12
-    lookback months oldest-first, `universe` the candidate tickers."""
     rows = []
     for tk in sorted(universe):
         hist = [agg.get((tk, mm)) for mm in look]
@@ -82,7 +82,6 @@ def parity_check(df, t, agg, months):
     uni_T = set(df[df.month == T].ticker)
     mine = features(agg, months[i - 12:i], (uni_prev & uni_T) - ETF)
     ref = t[t.tmonth == T][['ticker'] + FEATS]
-    # ref features are rank-transformed; recompute ranks on mine to compare
     for f in FEATS:
         mine[f] = rank_pm(mine[f], pd.Series(0, index=mine.index))
     j = ref.merge(mine, on='ticker', suffixes=('_bt', '_lv'))
@@ -92,37 +91,55 @@ def parity_check(df, t, agg, months):
     return d < 1e-9
 
 
-def grade(log):
+def grade(log, daily):
     import yfinance as yf
-    ungraded = log[log.q5_on_bps.isna() & (log.date < dt.date.today()
-                                           .strftime('%Y%m%d'))]
-    for i, r in ungraded.iterrows():
-        names = r.q5.split(';') + ['QQQ']
-        d0 = dt.datetime.strptime(r.date, '%Y%m%d').date()
-        v = yf.download([n.replace('.', '-') for n in names],
-                        start=d0, end=d0 + dt.timedelta(days=8), interval='1d',
-                        auto_adjust=False, actions=False, group_by='ticker',
-                        progress=False)
-        ons, qqq = [], np.nan
-        for n in names:
-            try:
-                s = v[n.replace('.', '-')][['Open', 'Close']].dropna()
-            except KeyError:
+    today = dt.datetime.now(ET).strftime('%Y%m%d')
+    done = set(daily.date) if len(daily) else set()
+    for _, r in log.iterrows():
+        m0 = r.month.replace('-', '')
+        names = r.q5.split(';')
+        d0 = dt.datetime.strptime(r.month + '-01', '%Y-%m-%d').date()
+        d1 = (d0.replace(day=28) + dt.timedelta(days=12)).replace(day=1) \
+            + dt.timedelta(days=9)
+        try:
+            v = yf.download([n.replace('.', '-') for n in names + ['QQQ']],
+                            start=d0 - dt.timedelta(days=3), end=d1,
+                            interval='1d', auto_adjust=False, actions=False,
+                            group_by='ticker', progress=False)
+            series = {}
+            for n in names + ['QQQ']:
+                try:
+                    s = v[n.replace('.', '-')][['Open', 'Close']].dropna()
+                    s.index = s.index.strftime('%Y%m%d')
+                    series[n] = s
+                except KeyError:
+                    continue
+        except Exception as ex:
+            print(f'  {r.month}: grading fetch failed ({type(ex).__name__}) '
+                  f'-- will retry next run')
+            continue
+        if 'QQQ' not in series:
+            continue
+        qd = series['QQQ'].index
+        for k in range(len(qd) - 1):
+            D, Dn = qd[k], qd[k + 1]
+            if (D[:6] != m0[:6] or D < r.emitted_on or D >= today or D in done):
                 continue
-            if len(s) < 2 or s.index[0].strftime('%Y%m%d') != r.date:
+            ons = [float(np.log(series[n].Open[Dn] / series[n].Close[D]) * 1e4)
+                   for n in names if n in series
+                   and D in series[n].index and Dn in series[n].index]
+            if len(ons) < 5:
                 continue
-            on = float(np.log(s.Open.iloc[1] / s.Close.iloc[0]) * 1e4)
-            if n == 'QQQ':
-                qqq = on
-            else:
-                ons.append(on)
-        if len(ons) >= 5 and np.isfinite(qqq):
-            log.loc[i, 'q5_on_bps'] = float(np.mean(ons))
-            log.loc[i, 'qqq_on_bps'] = qqq
-            log.loc[i, 'tilt_bps'] = float(np.mean(ons)) - qqq
-            print(f'graded {r.date}: basket {np.mean(ons):+.1f} bps  '
-                  f'QQQ {qqq:+.1f}  tilt {np.mean(ons) - qqq:+.1f}')
-    return log
+            qqq = float(np.log(series['QQQ'].Open[Dn]
+                               / series['QQQ'].Close[D]) * 1e4)
+            daily = pd.concat([daily, pd.DataFrame([dict(
+                date=D, month=r.month, n=len(ons),
+                q5_on_bps=float(np.mean(ons)), qqq_on_bps=qqq,
+                tilt_bps=float(np.mean(ons)) - qqq)])], ignore_index=True)
+            done.add(D)
+            print(f'graded {D}: basket {np.mean(ons):+.1f}  QQQ {qqq:+.1f}  '
+                  f'tilt {np.mean(ons) - qqq:+.1f} bps')
+    return daily
 
 
 def main():
@@ -139,55 +156,58 @@ def main():
     cur = now.strftime('%Y-%m')
     if months[-1] < (pd.Period(cur) - 1).strftime('%Y-%m'):
         print(f'WARNING: panel ends {months[-1]} but current month is {cur} -- '
-              f'features are stale; run xsec_extend.py')
+              f'run xsec_extend.py first; emitting anyway on stale features')
 
-    live = features(agg, months[-12:], set(df[df.month == months[-1]].ticker)
-                    - ETF)
-    raw = live.copy()
-    for f in FEATS:
-        live[f] = rank_pm(live[f], pd.Series(0, index=live.index))
-    mp = os.path.join(ROOT, 'models', 'xsec_lgbm.json')
-    if not os.path.exists(mp):
-        raise SystemExit('no frozen models -- run xsec_replay.py or '
-                         'xsec_ml.py --save-model first')
-    meta = json.load(open(mp))
-    m = lgb.Booster(model_file=os.path.join(ROOT, 'models', 'xsec_on_lgbm.txt'))
-    live['score'] = m.predict(live[FEATS])
-    k = len(live) // 5
-    q5 = live.nlargest(k, 'score').ticker.tolist()
-    q1 = live.nsmallest(k, 'score').ticker.tolist()
-
-    cols = ['date', 'universe_month', 'model_frozen', 'n_scored', 'q5', 'q1',
-            'q5_on_bps', 'qqq_on_bps', 'tilt_bps']
-    log = pd.read_csv(LOG, dtype={'date': str}) if os.path.exists(LOG) \
+    cols = ['emitted_on', 'month', 'universe_month', 'model_frozen',
+            'n_scored', 'q5', 'q1']
+    log = pd.read_csv(LOG, dtype=str) if os.path.exists(LOG) \
         else pd.DataFrame(columns=cols)
-    log = grade(log)
+    dcols = ['date', 'month', 'n', 'q5_on_bps', 'qqq_on_bps', 'tilt_bps']
+    daily = pd.read_csv(DAILY, dtype={'date': str, 'month': str}) \
+        if os.path.exists(DAILY) else pd.DataFrame(columns=dcols)
 
-    today = now.strftime('%Y%m%d')
-    if today in set(log.date):
-        print(f'{today} already logged')
-    elif now.weekday() >= 5:
-        print(f'{today} is a weekend -- nothing to log')
+    if cur in set(log.month):
+        print(f'{cur} already pre-registered '
+              f'(emitted {log[log.month == cur].emitted_on.iloc[0]})')
     else:
+        live = features(agg, months[-12:],
+                        set(df[df.month == months[-1]].ticker) - ETF)
+        for f in FEATS:
+            live[f] = rank_pm(live[f], pd.Series(0, index=live.index))
+        mp = os.path.join(ROOT, 'models', 'xsec_lgbm.json')
+        if not os.path.exists(mp):
+            raise SystemExit('no frozen models -- run xsec_ml.py --save-model')
+        meta = json.load(open(mp))
+        m = lgb.Booster(model_file=os.path.join(ROOT, 'models',
+                                                'xsec_on_lgbm.txt'))
+        live['score'] = m.predict(live[FEATS])
+        k = len(live) // 5
+        q5 = live.nlargest(k, 'score').ticker.tolist()
+        q1 = live.nsmallest(k, 'score').ticker.tolist()
         log = pd.concat([log, pd.DataFrame([dict(
-            date=today, universe_month=months[-1],
+            emitted_on=now.strftime('%Y%m%d'), month=cur,
+            universe_month=months[-1],
             model_frozen=meta.get('frozen_on', '?'), n_scored=len(live),
             q5=';'.join(q5), q1=';'.join(q1))])], ignore_index=True)
-        print(f'\nlogged {today}: hold overnight (buy MOC, sell MOO), '
-              f'{len(q5)} names from {months[-1]} universe:')
+        print(f'\npre-registered {cur}: hold overnight every session '
+              f'(buy MOC, sell MOO), {len(q5)} names:')
         print('  ' + '  '.join(q5))
+
+    daily = grade(log, daily)
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     log[cols].to_csv(LOG, index=False)
+    daily[dcols].to_csv(DAILY, index=False)
 
-    g = log.dropna(subset=['tilt_bps'])
-    if len(g):
+    if len(daily):
+        g = daily.astype({'q5_on_bps': float, 'qqq_on_bps': float,
+                          'tilt_bps': float})
         print(f'\nscorecard: {len(g)} graded nights   basket '
-              f'{g.q5_on_bps.astype(float).mean():+.1f} bps/n   QQQ '
-              f'{g.qqq_on_bps.astype(float).mean():+.1f}   tilt '
-              f'{g.tilt_bps.astype(float).mean():+.1f}   hit '
-              f'{(g.tilt_bps.astype(float) > 0).mean() * 100:.0f}%   '
-              f'cum tilt {g.tilt_bps.astype(float).sum() / 100:+.2f}%')
-    print(f'log -> {LOG}  (commit it -- the log is the evidence)')
+              f'{g.q5_on_bps.mean():+.1f} bps/n   QQQ {g.qqq_on_bps.mean():+.1f}'
+              f'   tilt {g.tilt_bps.mean():+.1f}   hit '
+              f'{(g.tilt_bps > 0).mean() * 100:.0f}%   cum tilt '
+              f'{g.tilt_bps.sum() / 100:+.2f}%')
+    print(f'logs -> {LOG}\n        {DAILY}\n(commit both -- the log is the '
+          f'evidence)')
 
 
 if __name__ == '__main__':
