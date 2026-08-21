@@ -84,6 +84,16 @@ def build_month(m):
     d0 = f'{m}-01'
     nx = dt.date(int(m[:4]) + (m[5:7] == '12'), int(m[5:7]) % 12 + 1, 1)
     daily = fetch(yf, list(ym.values()), d0, nx.isoformat(), '1d')
+    # class-share mapping fallback: BRK.B -> BRK-B is right, but CMCS.A wants
+    # CMCSA on Yahoo; retry dot-dropped for dotted names the dash form missed
+    miss = [tk for tk in cand if ym[tk] not in daily and '.' in tk]
+    if miss:
+        alt = fetch(yf, [tk.replace('.', '') for tk in miss], d0,
+                    nx.isoformat(), '1d')
+        for tk in miss:
+            if tk.replace('.', '') in alt:
+                ym[tk] = tk.replace('.', '')
+                daily[ym[tk]] = alt[ym[tk]]
     dv = {tk: float((daily[y].Volume * daily[y].Close).sum())
           for tk, y in ym.items() if y in daily}
     top = sorted(dv, key=dv.get, reverse=True)[:TOP_N]
@@ -135,11 +145,15 @@ def check(m):
     j = hf.merge(yh, on=['ticker', 'day'], suffixes=('_hf', '_yh'))
     for c in ('open', 'close', 'p60'):
         d = (np.log(j[f'{c}_yh'] / j[f'{c}_hf']) * 1e4).abs()
-        print(f'  |{c} diff|: mean {d.mean():.1f} bps  p95 {d.quantile(.95):.1f} '
-              f'bps  ({len(j):,} common rows)')
-    print('  read: overlap >=90% and diffs of a few bps mean the extension can '
-        'be trusted;\n  p60 diffs include the minute-bar-vs-60m-bar convention '
-        'gap and run higher.')
+        big = j.loc[d > 1000, 'ticker'].nunique()
+        print(f'  |{c} diff|: median {d.median():.1f} bps  p95 '
+              f'{d.quantile(.95):.1f} bps  ({len(j):,} rows'
+              + (f'; {big} name(s) look split-adjusted -- Yahoo folds splits '
+                 f'into all pre-split history, the panel is raw; the seam is '
+                 f'what the split detector is for)' if big else ')'))
+    print('  read: overlap >=90% and median/p95 of a few bps mean the '
+        'extension can be trusted;\n  p60 diffs include the '
+        'minute-bar-vs-60m-bar convention gap and run higher.')
 
 
 def main():
