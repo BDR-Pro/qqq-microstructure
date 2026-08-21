@@ -13,9 +13,26 @@
 #
 #   python src/monthly.py
 #
-# Hands-free (Windows, machine must be on; run once to register):
-#   schtasks /Create /TN qqq-monthly /SC MONTHLY /D 1 /ST 18:00 /TR ^
-#     "cmd /c cd /d C:\Users\bader\qqq-microstructure && python src\monthly.py >> reports\monthly.log 2>&1"
+# Hands-free with failover (Windows; run the block once in PowerShell). Weekly
+# on purpose: every step is idempotent, so extra runs are free and each month
+# gets four to five chances instead of one. StartWhenAvailable catches up after
+# sleep or a missed boot, WakeToRun wakes a sleeping machine, and RestartCount
+# retries transient failures because this script exits nonzero when a step
+# fails. Runs as the logged-on user, so set DATABENTO_API_KEY with setx to make
+# it visible. The pushed commits double as the heartbeat: no commit for a
+# month means the task is broken.
+#
+#   $repo    = "C:\Users\bader\qqq-microstructure"
+#   $action  = New-ScheduledTaskAction -Execute "cmd.exe" -Argument ('/c cd /d ' + $repo +
+#              ' && python src\monthly.py >> reports\monthly.log 2>&1' +
+#              ' && git add reports data && (git diff --cached --quiet || ' +
+#              '(git commit -m "forward log" && git push))')
+#   $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 18:00
+#   $set     = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+#              -RestartCount 3 -RestartInterval (New-TimeSpan -Hours 1) `
+#              -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+#   Register-ScheduledTask -TaskName "qqq-monthly" -Action $action `
+#              -Trigger $trigger -Settings $set
 
 import os, subprocess, sys
 
@@ -46,6 +63,9 @@ def main():
     print('\nnow: git add reports data && git commit -m "monthly forward log" '
           '&& git push\n(reports/xsec_paper*.csv are the evidence; '
           'data/opra_daily.parquet stays local)')
+    # nonzero exit when any step failed, so Task Scheduler's RestartCount can
+    # retry -- every step is idempotent, so a retry only redoes what is missing
+    sys.exit(1 if any(rc for _, rc in results) else 0)
 
 
 if __name__ == '__main__':
