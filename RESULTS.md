@@ -1475,3 +1475,120 @@ instruction to diagnose rather than filter when a month goes wrong. The
 options thread, opened by §8 on an invented IV, closes on 749 measured days
 with one dead hypothesis, one retired proxy, and one live, bounded,
 +0.71%/month finding that the book must size as momentum.
+
+---
+
+## 19. The fan and the tripwires: Monte Carlo on the measured book — `mc_risk.py`
+
+> "Given the returns I've actually measured, what range of outcomes could
+> reasonably happen, and what future result would convince me that the
+> backtest's edge is real?"
+
+That question is the whole scope. Monte Carlo for *selecting* trades was
+considered and rejected as waste — resampling one history cannot rank
+strategies beyond what the measured means already say, and tuning against
+resampled noise is overfitting with extra steps. What survives are the two
+uses simulation is actually good at: the **range** (the fan of five-year
+outcomes around the one path history happened to draw) and the **verdict**
+(pass/fail thresholds for the forward test, committed before the months they
+will judge).
+
+Method: circular block bootstrap of the measured daily series — 21-day
+blocks, so volatility clustering and within-month autocorrelation are
+carried; 10,000 paths; seed 7; financing at 5%/yr on the borrowed fraction.
+Nothing is simulated except the resampling: every path is a rearrangement of
+days that actually happened. The machinery was validated on planted truth
+before touching real series: on iid noise with a known mean the GO
+thresholds print 14.9/10.5/7.3 bps (3/6/12mo) against the closed-form
+14.7/10.4/7.33 and P(pass|real) 24% against the analytic 24.5%; on an
+AR(0.5) series the blocks widen the 3-month standard error ×1.66 (an iid
+bootstrap would leave it unchanged and overstate every confidence below;
+theory says ×1.73).
+
+### A. The range: 10,000 alternate five-years (p95 = the bad-tail 5% end)
+
+```
+  v2 (ON+MOM), 5,843 measured days:
+  lev   CAGR p5/p50/p95     maxDD p50/p95   worst-mo p95  P(mo<-20%)  P(5y loss)
+  1.0    8.4  27.4   48.4    -26.8  -48.8       -40.5%       25.7%       1.1%
+  1.5    7.4  37.3   72.8    -39.1  -65.6       -61.0%       58.3%       1.9%
+  2.0    4.5  46.0   98.7    -50.1  -77.9       -81.5%       84.1%       3.3%
+  3.0   -6.7  57.9  151.9    -68.1  -92.3      -122.4%       97.1%       7.4%
+
+  v2n (NEU+MOM), 5,841 days:
+  1.0    2.2  15.1   30.7    -22.4  -36.4       -17.6%        1.1%       2.5%
+  1.5   -0.4  19.0   43.9    -33.0  -52.5       -26.5%       23.4%       5.4%
+  2.0   -3.7  22.1   57.2    -42.9  -65.1       -35.5%       52.1%       8.3%
+  3.0  -12.2  25.7   83.3    -59.9  -82.9       -53.5%       90.7%      14.5%
+
+  v2o (ON+MOM+OPT), 749 days, lev 1.0 only:
+         34.1 60.0   88.5    -24.6  -37.7       -18.8%        0.0%       0.0%
+```
+
+Three decisions fall out:
+
+- **The fan is wider than the path.** v2 unlevered shows a p95 max drawdown
+  of −48.8% against history's single −43.1%, and a 1-in-4 chance of at least
+  one month worse than −20% somewhere in five years. That is the price of
+  admission the backtest line never displays, and it is what a funder must
+  accept — not 27% p50 CAGR.
+- **§16's leverage plan dies here.** "v2n as the base configuration if
+  leverage is ever considered" does not survive financing: v2n at 1.5× (p50
+  CAGR 19.0%, p95 maxDD −52.5%) and at 2× (22.1%, −65.1%) are both dominated
+  by plain v2 at 1× (27.4%, −48.8%) on return AND tail. Corrected role: v2n
+  is the low-tail configuration at 1× — worst-month p95 −17.6% vs v2's
+  −40.5%, P(−20% month) 1.1% vs 25.7% — and anyone wanting more return
+  should move to v2 unlevered, not lever the neutral book. At 3× the 21-day
+  sums cross −100% (ruin territory) for both books; there is no leverage
+  row this Monte Carlo endorses.
+- **v2o's fan is an illustration, not a plan.** Five-year paths resampled
+  from 749 bull-window days, with §18's spread edge already decaying by year
+  (+4.7 → +0.2), print a p50 CAGR of 60% and zero loss probability. Upper
+  bound; the honest read of the overlay stays §18's: ~+3 bps/day added
+  nearly additively, sized as momentum.
+
+### B. The verdict, pre-registered
+
+Thresholds computed from the frozen walk-forward series alone (both end
+2026-03, the training cutoff of the 2026-08-20 freeze). GO = the 95th
+percentile of the no-edge world (same days, demeaned): a forward mean above
+it has <5% probability if the edge is zero. KILL = the 5th percentile of the
+as-measured world: a forward mean below it has <5% probability if the
+backtest's edge is real. Units: mean bps/day over the forward window.
+
+```
+  replay metric: ON long/short, gross (measured +12.2 bps/day, 5,843 days)
+  horizon    GO >   P(pass|real)   KILL <   P(kill|none)
+      3mo    15.1        35%         -2.6        38%
+      6mo    11.1        56%          1.6        61%
+     12mo     7.8        83%          4.6        84%
+     24mo     5.5        98%          6.8        98%     <- worlds fully separate
+
+  paper-log metric: Q5 minus QQQ overnight tilt, gross (+6.4 bps/day, 5,841 days)
+      3mo    12.5        18%         -5.0        24%
+      6mo     9.6        25%         -2.1        36%
+     12mo     7.0        41%          0.4        57%
+     24mo     4.8        71%          2.0        78%     <- not yet separate at 24mo
+```
+
+The clock. The replay's first four quasi-holdout months — 2026-04 +5.00%,
+-05 +4.88%, -06 +11.33%, -07 −1.91%, **+19.3% cumulative ≈ +23 bps/day** —
+clear even the 3-month GO of 15.1. But their outcomes were known before
+these thresholds were committed, so they count as a consistency check, not
+as verdict evidence. The binding window starts with the first month that
+completes after this section's commit: **2026-08**. First (weak) read early
+November 2026 at the 3-month row; first high-power read early August 2027 at
+the 12-month row, where a real edge passes 83% of the time and a dead one is
+caught 84% of the time. The tilt metric, with half the mean, stays honest
+longer: even at 24 months a real tilt clears its GO only 71% of the time —
+patience is the modal outcome there and that is what the power column is for.
+
+The rule, mechanical from here: average the replay's forward months into
+bps/day and compare to the row for the elapsed horizon. Above GO — the edge
+is hard to dismiss; size it off the range table, not the backtest line.
+Below KILL — the backtest is hard to believe; stop and diagnose (§12's
+instruction, unchanged). Between the two — neither vindication nor refutation,
+only more waiting, which at short horizons is the likeliest outcome even
+when everything is real. `mc_risk.py` reproduces these numbers exactly
+(seed 7, inputs frozen at the cutoff); the binding copy is this section,
+whose git timestamp precedes every month it will judge.
