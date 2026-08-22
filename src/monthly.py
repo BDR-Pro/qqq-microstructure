@@ -63,6 +63,15 @@ def main():
     print('\nnow: git add reports data && git commit -m "monthly forward log" '
           '&& git push\n(reports/xsec_paper*.csv are the evidence; '
           'data/opra_daily.parquet stays local)')
+    try:
+        from notify import send
+        if send('qqq monthly: '
+                + '  '.join(f'{n} {"ok" if rc == 0 else "FAILED"}'
+                            for n, rc in results)
+                + '\nnow commit reports/'):
+            print('telegram: sent')
+    except Exception:
+        pass
     # nonzero exit when any step failed, so Task Scheduler's RestartCount can
     # retry -- every step is idempotent, so a retry only redoes what is missing
     sys.exit(1 if any(rc for _, rc in results) else 0)

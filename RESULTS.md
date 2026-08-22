@@ -1592,3 +1592,127 @@ only more waiting, which at short horizons is the likeliest outcome even
 when everything is real. `mc_risk.py` reproduces these numbers exactly
 (seed 7, inputs frozen at the cutoff); the binding copy is this section,
 whose git timestamp precedes every month it will judge.
+
+---
+
+## 20. The overlays pass, and July gets its post-mortem — `overlay.py`, `diagnose.py`
+
+Two sizing/hedging layers, specs and PASS/FAIL criteria committed before the
+run (overlay.py's header), neither touching the frozen models nor the
+registered metrics — §19's clock ran untouched through all of this. Both
+were validated on planted truth first (beta 1.4 recovered to 0.02, beta=1
+reproduces NEU to the float, no lookahead at hand-checked positions, the
+criterion firing in both directions on synthetic worlds), and the vol
+overlay carried a stated risk: v2 earned most in storms (2008-11, +15.4),
+so de-levering storms could FAIL. It didn't. All four pre-declared verdicts
+passed.
+
+### The beta the 1:1 hedge was missing
+
+§16 conjectured Q5 names carry overnight beta > 1. Measured (252-day
+trailing, lagged, clamped [0.5, 2.0]):
+
+```
+  beta: mean 1.25   p5 0.87   p95 1.67   LAST 1.55      (5,715 days, 2003-2026)
+  corr with QQQ_ON, same window:   NEU (1:1) +0.40   NEUb +0.03    -> PASS (<0.20)
+
+                bps/day      t   Sharpe   CAGR%   maxDD%    %/mo
+  NEU  (1:1)      +4.17   5.24     1.10   10.57    -31.7   +0.84
+  NEUb (beta)     +3.40   4.85     1.02    8.56    -26.6   +0.69
+```
+
+The hedge does exactly what it was specified to do: residual market
+exposure +0.40 -> +0.03. The 0.77 bps/day it costs is the QQQ overnight
+premium the extra ~0.25 of hedge no longer collects — NEUb is the purest
+number in the repo, the selection alpha net of ALL market exposure, and it
+is +3.40 at t=4.85. The last reading matters live: **today's basket runs
+overnight beta ~1.55**, so the 1:1-hedged book is quietly long ~0.55 of
+QQQ's overnight without knowing it. Honest ranking note: PASSing its own
+criterion did not earn NEUb a slot in the book table below — v2n-scaled
+dominates v2nb-scaled on mean and tail alike. The hedge's value is
+diagnostic (what is the alpha really?) and as the go-to configuration if
+market-overnight exposure ever needs to be exactly zero.
+
+### De-levering the storms: PASS on all three books
+
+Exposure = min(1, target/vol), causal, capped at 1 — the mirror image of
+the margin §19 vetoed. Raw and scaled on identical days (post-burn-in
+window 2004-02 -> 2026-03, so raw rows differ slightly from §16's
+full-window numbers); MC columns from §19's bootstrap at 1x:
+
+```
+                bps/day    t  Sharpe  %/mo | MC: CAGR p5   p50  maxDD p95  w-mo p95  P(-20%mo)  p50/|DD|
+  v2   raw       +10.84 5.38   1.14  +2.06 |       9.2%  27.9%    -48.3%    -41.9%      27.9%      0.58
+       scaled     +8.90 6.53   1.39  +1.77 |      11.1%  23.7%    -27.0%    -15.8%       0.0%      0.88
+  v2n  raw        +6.74 4.52   0.96  +1.29 |       3.7%  16.5%    -34.5%    -17.6%       1.2%      0.48
+       scaled     +5.41 5.06   1.08  +1.08 |       4.2%  13.6%    -23.2%     -8.7%       0.0%      0.59
+  v2nb raw        +5.50 3.74   0.81  +1.04 |       1.0%  13.0%    -35.5%    -15.5%       0.0%      0.37
+       scaled     +4.13 3.88   0.83  +0.80 |       0.8%  10.0%    -27.1%     -8.8%       0.0%      0.37*
+                                             (* marginal at print precision)
+  v2 exposure: mean 0.84, at the cap 51% of days, p5 0.39
+  v2 by era, scaled | raw: 04-07 12.9|13.9   08-11 10.9|15.4   12-15 7.7|8.5
+                           16-19  5.2|5.7    20-23  5.2|7.0    24-27 13.8|17.4
+```
+
+The headline is the v2 row. Giving up 18% of the mean (10.84 -> 8.90)
+buys: the MC max drawdown nearly halved (-48.3% -> -27.0%), the worst-month
+tail cut by 62% (-41.9% -> -15.8%), the chance of a -20% month from 27.9%
+to zero — and the 5%-unlucky-world CAGR RISES (9.2% -> 11.1%). That last
+one is §19's leverage table in mirror image: margin improved the median by
+degrading the bad worlds; de-levering storms improves the bad worlds while
+keeping most of the median. Return per unit of tail: 0.58 -> 0.88. Sharpe
+1.14 -> 1.39, and the t-stat rises despite the lower mean.
+
+The stated risk showed up and was survivable: storms did pay (08-11 scaled
+kept 10.9 of raw's 15.4; 24-27 kept 13.8 of 17.4), but the premium in
+storms is not proportional to variance — the overlay kept ~70% of the
+storm-era mean at half the storm-era risk, and every era stayed positive.
+
+The 1x menu this leaves, for the go-live day (nothing about probation
+moves): raw v2 is the +2.06%/mo book at a -48% MC tail; scaled v2 is
++1.77%/mo at -27% with the highest Sharpe in the repo (1.39); scaled v2n
+is the calm book (+1.08%/mo, worst-month p95 -8.7%). The forward metrics
+are configuration-independent, so this choice is sizing, not evidence.
+Whether modest leverage ON THE SCALED book beats raw v2 is a legitimate
+future question for the same MC machinery — after the forward verdict,
+not before.
+
+### July 2026, diagnosed — `diagnose.py`
+
+The one negative replay month (-1.91%, §19's quasi-holdout), decomposed by
+the harness built for §12's "diagnose, don't filter" (selection rebuilt
+exactly as the replay's, reconciled to `portfolio()` at 1e-9):
+
+```
+  2026-07: 52 eligible, Q5/Q1 = 10 each; L/S -8.70 bps/day x 22 nights (ref +12.2)
+    market    QQQ overnight            +0.37
+    breadth   universe EW minus QQQ    -2.36
+    long sel  Q5 minus universe        -1.97
+    short sel universe minus Q1        -6.73     <- the month
+    identity  L/S                      -8.70
+  worst nights: 07-28 -581.6 (MU -697)   07-07 -544.9 (AMAT -834)
+                07-17 -395.3 (LRCX -548)
+  data flags: none -- 20 names x 22 nights, zero exclusions, zero missing
+```
+
+The month was the SHORT side. The market was fine (+0.37) and the longs
+only mildly lagged; the loss sat in Q1 rallying overnight — XOM +30.0,
+CRWD +22.1, WFC +20.2, MA +18.6 bps/night: an old-economy/financials
+rotation month that the momentum-flavored short book leaned against. The
+long side was an earnings-dispersion wash (LRCX +70.0 and AMAT +24.1
+against QCOM -62.2 and PLTR -39.5), and the worst nights are single-name
+earnings gaps — the known texture of a 10-name book in July. The floor
+model printed -26.91 the same month: the opening prints cushioned July
+rather than inflating it. Under §12 and §19 together the verdict is
+mechanical: -8.70 for one month sits inside the fan (the 3-month table
+calls anything between -2.6 and +15.1 "waiting"), the data are clean, and
+no rule changes.
+
+One blemish surfaced in the open: **SGOV — a T-bill ETF — sat in Q1** (it
+postdates the frozen ETF exclusion list). Its contribution was -0.3
+bps/night of nothing, exactly what a cash ETF does overnight; the cost is
+a wasted short slot, not a wrong number. The frozen experiment keeps its
+universe rule as-is (the model was trained under it; changing it mid-probation
+would create train/serve skew), and the ETF list gets amended at the next
+deliberate re-freeze, which is its own dated commit. Found, sized
+(negligible), deferred deliberately — that is what the harness is for.
