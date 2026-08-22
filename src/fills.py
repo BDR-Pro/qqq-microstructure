@@ -127,26 +127,35 @@ def reconcile():
             tot_gn += notional
             rows += 1
     net = tot_net / tot_not
-    print(f'\n  {len(nights)} night(s): realized net {net:+.1f} bps/night '
-          f'on ${tot_not / len(nights):,.0f} avg'
-          + (f'   graded {tot_g / tot_gn:+.1f} over the {rows} graded'
-             if rows else ''))
+    line = (f'{len(nights)} night(s): realized net {net:+.1f} bps/night '
+            f'on ${tot_not / len(nights):,.0f} avg'
+            + (f'   graded {tot_g / tot_gn:+.1f} over the {rows} graded'
+               if rows else ''))
+    print('\n  ' + line)
     print('  gap = slippage + integer-share tracking + unbought names; '
           'commissions shown separately.\n  ROI check: net bps/night x '
           'nights/mo / 100 = %/mo on deployed capital.')
-    return net
+    return net, line
 
 
 def main():
-    try:
-        n = capture()
-    except SystemExit as ex:
-        print(f'{ex}\n(TWS unreachable -- reconciling from the CSV alone)')
-        n = 0
-    net = reconcile()
-    if n and net is not None:
-        send(f'qqq fills: {n} new, realized net {net:+.1f} bps/night so far')
-    print('\ncommit reports/fills.csv with the rest of reports/')
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--report', action='store_true',
+                    help='no capture: reconcile the committed CSV and '
+                         'telegram the scorecard (what the CI job runs)')
+    a = ap.parse_args()
+    n = 0
+    if not a.report:
+        try:
+            n = capture()
+        except SystemExit as ex:
+            print(f'{ex}\n(TWS unreachable -- reconciling from the CSV alone)')
+    out = reconcile()
+    if out is not None and (n or a.report):
+        send(f'qqq ROI: {out[1]}' + (f' ({n} new fills)' if n else ''))
+    if not a.report:
+        print('\ncommit reports/fills.csv with the rest of reports/')
 
 
 if __name__ == '__main__':

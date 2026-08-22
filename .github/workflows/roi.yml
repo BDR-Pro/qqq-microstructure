@@ -1,0 +1,44 @@
+# Part of qqq-microstructure.
+#
+# The daily ROI telegram. This job never touches the broker -- it reconciles
+# the fills the VM already pushed (reports/fills.csv) against the graded
+# record and sends the scorecard. The division of labor, on the record:
+#
+#   VM (next to IB Gateway, localhost only -- see install_ibkr.sh):
+#     runs the order legs and captures fills, then pushes. Crontab:
+#
+#       CRON_TZ=America/New_York
+#       25 15 * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg close --submit >> $HOME/qqq.log 2>&1
+#       10 16 * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
+#       20 9  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg open --submit >> $HOME/qqq.log 2>&1
+#       40 9  * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
+#
+#   GitHub (this file): reads what the VM pushed, telegrams the running net.
+#     15:00 UTC Tue-Sat covers Mon-Fri nights after the morning capture push.
+#
+# Secrets: TELEGRAM_API, TELEGRAM_CHAT. Never an IBKR anything -- the IB API
+# socket is unauthenticated and must stay on the VM's localhost.
+# Note: cron fires only from the DEFAULT branch.
+
+name: roi
+on:
+  schedule:
+    - cron: '0 15 * * 2-6'        # Tue-Sat 15:00 UTC
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  roi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --quiet numpy pandas
+      - name: reconcile and telegram
+        env:
+          TELEGRAM_API: ${{ secrets.TELEGRAM_API }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+        run: python src/fills.py --report
