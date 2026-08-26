@@ -209,11 +209,17 @@ def main():
     if not os.path.exists(sp):
         raise SystemExit('missing data/stack_daily.csv -- run stack_v2.py first')
     L = pd.read_csv(sp, dtype={'day': str}).set_index('day')
-    op = os.path.join(d, 'opra_daily.parquet')
-    if os.path.exists(op):
-        od = pd.read_parquet(op).set_index('day')
-        if 'ev_sprd' in od and 'spot' in od:
-            L = L.join((od.ev_sprd - 1.30 / (od.spot * 100) * 1e4).rename('OPT'))
+    # stack_v2 already writes an OPT column when the OPRA chains exist; only
+    # derive one here if the stack didn't (older stack_daily.csv)
+    if 'OPT' not in L:
+        op = os.path.join(d, 'opra_daily.parquet')
+        if os.path.exists(op):
+            od = pd.read_parquet(op)
+            od['day'] = od.day.astype(str)
+            od = od.set_index('day')
+            if 'ev_sprd' in od and 'spot' in od:
+                L = L.join((od.ev_sprd - 1.30 / (od.spot * 100) * 1e4)
+                           .rename('OPT'))
     b = books(L)
 
     df = load_panel()
