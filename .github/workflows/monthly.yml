@@ -1,0 +1,65 @@
+# Part of qqq-microstructure.
+#
+# The monthly ritual, off the home PC: extend the panel from Yahoo, replay the
+# frozen models, pre-register the month's basket, grade elapsed nights, commit
+# reports/ back, and Telegram the summary (monthly.py sends it). Weekly on
+# purpose -- every step is idempotent, so each month gets four or five chances
+# (the same failover design as the Windows Task Scheduler block in monthly.py,
+# with GitHub's uptime instead of a home machine's).
+#
+# NEVER put broker access here. The IBKR socket has no authentication -- the
+# broker legs run on the VM next to TWS/Gateway on localhost (see
+# install_ibkr.sh and the crontab in roi.yml). This job is data and reporting
+# only.
+#
+# Secrets (repo Settings > Secrets and variables > Actions):
+#   TELEGRAM_API    bot token          TELEGRAM_CHAT   pinned chat id
+#   DATABENTO_API_KEY is deliberately NOT wired: the options slice lives in
+#   the data/ cache, and an evicted cache would silently re-bill ~$20 on the
+#   next run. Keep the opra pull on a machine with a persistent disk.
+#
+# The panel cache: data/xsec (~60 MB) restores from the most recent cache and
+# re-saves each run. The very first run bootstraps it with xsec_extract.py --
+# heavy (it streams each month's minute file from HuggingFace) and resumable,
+# so if it exceeds the job timeout, just re-run the dispatch until it
+# completes once. Note: cron fires only from the DEFAULT branch.
+
+name: monthly
+on:
+  schedule:
+    - cron: '0 15 * * 1'          # Mondays 15:00 UTC
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: monthly
+jobs:
+  monthly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/cache@v4
+        with:
+          path: data/xsec
+          key: xsec-${{ github.run_id }}
+          restore-keys: |
+            xsec-
+      - run: pip install --quiet numpy pandas pyarrow lightgbm yfinance
+      - name: bootstrap panel (first run only; heavy, resumable)
+        run: |
+          [ -n "$(ls -A data/xsec 2>/dev/null)" ] || python src/xsec_extract.py
+      - name: monthly ritual
+        env:
+          TELEGRAM_API: ${{ secrets.TELEGRAM_API }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+        run: python src/monthly.py
+      - name: commit the forward log
+        run: |
+          git config user.name 'qqq-monthly[bot]'
+          git config user.email 'actions@users.noreply.github.com'
+          git add reports
+          git diff --cached --quiet || { git commit -m 'forward log (actions)'; git push; }

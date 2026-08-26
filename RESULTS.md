@@ -1716,3 +1716,86 @@ universe rule as-is (the model was trained under it; changing it mid-probation
 would create train/serve skew), and the ETF list gets amended at the next
 deliberate re-freeze, which is its own dated commit. Found, sized
 (negligible), deferred deliberately — that is what the harness is for.
+
+---
+
+## 21. Is it alpha or beta, and do the option numbers survive real quotes? — `factor.py`, `optbacktest.py`
+
+Two questions the earlier sections deferred, answered on the real panel.
+
+### The factor decomposition: v2's alpha is real, and so is its market beta
+
+Every book regressed on QQQ + SPY overnight (and QQQ intraday), Newey-West
+HAC t-stats. The two session-orthogonality falsification checks passed —
+ON on the intraday factor beta +0.00, MOM on the overnight factor beta
+−0.01 — so no session leaks into the other.
+
+```
+  book   alpha bps/d  t_HAC  residSharpe  R2   betas (mkt_on / spy_on)
+  ON        +2.45     2.81      0.71      0.75   +0.20 / +1.19
+  NEU       +1.13     1.47      0.36      0.15   -0.09 / +0.41
+  MOM       +4.42     2.70      0.56      0.00   (vs intraday: -0.03)
+  v2        +4.88     3.26      0.74      0.47   +0.18 / +1.24
+  v2n       +3.45     2.32      0.54      0.05   -0.03 / +0.37
+```
+
+Read carefully, this is the most important table in the file, and it cuts
+both ways:
+
+- **The alpha is real.** v2's intercept is **+4.88 bps/day at t_HAC = 3.26**,
+  residual Sharpe 0.74 — a return no combination of QQQ/SPY overnight and QQQ
+  intraday reproduces, significant after the HAC penalty that the
+  autocorrelation warrants. ON+MOM is its own source, not repackaged index
+  exposure. v2n keeps a significant +3.45 (t 2.32) too. MOM standalone is
+  near-**pure** alpha (R² 0.00, t 2.70) — uncorrelated with the market, just
+  noisy on its own (Sharpe 0.49).
+- **But v2 is about half market-overnight beta.** R² 0.47 and a total
+  overnight-market beta near **1.4** mean roughly half of v2's raw +10.65
+  bps/day is the overnight equity-risk premium levered ~1.4×, not selection
+  skill. That premium is real and harvestable, but it is beta — it will draw
+  down when the overnight market does, and it is not what a fee is paid for.
+  The pure-selection piece is ~+4.9 bps/day (~1%/mo).
+- **A collinearity caveat, stated so the betas are not over-read.** QQQ and
+  SPY overnight returns are ~0.9 correlated, so the individual split
+  (+0.20 QQQ / +1.24 SPY) is unstable — the regression hands the shared
+  component mostly to SPY. The trustworthy quantity is the **sum**, ~1.4,
+  which matches §20's independently measured basket overnight beta of ~1.55.
+  Do not read "v2 is a SPY trade"; read "v2 carries ~1.4 units of
+  overnight-market beta, however it is split."
+
+The decision this forces is the one §20 already previewed, now on a rigorous
+basis: **v2** is max return but half of it is market-overnight beta (spy_on
+1.24); **v2n** is the cleaner, lower-beta expression (beta 0.37, alpha +3.45
+still significant) at a lower raw return; **NEU alone** over-hedges into
+statistically insignificant alpha (t 1.47) and is a tail tool, not a return
+source. Nothing here is killed — v2 clears the "real alpha" bar — but "v2 =
++2.02%/mo" is honestly restated as "≈half selection alpha, ≈half levered
+overnight beta."
+
+### The option backtest: real quotes confirm §18, and the model flatters ~3×
+
+`optbacktest.py` gives the structures the equity books' full treatment. Real
+mode reproduces §18 exactly on measured chains, and comparing it to model
+mode on the SAME QQQ structure is the whole lesson in one line:
+
+```
+  QQQ momentum credit spread, 833 days 2023-04 -> 2026-07
+  REAL  (measured bid/ask):        +2.92 bps/d  Sharpe 2.32  win 86%  maxDD -2.8%
+  MODEL (mid fills, IV x1.2):      +8.45 bps/d  Sharpe 4.69  win 82%  maxDD -5.8%
+  QQQ condor, REAL:                +1.48 bps/d  Sharpe 1.33  win 69%
+```
+
+The **model overstates the same structure by ~3×** (8.45 vs 2.92). That gap
+is exactly what the model omits: the 0DTE bid/ask a real order crosses, mid
+fills, and — in model mode — an assumed IV multiple instead of the measured
+premium. So every model-mode number is an **upper bound, not an edge**: the
+AAPL directional model printing +8.77 bps/day at Sharpe 4.29 is the same
+flattery (and directional-only at mult 1.0, with a −0.5 bps/day 2000–2003
+era inside it). The only tradeable options number in the repo remains §18's
+real-chain QQQ credit spread, +2.92 net, decaying by year (2023 +4.3 → 2026
++0.8), and it answers to the §19 forward clock like everything else.
+
+The through-line of both tests: the edges that were real stay real under the
+harsher lens (v2 alpha t 3.26; QQQ spread at measured quotes), and the harsher
+lens is exactly what stops the flattering numbers — half of v2's raw return,
+and two-thirds of the model option Sharpe — from being mistaken for skill.

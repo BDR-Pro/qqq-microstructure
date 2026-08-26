@@ -92,16 +92,19 @@ def size(names, px, capital):
     return rows, per
 
 
-def submit_paper(rows, leg, now):
+def connect_paper(client_offset=0):
+    """Connect to TWS/Gateway and REFUSE anything but a paper account.
+    The paper-only rule lives here and only here."""
     try:
-        from ib_insync import IB, Stock, Order
+        from ib_insync import IB
     except ImportError:
         raise SystemExit('pip install ib_insync   (needed only for --submit)')
     host, port, cid = (os.environ.get('IBKR_API') or
                        '127.0.0.1:7497:7').split(':')
     ib = IB()
     try:
-        ib.connect(host, int(port), clientId=int(cid), timeout=8)
+        ib.connect(host, int(port), clientId=int(cid) + client_offset,
+                   timeout=8)
     except Exception as ex:
         raise SystemExit(
             f'cannot reach TWS/Gateway at {host}:{port} ({type(ex).__name__})'
@@ -117,6 +120,12 @@ def submit_paper(rows, leg, now):
             f'until the forward verdict (RESULTS 19/20) -- log into TWS in '
             f'paper mode.')
     print(f'connected: paper account {acct}')
+    return ib
+
+
+def submit_paper(rows, leg, now):
+    from ib_insync import Stock, Order
+    ib = connect_paper()
     working = {t.contract.symbol for t in ib.openTrades()
                if t.order.orderType in ('MOC', 'MKT')}
     placed = 0
