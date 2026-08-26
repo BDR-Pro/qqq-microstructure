@@ -1799,3 +1799,60 @@ The through-line of both tests: the edges that were real stay real under the
 harsher lens (v2 alpha t 3.26; QQQ spread at measured quotes), and the harsher
 lens is exactly what stops the flattering numbers — half of v2's raw return,
 and two-thirds of the model option Sharpe — from being mistaken for skill.
+
+---
+
+## 22. The overnight edge is broad, not a few-name quirk — `xsec_replicate.py`
+
+The forward test answers "is the edge real?" over twelve months. This answers
+a different, faster question with data already in hand: **is the overnight
+edge a broad market phenomenon, or does it live in a handful of the 150
+names?** The test partitions the universe by a stable md5(ticker) hash — a
+name is in the same disjoint slice every month — and runs the persistence
+signal INDEPENDENTLY inside each slice, each ranked only against itself. A
+real, broad edge appears in every disjoint slice; a data-mined quirk hides in
+one. Survivorship-free, no new data.
+
+### It replicates in every well-powered disjoint slice
+
+```
+  signal on_12m, 462 names, 316 months 2000-04 -> 2026-07
+  full universe:            +13.16 bps/day  t 12.9   IC +0.197
+  3-way hash split:  +13.65 / +14.74 / +10.47   weakest t 7.5   -> BROAD
+  2-way random:      +12.78 / +13.47            weakest t 10.4  -> BROAD
+
+  signal on_1m, 766 names:
+  full universe:             +7.95 bps/day  t 8.0    IC +0.102
+  3-way hash split:   +9.42 / +8.98 / +6.85    weakest t 4.8   -> BROAD
+  2-way random:       +7.72 / +8.34            weakest t 6.8   -> BROAD
+```
+
+Every disjoint slice — names the others never touch — reproduces the edge at
+t ≥ 4.8, on both the 12-month and 1-month persistence signals, across two
+independent partitioning schemes. The edge is a property of the *population*
+of names, not of a lucky few. This is the single strongest piece of evidence
+in the file that the overnight book is not curve-fit to specific tickers, and
+it arrived without spending a forward month.
+
+### The honest caveat, and a tool that no longer cries wolf
+
+At `--k 5` the verdict first flipped to CONCENTRATED — a **false alarm from
+under-powering, not real concentration**. Splitting 150 names-per-month five
+ways leaves ~30 per slice, too few to form stable quintiles, so most months
+drop to the 20-name floor and one slice was judged on only 40 of 316 months
+(t 1.16 on noise). The tool now power-gates: it judges only slices that keep
+≥60% of the full month count, tags the rest UNDERPOWERED, and says "split too
+fine to judge" rather than inventing concentration. The well-powered
+partitions (k≤3, and the 2-way with all 316 months in each half) are the
+trustworthy ones, and they are unanimously BROAD. The lesson is generic and
+worth stating: a disjointness test must be powered on both sides, or the thin
+side's noise masquerades as a finding.
+
+### What remains
+
+This proves the edge is broad WITHIN the top-150. The stronger claim — that it
+exists in names that were *never* in the top-150 — needs an out-of-universe,
+survivorship-aware feed (mid-cap names via Yahoo, recent years, attrition
+measured) and is the next replication. But the datamined-to-specific-names
+worry, the cheapest way for this whole book to be an illusion, is now
+answered: it is not that.
