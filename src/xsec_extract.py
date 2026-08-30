@@ -84,10 +84,20 @@ def one_month(m):
 
 
 def main():
+    global TOP_N, OUT
     ap = argparse.ArgumentParser()
     ap.add_argument('--start', default='1999-03')
     ap.add_argument('--end', default='2026-03')
+    ap.add_argument('--top', type=int, default=TOP_N,
+                    help='names per month by dollar volume (default 150; '
+                         '1000 for the wide universe)')
+    ap.add_argument('--out', default=None,
+                    help='output dir (default data/xsec; use data/xsec1000 '
+                         'for the wide universe so the core panel is untouched)')
     a = ap.parse_args()
+    TOP_N = a.top
+    if a.out:
+        OUT = os.path.join(ROOT, a.out) if not os.path.isabs(a.out) else a.out
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(TMP, exist_ok=True)
     ms = months(a.start, a.end)

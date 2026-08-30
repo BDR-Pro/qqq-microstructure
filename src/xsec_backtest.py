@@ -123,10 +123,14 @@ def era_table(days, r):
         print(f'    {e}-{e+3}: {g.r.mean():+7.2f} bps/day  ({len(g)} days)')
 
 
-def load_panel():
-    files = sorted(glob.glob(os.path.join(XSEC, '*.parquet')))
+def load_panel(path=None):
+    """Load and clean a panel directory. Default is the top-150 panel; pass a
+    path (e.g. data/xsec1000) to run the SAME cleaning -- test-symbol drop,
+    split exclusion, backstop, known-split verification -- on a wider
+    extraction. One cleaning implementation, every universe."""
+    files = sorted(glob.glob(os.path.join(path or XSEC, '*.parquet')))
     if not files:
-        raise SystemExit(f'no files in {XSEC} -- run xsec_extract.py first')
+        raise SystemExit(f'no files in {path or XSEC} -- run xsec_extract.py first')
     df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
     df = df[(df.open > 0) & (df.close > 0)]
     is_test = df.ticker.str.match(TEST_RE) | df.ticker.isin(TEST_SYM)
