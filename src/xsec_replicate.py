@@ -106,34 +106,46 @@ def ls_series(rows):
     return pd.Series(out).sort_index(), pd.Series(ics)
 
 
-def report_subset(name, rows):
+def report_subset(name, rows, full_n=0):
     ls, ic = ls_series(rows)
     if len(ls) < 12:
         return None
     t = ls.mean() / (ls.std() / np.sqrt(len(ls)))
+    # a subset that keeps quintiles in far fewer months than the full universe
+    # is too thin to trust -- it lost months to the 20-name floor, not to a
+    # missing edge
+    weak = full_n and len(ls) < 0.6 * full_n
     print(f'  {name:<14} {ls.mean():+6.2f} bps/day  t={t:+5.2f}  '
           f'Sharpe {ls.mean()/ls.std()*np.sqrt(252):+5.2f}  '
           f'{(ls > 0).mean()*100:3.0f}% mo+  IC {ic.mean():+.3f}  '
-          f'({rows.ticker.nunique()} names, {len(ls)} mo)')
-    return dict(mean=ls.mean(), t=t, n_names=rows.ticker.nunique())
+          f'({rows.ticker.nunique()} names, {len(ls)} mo)'
+          + ('  UNDERPOWERED' if weak else ''))
+    return dict(mean=ls.mean(), t=t, n_names=rows.ticker.nunique(),
+                n_months=len(ls), powered=not weak)
 
 
-def partition_report(title, rows, groups):
+def partition_report(title, rows, groups, full_n):
     print(f'\n{title}')
     res = []
     for gi in sorted(set(groups.values())):
         names = {tk for tk, g in groups.items() if g == gi}
-        r = report_subset(f'subset {gi}', rows[rows.ticker.isin(names)])
+        r = report_subset(f'subset {gi}', rows[rows.ticker.isin(names)], full_n)
         if r:
             res.append(r)
-    if len(res) < 2:
-        print('  too few populated subsets to judge')
+    powered = [r for r in res if r['powered']]
+    if len(powered) < 2:
+        print(f'  --> only {len(powered)} of {len(res)} slices keep enough '
+              f'months to form stable quintiles -- split too fine to judge; '
+              f'use --k 3 or less')
         return
-    signs = {np.sign(r['mean']) for r in res}
-    weakest = min(res, key=lambda r: r['t'])
+    signs = {np.sign(r['mean']) for r in powered}
+    weakest = min(powered, key=lambda r: r['t'])
     broad = len(signs) == 1 and weakest['t'] > 1.5
-    print(f'  --> weakest disjoint slice: {weakest["mean"]:+.2f} bps/day '
-          f'(t={weakest["t"]:+.2f})   verdict: '
+    tag = ('' if len(powered) == len(res) else
+           f' (over the {len(powered)} well-powered of {len(res)}; '
+           f'the rest lost too many months to judge)')
+    print(f'  --> weakest well-powered slice: {weakest["mean"]:+.2f} bps/day '
+          f'(t={weakest["t"]:+.2f}){tag}   verdict: '
           + ('BROAD -- edge survives in every disjoint slice'
              if broad else
              'CONCENTRATED -- edge is not uniform across disjoint names'))
@@ -151,19 +163,20 @@ def main():
           f'{a.signal}\n{len(names)} names, {rows.tmonth.nunique()} trade '
           f'months {rows.tmonth.min()}..{rows.tmonth.max()}')
 
+    full_n = rows.tmonth.nunique()
     print('\nfull universe (the rule baseline this study partitions; the ML '
           'ceiling was RESULTS 15b):')
-    report_subset('FULL', rows)
+    report_subset('FULL', rows, full_n)
 
     hashgrp = {tk: subset_of(tk, a.k) for tk in names}
     partition_report(f'{a.k}-way DISJOINT hash split (stable md5(ticker)):',
-                     rows, hashgrp)
+                     rows, hashgrp, full_n)
 
     rng = np.random.default_rng(SEED)
     perm = rng.permutation(names)
     randgrp = {tk: (0 if i < len(names) // 2 else 1)
                for i, tk in enumerate(perm)}
-    partition_report('2-way RANDOM split (seed 7):', rows, randgrp)
+    partition_report('2-way RANDOM split (seed 7):', rows, randgrp, full_n)
 
     print('\nA broad edge appears in every disjoint slice; a data-mined quirk '
           'hides in one.\nThis is the fast replication -- it answers "is it '

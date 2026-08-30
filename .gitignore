@@ -23,6 +23,7 @@ data/_work_hf/
 data/hf_bars/
 data/daily_hf_*.parquet
 data/xsec/
+data/xsec1000/
 data/xsec_daily.csv
 data/xsec_ml_daily.csv
 data/xsec_intraday.csv
