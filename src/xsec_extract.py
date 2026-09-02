@@ -43,7 +43,13 @@ def months(start, end):
 def one_month(m):
     dest = os.path.join(OUT, f'{m}.parquet')
     if os.path.exists(dest):
-        return -1
+        # a Yahoo-built stopgap month (xsec_extend, src='yahoo') is replaced
+        # once the HF source has it; HF-built months are never re-done
+        try:
+            if 'src' not in pd.read_parquet(dest).columns:
+                return -1
+        except Exception:
+            return -1
     tmp = os.path.join(TMP, f'x{m}.{os.getpid()}.parquet')
     req = urllib.request.Request(URL.format(m=m), headers={'User-Agent': 'Mozilla/5.0'})
     try:
@@ -101,7 +107,15 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(TMP, exist_ok=True)
     ms = months(a.start, a.end)
-    todo = [m for m in ms if not os.path.exists(os.path.join(OUT, f'{m}.parquet'))]
+    def _redo(m):                       # missing, or a Yahoo stopgap to replace
+        f = os.path.join(OUT, f'{m}.parquet')
+        if not os.path.exists(f):
+            return True
+        try:
+            return 'src' in pd.read_parquet(f, columns=None).columns
+        except Exception:
+            return False
+    todo = [m for m in ms if _redo(m)]
     print(f'{len(ms)} months, {len(todo)} to fetch | top {TOP_N} by monthly $ volume',
           flush=True)
     t0 = time.time()

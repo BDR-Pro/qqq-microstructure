@@ -1856,3 +1856,115 @@ survivorship-aware feed (mid-cap names via Yahoo, recent years, attrition
 measured) and is the next replication. But the datamined-to-specific-names
 worry, the cheapest way for this whole book to be an illusion, is now
 answered: it is not that.
+
+---
+
+## 23. The adversarial audit: what an independent 52-agent review found — `AUDIT.md`
+
+Everything before this section was written by the people who wanted it to work.
+§23 records what an independent, adversarial review — six subsystem readers,
+six bias-dimension hunters, two refuters per finding defaulting to "refuted",
+a completeness critic — found on `main 00db31f`. Full report, classifications
+and the action log: **`AUDIT.md`**. Summary and the corrections it forces:
+
+### No leak; several magnitudes wrong
+
+Zero look-ahead leaks. The within-month overnight ranking edge stands (walk-
+forward t 12.6, IC t 17.5, floor t 6.6, disjoint-slice replication weakest t
+4.8). What the audit upheld instead — 18 findings, 0 refuted — are accounting,
+calibration and construction-mismatch defects. The ones that change what this
+file has been claiming:
+
+- **§21 is void until re-run.** `factor.py` built its market factors from
+  `ticker=='QQQ'` only with an unmasked `close.shift(1)`: the QQQQ era
+  (2004-12..2011-03, including 2008, v2's best era) was silently dropped and the
+  rename injected a ~+3,500 bps "overnight" regressor point. The +0.20/+1.19
+  QQQ/SPY split, the "half of v2 is beta" narrative, and NEU's t 1.47 are that
+  bug's signature — the "collinearity" explanation in §21 was explaining an
+  artefact. Fixed (QQQ+QQQQ stitched, factors from the panel's masked returns,
+  identity check printed); **the table must be re-run on the real panel and §21
+  rewritten from it.** The independent evidence for a positive hedged residual
+  (NEUb +3.40, t 4.85, §20) does not depend on the bug.
+- **Every long-only series is optimistically biased by censoring, by an
+  unrecorded amount.** The split-ratio band and the ±40% backstop (which in
+  log space fires at −28.6% downside) NaN real crash nights out of Q5 while the
+  live grade books them in full — direction-known, on the deployed object,
+  plausibly 0.4–2.5 bps/day. The exclusion counts printed by `load_panel` were
+  never pasted here. `xsec_gaps.py` now lists every censored non-verified-split
+  night and re-inserts the backstop nights for a lower bound; the paper log now
+  carries a like-for-like masked tilt. The frozen scoring path is untouched:
+  changing the mask is a re-freeze, not a patch.
+- **"ML doubles the rule" (§15b) compared the model with its weakest input.**
+  The baseline was `on_1m`; the model's top feature is `on_12m`, and §22's
+  `on_12m` rule prints +13.16 (t 12.9) in a different construction. The real
+  increment is plausibly +2..+4 bps/day, not 2×. `xsec_ml.py` now prints
+  `on_12m` and avg baselines on identical OOS rows and "ML minus best rule"
+  with its own t — the number to quote from here on.
+- **The ceiling canary's "construction floor" (§15b) was a post-hoc relabel of
+  a single draw.** The pre-declared rule said stop trusting; one permuted draw
+  is a random projection onto real feature signal, not a null. Multi-seed
+  canary null now printed. Recorded as a dated decision, not subtracted from
+  `REF`.
+- **Costs are understated where the data is oldest and the size is smallest:**
+  MOC/MOO collectability was asserted for 1999-2026 on a 2012+ check (Nasdaq
+  had no closing cross before 2004); MOM's flat 0.34 bps is 5-15× too low for
+  the 1/16-tick years; at the $25k rehearsal size the per-order commission
+  minimum alone is 2-4.5× the modelled crossing. The forward test and GO/KILL
+  (gross) are unaffected; the 1999-2004 rows of §11/§15 are.
+- **Dividends were stated with the wrong sign for the short leg** (§15, and the
+  header of `xsec_backtest.py`): the long leg's holder receives them (Q5/tilt
+  understated), the short leg pays them (Q1 overstated), so the L/S is roughly
+  neutral-to-optimistic. Corrected.
+- **Model-mode option numbers (§21's AAPL/QQQ "directional-only" readings) were
+  overstated:** the "fair" IV used full-day vol for a 10:30→close window and so
+  already sold ~1.1-1.4× rich. Fixed to the window's own vol; re-validated on a
+  planted overnight+first-hour world (condor at mult 1.0 ≈ 0). Real-mode
+  numbers (§18, §21) are unaffected.
+- Ops: a month-rollover hole could have left Aug-31 positions unsold for a
+  week; the Yahoo candidate pool was monotone-shrinking; the paper log had zero
+  graded nights at HEAD (the workflows had not fired). All three fixed in code;
+  the third needs the secrets and a manual dispatch.
+
+### Classification, from the audit (AUDIT.md §G)
+
+```
+  ON    ROBUST EDGE (long-only level optimistic by the censoring amount; ~70% overnight-market beta -- pending §21 re-run)
+  MOM   PROMISING BUT INSUFFICIENT EVIDENCE (t ~2.0-2.3 after era-correct costs; only holdout negative)
+  NEU   ROBUST EDGE, size disputed (+3.4 vs +1.1 until §21 is rebuilt)
+  v2    ROBUST EDGE (inherits ON; the MOM increment is unproven)
+  v2n   ROBUST EDGE (inherits NEU; weaker)
+  OPT   PROMISING BUT INSUFFICIENT EVIDENCE (one regime, decaying, assignment unmodelled)
+  v2o   PROMISING BUT INSUFFICIENT EVIDENCE (follows OPT)
+```
+
+### What is now different in the code, and what is not
+
+Twelve changes, all off the frozen scoring path (AUDIT.md §I): the factor fix;
+the censoring measurement (`xsec_gaps.py`, `load_panel(keep_backstop=)`); the
+like-for-like paper-log columns; `on_12m` baselines and the multi-seed canary;
+`--through` honoured everywhere and `mc_risk` refusing a series that runs past
+the frozen cutoff; common random numbers in the overlay verdict; the window-vol
+fair IV; capacity/Sortino/cost-base corrections in the report; the open-leg
+liquidation and small-slice warning; the HF-only candidate pool; the dividend
+text; and a regression test file that poisons the raw future parquets before
+`load_panel`, checks the DST windows and the factor stitching, now run in CI.
+Not changed, deliberately: the mask, the ETF list, the universe rule, `REF`,
+the GO/KILL tables, the era-varying MOM cost, assignment modelling — each is a
+re-freeze item, and the RESULTS 19 clock keeps running on the construction the
+frozen models were trained on.
+
+### What only the real panel can settle (run and paste)
+
+```
+python src/xsec_gaps.py                      # the censoring block -> here, §15
+python src/factor.py                         # §21, rebuilt -- replaces the table
+python src/xsec_ml.py                        # ML vs on_12m, canary null, exclusion counts
+python src/research_report.py                # §6 inherits the factor fix
+python src/xsec_extend.py --check 2026-03    # the Yahoo seam, never recorded
+python -m pytest tests -q
+```
+
+The honest one-line reading: the edge is real and the book is fundable in
+principle; several of the numbers this file quotes for it are too high by
+amounts that are now measurable instead of assumed, and one table (§21) is
+wrong and awaits its re-run.

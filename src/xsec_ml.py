@@ -125,7 +125,7 @@ def build_table(df):
     return t
 
 
-def walk_forward(t, ycol, shuffle=False):
+def walk_forward(t, ycol, shuffle=False, seed_offset=0):
     preds = pd.Series(np.nan, index=t.index)
     model = None
     for ty in sorted(t.year.unique()):
@@ -135,7 +135,7 @@ def walk_forward(t, ycol, shuffle=False):
             continue
         y = tr[ycol].values
         if shuffle:
-            rng = np.random.default_rng(ty)
+            rng = np.random.default_rng(ty + seed_offset)
             y = tr.groupby('tmonth')[ycol].transform(
                 lambda s: rng.permutation(s.values)).values
         m = lgb.train(PARAMS, lgb.Dataset(tr[FEATS], y, free_raw_data=True),
@@ -198,16 +198,24 @@ def main():
     ap.add_argument('--save-model', action='store_true',
                     help='train on all history and write models/xsec_*_lgbm.txt')
     ap.add_argument('--through', default=None,
-                    help='with --save-model: train only on trade months <= YYYY-MM')
+                    help='train/evaluate only on trade months <= YYYY-MM (both '
+                         'paths; the walk-forward path once ignored it -- a '
+                         're-run after xsec_extend would have folded the '
+                         'holdout months into xsec_ml_daily.csv, audit 2026-09)')
+    ap.add_argument('--canary-seeds', type=int, default=5,
+                    help='permuted-target canary draws per target (a single '
+                         'draw is not a null distribution)')
     a = ap.parse_args()
     df = load_panel()
     bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'on15_bps']]
            for m, g in df.groupby('month')}
     t = build_table(df)
+    if a.through:
+        t = t[t.tmonth <= a.through].reset_index(drop=True)
     print(f'\nfeature table: {len(t):,} name-months, '
           f'{t.tmonth.nunique()} trade months {t.tmonth.min()} .. {t.tmonth.max()}')
     if a.save_model:
-        save_production(t[t.tmonth <= a.through] if a.through else t)
+        save_production(t)
         return
 
     runs = {}
@@ -223,6 +231,20 @@ def main():
                          rls=portfolio(t, rule_score, bym, col),
                          cls=portfolio(t, canary, bym, col),
                          ic=monthly_ic(t, pred, ycol))
+        if tag != 'cc':
+            # the model's top feature is on_12m; "doubles the rule" against
+            # on_1m alone compared the model with its weakest input (audit
+            # 2026-09, B1#10). Same OOS rows, same portfolio mechanics.
+            runs[tag]['rls12'] = portfolio(t, t['on_12m'].where(oos), bym, col)
+            avg = ((t['on_1m'] + t['on_12m']) / 2).where(oos)
+            runs[tag]['rlsavg'] = portfolio(t, avg, bym, col)
+        # multi-seed canary null: one permuted draw is a random projection
+        # onto real feature signal and its iid t is not a null (B1#11)
+        cm = []
+        for sd in range(1, a.canary_seeds):
+            c2, _ = walk_forward(t, ycol, shuffle=True, seed_offset=sd * 1000)
+            cm.append(portfolio(t, c2, bym, col).ls.mean())
+        runs[tag]['canary_null'] = [runs[tag]['cls'].ls.mean()] + cm
 
     print(f'\nout-of-sample trade months: {t[runs["cc"]["oos"]].tmonth.nunique()} '
           f'({t[runs["cc"]["oos"]].tmonth.min()} .. {t[runs["cc"]["oos"]].tmonth.max()})')
@@ -234,18 +256,37 @@ def main():
     print('  by 4-year era (ML L/S):')
     era_table(runs['cc']['ls'].index, runs['cc']['ls'].ls.values)
 
+    def rule_block(tag):
+        r = runs[tag]
+        stats(r['rls'].ls.values, 'rule on_1m L/S')
+        stats(r['rls12'].ls.values, 'rule on_12m L/S')
+        stats(r['rlsavg'].ls.values, 'rule avg(1m,12m)')
+        stats(r['ls'].ls.values, 'ML L/S')
+        best_lab, best = max((('on_1m', r['rls']), ('on_12m', r['rls12']),
+                              ('avg', r['rlsavg'])), key=lambda x: x[1].ls.mean())
+        j = r['ls'].ls.to_frame('ml').join(best.ls.rename('rule'), how='inner')
+        d = j.ml - j.rule
+        mo = d.groupby(d.index.str[:6]).mean()
+        print(f'  ML minus best rule ({best_lab}): {d.mean():+.2f} bps/day  '
+              f'daily t={d.mean()/(d.std()/np.sqrt(len(d))):+.2f}  '
+              f'monthly t={mo.mean()/(mo.std()/np.sqrt(len(mo))):+.2f}  '
+              f'({len(mo)} months)')
+        cn = np.array(r['canary_null'])
+        print(f'  canary null over {len(cn)} permutation seeds: mean '
+              f'{cn.mean():+.2f}  sd {cn.std(ddof=1) if len(cn) > 1 else 0:.2f}  '
+              f'range [{cn.min():+.2f}, {cn.max():+.2f}] bps/day '
+              f'(the ML must clear this band, not zero)')
+
     print('\nB. next-month overnight mean (hold the nights):')
-    stats(runs['on']['rls'].ls.values, 'rule on_1m L/S')
-    stats(runs['on']['ls'].ls.values, 'ML L/S')
-    stats(runs['on']['cls'].ls.values, 'canary (shuffled)')
+    rule_block('on')
+    stats(runs['on']['cls'].ls.values, 'canary (seed 0)')
     print('  by 4-year era (ML L/S):')
     era_table(runs['on']['ls'].index, runs['on']['ls'].ls.values)
 
     print('\nC. the floor: same trade sold at 09:45 -- does the model survive '
           'without the opening print?')
-    stats(runs['on15']['rls'].ls.values, 'rule on_1m L/S')
-    stats(runs['on15']['ls'].ls.values, 'ML L/S')
-    stats(runs['on15']['cls'].ls.values, 'canary (shuffled)')
+    rule_block('on15')
+    stats(runs['on15']['cls'].ls.values, 'canary (seed 0)')
     print('  by 4-year era (ML L/S):')
     era_table(runs['on15']['ls'].index, runs['on15']['ls'].ls.values)
 
@@ -290,7 +331,12 @@ def main():
     out.index.name = 'day'
     p = os.path.join(ROOT, 'data', 'xsec_ml_daily.csv')
     out.to_csv(p, float_format='%.3f')
-    print(f'daily series -> {p}')
+    import json
+    json.dump({'last_tmonth': str(t.tmonth.max()), 'through': a.through,
+               'rows': int(len(t))},
+              open(p.replace('.csv', '.meta.json'), 'w'), indent=1)
+    print(f'daily series -> {p}  (+ .meta.json with last_tmonth '
+          f'{t.tmonth.max()})')
 
 
 if __name__ == '__main__':

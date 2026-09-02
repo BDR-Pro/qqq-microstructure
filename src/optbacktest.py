@@ -16,11 +16,13 @@
 #       close. It has NO measured chain, so two things a real seller lives on
 #       are absent BY CONSTRUCTION and stated on every run:
 #         - no bid/ask: entry is at the mid, so it flatters every structure;
-#         - IV = trailing realised vol x --iv-mult. At the default mult 1.0 you
-#           are selling at FAIR, which means the variance-risk premium -- the
-#           entire reason premium-selling earns -- is set to ZERO. So the
-#           default model run measures DIRECTIONAL P&L only; to model the
-#           premium you must assert an --iv-mult > 1 and own that number.
+#         - IV = trailing realised vol OF THE 10:30->CLOSE WINDOW x --iv-mult,
+#           annualised by the window's own length. At mult 1.0 the structure is
+#           priced at the window's realised variance, i.e. ZERO variance-risk
+#           premium by construction, so the default run measures DIRECTIONAL
+#           P&L only; to model the premium assert --iv-mult > 1 and own it.
+#           (An earlier version used full-day close-to-close vol here, which
+#           already sold rich; fixed after the 2026-09 audit.)
 #       Model mode answers "does the directional/vol thesis have legs on this
 #       name"; it does NOT answer "is it tradeable." Only real mode does.
 #
@@ -70,12 +72,18 @@ def struct_legs(kind, S, up):
     return [(S * 1.005, 'C', -1.0), (S * 1.015, 'C', 1.0)]
 
 
-def model_series(sym, kind, iv_mult, iv_fix, comm):
-    df = load_panel()
+def model_series(sym, kind, iv_mult, iv_fix, comm, df=None):
+    df = load_panel() if df is None else df
     g = df[df.ticker == sym].sort_values('day').set_index('day')
     if len(g) < 250:
         raise SystemExit(f'{sym}: only {len(g)} panel days -- too few')
-    rv = (g.cc_bps / 1e4).rolling(20).std().shift(1) * np.sqrt(252)  # causal
+    # "fair" IV for the 10:30->close WINDOW must be the vol of that window's
+    # own return, annualised by its own length: the first version used the
+    # full close-to-close vol (overnight + first hour included) and so sold
+    # ~1.1-1.4x rich at mult 1.0 while claiming a zero variance premium
+    # (audit 2026-09, B1#8). Causal: trailing 20 windows, shifted one day.
+    wret = np.log(g.close / g.p60.where(g.p60 > 0))
+    rv = wret.rolling(20).std().shift(1) * np.sqrt(252.0 / SF)
     S0 = g.p60.where(g.p60 > 0, g.open)                             # 10:30 entry
     T = SF / 252.0
     out = {}
@@ -116,7 +124,7 @@ def report(r, label, spot_med):
     n = len(v)
     eq = np.cumsum(v)                                   # additive, bps of spot
     dd = (eq - np.maximum.accumulate(eq)).min()
-    down = v[v < 0].std()
+    down = np.sqrt(np.mean(np.minimum(v, 0) ** 2))      # downside deviation
     sh = v.mean() / v.std() * np.sqrt(252) if v.std() else np.nan
     so = v.mean() / down * np.sqrt(252) if down else np.nan
     dollar = v.mean() / 1e4 * spot_med * 100

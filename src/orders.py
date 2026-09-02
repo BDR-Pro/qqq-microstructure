@@ -130,8 +130,20 @@ def submit_paper(rows, leg, now):
                if t.order.orderType in ('MOC', 'MKT')}
     placed = 0
     if leg == 'open':
+        # the open leg SELLS WHATEVER THE ACCOUNT HOLDS -- every long stock
+        # position, whether or not it is in the current basket. The first
+        # version sold only current-basket names, so a month rollover (Aug-31
+        # buys, September basket emitted days later) could leave positions
+        # unsold for a week (audit 2026-09, critic #4). This paper account is
+        # dedicated to the strategy by construction.
         pos = {p.contract.symbol: int(p.position) for p in ib.positions()
-               if p.position > 0}
+               if p.position > 0 and p.contract.secType == 'STK'}
+        held = set(pos) - {n.replace('.', ' ') for n, *_ in rows}
+        if held:
+            print(f'  liquidating {len(held)} position(s) not in the basket: '
+                  + ' '.join(sorted(held)))
+        rows = list(rows) + [(h.replace(' ', '.'), None, pos[h], 0.0)
+                             for h in sorted(held)]
     for n, p, q, _ in rows:
         sym = n.replace('.', ' ')
         if leg == 'open':
@@ -177,9 +189,22 @@ def main():
         print(f'leg not given -- inferred "{leg}" from ET clock '
               f'({now:%H:%M} ET); pass --leg to override')
 
-    month, names, emitted = basket(now)
-    px = prices(names)
-    rows, per = size(names, px, a.capital)
+    try:
+        month, names, emitted = basket(now)
+    except SystemExit as ex:
+        if leg != 'open':
+            raise
+        # no registration for this month yet: the open leg still has to exit
+        # yesterday's positions (submit mode reads them from the account)
+        print(f'{ex}\n-> open leg proceeds without a basket: it will liquidate '
+              f'whatever the account holds')
+        month, names, emitted = now.strftime('%Y-%m'), [], '-'
+    px = prices(names) if names else {}
+    rows, per = size(names, px, a.capital) if names else ([], 0.0)
+    if names and per < 10_000:
+        print(f'WARNING: ${per:,.0f} per name is below ~$10k -- the broker\'s '
+              f'per-order minimum commission alone is 2-4x the modelled '
+              f'1 bps crossing at this size (RESULTS 20 cost note)')
     mode = 'SUBMIT (paper)' if a.submit else 'DRY RUN'
 
     print(f'\n{month} basket (pre-registered {emitted}), {len(names)} names, '

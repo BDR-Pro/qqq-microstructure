@@ -6,7 +6,9 @@
 # what survives the regression -- the intercept -- is the only return that is
 # actually yours.
 #
-# Factors, built fresh from the panel (not from the cost-netted stack series),
+# Factors, built from the panel's own masked returns (QQQ+QQQQ stitched; see
+# factors() -- an earlier version dropped the QQQQ era and RESULTS 21 must be
+# re-run with this file), not from the cost-netted stack series,
 # each in the SAME session the strategy trades so a real exposure cannot hide
 # in a timing mismatch:
 #   mkt_on   = QQQ overnight  log(open_t / close_{t-1})   -- the overnight book's factor
@@ -76,19 +78,22 @@ def regress(y, F):
 
 
 def factors(df):
-    def leg(tk, kind):
-        g = df[df.ticker == tk].sort_values('day').set_index('day')
-        if kind == 'on':
-            return np.log(g.open / g.close.shift(1)) * 1e4
-        if kind == 'cc':
-            return np.log(g.close / g.close.shift(1)) * 1e4
-        return np.log(g.close / g.open) * 1e4                    # intraday
-    F = pd.DataFrame({
-        'mkt_on': leg('QQQ', 'on'), 'mkt_cc': leg('QQQ', 'cc'),
-        'mkt_id': leg('QQQ', 'id')})
-    spy = df[df.ticker == 'SPY']
-    if len(spy):
-        F['spy_on'] = leg('SPY', 'on')
+    """Market factors from the panel's OWN masked returns (load_panel's
+    on_bps/cc_bps/id_bps: split-band and backstop exclusions applied), with
+    QQQ and QQQQ stitched -- the fund was QQQQ 2004-12..2011-03 and every
+    other consumer in this repo aliases it (stack_v2, diagnose, opra_value).
+    The first draft used ticker=='QQQ' only with a raw close.shift(1): it
+    silently dropped the QQQQ era and injected a multi-thousand-bps seam
+    point at the rename, which corrupted RESULTS 21's betas (audit, 2026-09)."""
+    def leg(names, col):
+        g = df[df.ticker.isin(names)].sort_values(['day', 'ticker']) \
+              .groupby('day').first()
+        return g[col]
+    q = {'QQQ', 'QQQQ'}
+    F = pd.DataFrame({'mkt_on': leg(q, 'on_bps'), 'mkt_cc': leg(q, 'cc_bps'),
+                      'mkt_id': leg(q, 'id_bps')})
+    if (df.ticker == 'SPY').any():
+        F['spy_on'] = leg({'SPY'}, 'on_bps')
     return F
 
 
@@ -103,7 +108,8 @@ def show(name, y, F, cols):
     print(f'  {name:<16} alpha {r["alpha"]:+6.2f} bps/d '
           f'(t_HAC {r["t_alpha"]:+5.2f}, {r["alpha"]*21/100:+.2f}%/mo)   '
           f'R2 {r["r2"]:.2f}   residSharpe {r["resid_sharpe"]:+.2f}')
-    print(f'  {"":16} betas: {bs}')
+    print(f'  {"":16} betas: {bs}   [{len(j):,} days '
+          f'{j.index[0]}..{j.index[-1]}; identity mean={r["alpha"] + sum(r["betas"][c] * j[c].mean() for c in cols):+.2f} vs {j.y.mean():+.2f}]')
     return r
 
 

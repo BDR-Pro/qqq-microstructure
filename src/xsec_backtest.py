@@ -28,9 +28,11 @@
 #     verified whenever those ticker-days are in the panel. The backstop also
 #     drops real >40% crashes; for both L/S signals that is conservative (the
 #     dropped days are mostly the short leg's profit), and the count is printed.
-#   - Dividends land as negative overnight price moves that the holder actually
-#     receives, so both signals are UNDERSTATED, B most (its long leg holds the
-#     high-dividend-capture window). Same convention as overnight_study.py.
+#   - Dividends land as negative overnight price moves. The LONG leg's holder
+#     receives them (long-only Q5 / tilt are UNDERSTATED); the SHORT leg PAYS
+#     them (Q1 is OVERSTATED), so the L/S is roughly neutral-to-optimistic, not
+#     understated as an earlier version of this note said (audit 2026-09).
+#     Magnitude unmeasured; ~0.3-0.6 bps/day/leg from trailing yields.
 #   - ETFs/ETNs are excluded by a frozen list (index, sector, country, bond,
 #     commodity, volatility, levered, single-stock, crypto, HOLDRs). Residual
 #     unlisted funds may survive; the per-month exclusion count is printed.
@@ -123,11 +125,15 @@ def era_table(days, r):
         print(f'    {e}-{e+3}: {g.r.mean():+7.2f} bps/day  ({len(g)} days)')
 
 
-def load_panel(path=None):
+def load_panel(path=None, keep_backstop=False):
     """Load and clean a panel directory. Default is the top-150 panel; pass a
     path (e.g. data/xsec1000) to run the SAME cleaning -- test-symbol drop,
     split exclusion, backstop, known-split verification -- on a wider
-    extraction. One cleaning implementation, every universe."""
+    extraction. One cleaning implementation, every universe.
+    keep_backstop=True keeps the >40%-backstop nights (adjacent, no split-
+    ratio match) in on_bps instead of NaN'ing them -- a MEASUREMENT switch for
+    xsec_gaps.py only. The frozen models were trained with the default mask;
+    never score them on keep_backstop=True (audit 2026-09, finding B1#1)."""
     files = sorted(glob.glob(os.path.join(path or XSEC, '*.parquet')))
     if not files:
         raise SystemExit(f'no files in {path or XSEC} -- run xsec_extract.py first')
@@ -151,6 +157,8 @@ def load_panel(path=None):
     is_split = adjacent.values & (near < SPLIT_TOL) & (np.abs(on) > np.log(1.25))
     too_big = adjacent.values & ~is_split & (np.abs(on) > BACKSTOP)
     ok = adjacent.values & ~is_split & (np.abs(on) <= BACKSTOP)
+    if keep_backstop:
+        ok = adjacent.values & ~is_split
 
     df['on_bps'] = np.where(ok, on * 1e4, np.nan)
     df['id_bps'] = np.log(df.close.values / df.open.values) * 1e4

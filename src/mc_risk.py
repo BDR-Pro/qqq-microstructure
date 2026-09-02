@@ -102,6 +102,10 @@ def main():
     ap.add_argument('--rate', type=float, default=5.0,
                     help='annual %% financing on the levered fraction')
     ap.add_argument('--paths', type=int, default=10000)
+    ap.add_argument('--allow-forward', action='store_true',
+                    help='proceed even if the input series extends past the '
+                         'frozen training cutoff (thresholds would then '
+                         'contain forward months -- normally a mistake)')
     a = ap.parse_args()
     rng = np.random.default_rng(SEED)
     d = os.path.join(ROOT, 'data')
@@ -127,6 +131,22 @@ def main():
           'commit this output)')
     ml = pd.read_csv(os.path.join(d, 'xsec_ml_daily.csv'),
                      dtype={'day': str}).set_index('day')
+    # the thresholds are a PRE-REGISTRATION: they must be computed from the
+    # series that ends at the frozen training cutoff, never from one that a
+    # routine re-run of xsec_ml.py after xsec_extend has extended (audit 2026-09)
+    mp = os.path.join(ROOT, 'models', 'xsec_lgbm.json')
+    if os.path.exists(mp):
+        import json
+        cut = json.load(open(mp)).get('last_tmonth', '9999-99').replace('-', '')
+        last = ml.mlon_ls.dropna().index.max()
+        if last[:6] > cut[:6]:
+            msg = (f'xsec_ml_daily.csv runs to {last} but the frozen models '
+                   f'were trained through {cut[:4]}-{cut[4:6]}: the input '
+                   f'contains forward months. Re-run xsec_ml.py --through '
+                   f'{cut[:4]}-{cut[4:6]} first.')
+            if not a.allow_forward:
+                raise SystemExit('REFUSED: ' + msg + '  (--allow-forward overrides)')
+            print('WARNING: ' + msg)
     verdict_table('replay metric: ON long/short (gross)',
                   ml.mlon_ls.dropna().values, a.paths, rng)
     bt = pd.read_csv(os.path.join(d, 'xsec_daily.csv'),
