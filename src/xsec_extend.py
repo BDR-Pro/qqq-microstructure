@@ -11,9 +11,10 @@
 #     entire data need.
 #   - The universe: Yahoo cannot rank every US ticker, so each month's top-150
 #     is chosen from the union of the last 12 HF months' members (~250 names)
-#     re-ranked by the new month's dollar volume. A genuinely new entrant is
-#     missed until the HF source catches up -- which cannot affect the frozen
-#     models, whose eligibility requires 12 months of history anyway.
+#     re-ranked by the new month's dollar volume, drawn only from HF-sourced
+#     months (Yahoo months are not fed back into the pool). A genuinely new
+#     entrant is missed until the HF source catches up; when it does,
+#     xsec_extract.py re-extracts and OVERWRITES any month marked src='yahoo'.
 #   - Intraday snapshots: p60 from 60-minute bars (Yahoo keeps ~2 years); p15
 #     and p30 from 15-minute bars (Yahoo keeps ~60 days). Months older than the
 #     15m retention get p15/p30 = open with a loud FABRICATED warning -- for
@@ -42,10 +43,27 @@ def month_files():
 
 
 def candidates(before):
+    """Names eligible to be re-ranked into month `before`: the union of the
+    last CAND_MONTHS HF-sourced months. Yahoo-built months are EXCLUDED from
+    the pool on purpose -- feeding them back made the pool a closed, monotone-
+    shrinking cohort (audit 2026-09, B1#4). When no HF month remains in the
+    window the pool falls back to all files, loudly."""
     fs = [f for f in month_files() if os.path.basename(f)[:7] < before][-CAND_MONTHS:]
-    tks = set()
+    tks, hf = set(), 0
     for f in fs:
-        tks.update(pd.read_parquet(f, columns=['ticker']).ticker.unique())
+        d = pd.read_parquet(f, columns=['ticker'] + (
+            ['src'] if 'src' in pd.read_parquet(f).columns else []))
+        if 'src' in d and (d.src == 'yahoo').all():
+            continue
+        hf += 1
+        tks.update(d.ticker.unique())
+    if not tks:
+        print(f'WARNING: no HF-sourced month in the last {CAND_MONTHS} -- the '
+              f'candidate pool is a closed Yahoo cohort; new entrants cannot '
+              f'be scored until the HF source resumes (re-extract overwrites '
+              f'Yahoo months)')
+        for f in fs:
+            tks.update(pd.read_parquet(f, columns=['ticker']).ticker.unique())
     return sorted(tks)
 
 

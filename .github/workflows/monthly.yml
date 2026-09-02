@@ -27,7 +27,10 @@
 name: monthly
 on:
   schedule:
-    - cron: '0 15 * * 1'          # Mondays 15:00 UTC
+    - cron: '0 15 * * 1-5'        # weekdays 15:00 UTC -- daily so the month's
+                                  # basket is registered on the 1st, not the
+                                  # first Monday (audit 2026-09: a rollover gap
+                                  # left positions unsold for up to a week)
   workflow_dispatch: {}
 permissions:
   contents: write
@@ -48,10 +51,12 @@ jobs:
           key: xsec-${{ github.run_id }}
           restore-keys: |
             xsec-
-      - run: pip install --quiet numpy pandas pyarrow lightgbm yfinance
+      - run: pip install --quiet numpy pandas pyarrow lightgbm yfinance pytest
       - name: bootstrap panel (first run only; heavy, resumable)
         run: |
           [ -n "$(ls -A data/xsec 2>/dev/null)" ] || python src/xsec_extract.py
+      - name: tests (look-ahead canary + audit regressions)
+        run: python -m pytest tests -q
       - name: monthly ritual
         env:
           TELEGRAM_API: ${{ secrets.TELEGRAM_API }}

@@ -77,19 +77,31 @@ def vol_scaled(r):
     return w.dropna()
 
 
-def mc_row(r, n, rng):
-    p = paths(r, n, HORIZON_A, BLOCK, rng)
+def block_index(nlen, n, rng):
+    """Block starts drawn ONCE so raw and scaled see identical resamples
+    (common random numbers) -- the first version drew fresh blocks for each
+    series and the PASS/FAIL carried Monte-Carlo noise (audit 2026-09)."""
+    nb = int(np.ceil(HORIZON_A / BLOCK))
+    start = rng.integers(0, nlen, size=(n, nb))
+    take = (start[:, :, None] + np.arange(BLOCK)[None, None, :]) % nlen
+    return take.reshape(n, -1)[:, :HORIZON_A]
+
+
+def mc_row(r, n, rng, take=None):
+    r = np.asarray(r, float)
+    p = r[take] if take is not None else paths(r, n, HORIZON_A, BLOCK, rng)
     eq = np.cumprod(1 + p / 1e4, axis=1)
     cagr = eq[:, -1] ** (252 / HORIZON_A) - 1
     dd = (eq / np.maximum.accumulate(eq, axis=1) - 1).min(axis=1)
     mo = p[:, :HORIZON_A - HORIZON_A % 21].reshape(len(p), -1, 21).sum(2) / 1e4
     return dict(p5=np.percentile(cagr, 5), p50=np.percentile(cagr, 50),
                 dd95=np.percentile(dd, 5), wmo95=np.percentile(mo.min(1), 5),
-                p20=(mo < -0.20).any(1).mean())
+                p20=(mo < -0.20).any(1).mean(), ratio=cagr / np.abs(dd))
 
 
 def mc_compare(name, raw, sca, n, rng):
-    a, b = mc_row(raw.values, n, rng), mc_row(sca.values, n, rng)
+    take = block_index(len(raw), n, rng)
+    a, b = mc_row(raw.values, n, rng, take), mc_row(sca.values, n, rng, take)
     print(f'  MC ({n:,} x 5y, lev 1):'
           f'{"CAGR p5":>10}{"p50":>7}{"maxDD p95":>11}{"worst-mo p95":>14}'
           f'{"P(mo<-20%)":>12}{"p50/|maxDD|":>13}')
@@ -99,6 +111,11 @@ def mc_compare(name, raw, sca, n, rng):
               f'{m["p20"]*100:>11.1f}%{m["p50"]/abs(m["dd95"]):>13.2f}')
     ok = (b['p50'] / abs(b['dd95']) > a['p50'] / abs(a['dd95'])
           and b['p20'] <= a['p20'])
+    d = b['ratio'] - a['ratio']                 # paired per-path, same blocks
+    print(f'  paired per-path CAGR/|maxDD| difference (scaled - raw): '
+          f'p5 {np.percentile(d, 5):+.2f}  p50 {np.percentile(d, 50):+.2f}  '
+          f'p95 {np.percentile(d, 95):+.2f}   P(scaled better) '
+          f'{(d > 0).mean()*100:.0f}%')
     print(f'  {name}: pre-declared criterion -> {"PASS" if ok else "FAIL"} '
           f'(return per unit of tail '
           f'{"improves" if ok else "does not improve"})')

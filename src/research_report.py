@@ -32,7 +32,7 @@
 #
 #   python src/research_report.py
 
-import os
+import os, argparse
 import numpy as np, pandas as pd
 from xsec_backtest import load_panel, stats, era_table
 from mc_risk import paths, BLOCK, SEED
@@ -40,10 +40,19 @@ import factor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# per-book round-trip cost actually charged in stack_v2 (bps/day), so gross =
-# net + base and net(m) = net + (1-m)*base under a cost multiplier m
-BASE_COST = {'ON': 2.0, 'NEU': 2.34, 'MOM': 0.34, 'QQQ_ON': 0.34,
-             'v2': 2.34, 'v2n': 2.68}
+# per-book round-trip cost actually charged in stack_v2 (bps/day) at the --c
+# the stack was run with, so gross = net + base and net(m) = net + (1-m)*base
+# under a cost multiplier m. OPT's base is RESULTS 18's entry commissions.
+OPT_COMM = 0.27
+
+
+def base_cost(c):
+    return {'ON': 2 * c, 'NEU': 2 * c + 0.34, 'MOM': 0.34, 'QQQ_ON': 0.34,
+            'v2': 2 * c + 0.34, 'v2n': 2 * c + 0.68, 'OPT': OPT_COMM,
+            'v2o': 2 * c + 0.34 + OPT_COMM}
+
+
+BASE_COST = base_cost(1.0)
 TURNOVER = {'ON': '200%/day (enter MOC, exit MOO)',
             'NEU': '200%/day + QQQ pair', 'MOM': '200%/day intraday',
             'v2': '~400%/day (two non-overlapping legs)',
@@ -56,7 +65,7 @@ def metrics(r):
     n = len(r)
     cagr = eq[-1] ** (252 / n) - 1
     dd = (eq / np.maximum.accumulate(eq) - 1).min()
-    down = r[r < 0].std()
+    down = np.sqrt(np.mean(np.minimum(r, 0) ** 2))   # downside deviation (LPM2)
     return dict(
         n=n, mean=r.mean(), cagr=cagr,
         sharpe=r.mean() / r.std() * np.sqrt(252),
@@ -164,15 +173,25 @@ def sec_capacity(df):
     print('\n' + '=' * 20 + ' 8. CAPACITY ' + '=' * 20)
     last = sorted(df.month.unique())[-1]
     dv = df[df.month == last].groupby('ticker').dollar_vol.mean()
-    k = max(10, len(dv) // 5)                      # Q5 of the universe
-    med = dv.nsmallest(int(len(dv) * 0.5)).median()  # median-liquid name
-    AUCT, PARTIC = 0.08, 0.10                        # auction ~8% ADV, take 10%
-    per_name = med * AUCT * PARTIC
-    print(f'  universe month {last}: {len(dv)} names, Q5 basket ~{k} names')
-    print(f'  median name ADV$ ~${med/1e6:.0f}M; auction ~{AUCT:.0%} of ADV, '
-          f'participate ~{PARTIC:.0%}')
-    print(f'  -> ~${per_name/1e6:.2f}M per name x {k} = '
-          f'~${per_name*k/1e6:.0f}M before the MOC/MOO footprint is material')
+    k = 10                                           # the traded basket
+    rp = os.path.join(ROOT, 'reports', 'xsec_paper.csv')
+    if os.path.exists(rp):
+        try:
+            k = len(pd.read_csv(rp, dtype=str).q5.iloc[-1].split(';'))
+        except Exception:
+            pass
+    med = dv.median()                                # true median name
+    p25 = dv.quantile(0.25)                          # a weak Q5 name
+    AUCT_CLOSE, AUCT_OPEN, PARTIC = 0.08, 0.03, 0.10  # share of ADV in each cross
+    auct = min(AUCT_CLOSE, AUCT_OPEN)                # the exit cross binds
+    per_med, per_p25 = med * auct * PARTIC, p25 * auct * PARTIC
+    print(f'  universe month {last}: {len(dv)} names; traded basket k={k}')
+    print(f'  ADV$ median ~${med/1e6:.0f}M, p25 ~${p25/1e6:.0f}M; closing '
+          f'cross ~{AUCT_CLOSE:.0%} / opening cross ~{AUCT_OPEN:.0%} of ADV, '
+          f'participate ~{PARTIC:.0%} of the binding (opening) cross')
+    print(f'  -> ~${per_med/1e6:.2f}M per median name, ~${per_p25/1e6:.2f}M per '
+          f'p25 name; x{k} equal-weight = ~${per_p25*k/1e6:.0f}M '
+          f'(least-liquid binds) .. ~${per_med*k/1e6:.0f}M')
     print('  (equal-weight, so the least-liquid name binds; overnight names '
           'are the top of\n   the tape, so this is an estimate, not a claim -- '
           'measure it live with fills.py)')
@@ -204,6 +223,12 @@ def sec_survival(b):
 
 
 def main():
+    global BASE_COST
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--c', type=float, default=1.0,
+                    help='the one-way auction cost stack_v2.py was run with')
+    a = ap.parse_args()
+    BASE_COST = base_cost(a.c)
     d = os.path.join(ROOT, 'data')
     sp = os.path.join(d, 'stack_daily.csv')
     if not os.path.exists(sp):
@@ -221,6 +246,15 @@ def main():
                 L = L.join((od.ev_sprd - 1.30 / (od.spot * 100) * 1e4)
                            .rename('OPT'))
     b = books(L)
+    mp = os.path.join(ROOT, 'models', 'xsec_lgbm.json')
+    if os.path.exists(mp):
+        import json
+        cut = json.load(open(mp)).get('last_tmonth', '9999-99').replace('-', '')
+        last = L.index.max()
+        if 'ON' in L and L.ON.dropna().index.max()[:6] > cut[:6]:
+            print(f'WARNING: ON runs past the frozen cutoff {cut[:4]}-{cut[4:6]} '
+                  f'-- xsec_ml_daily.csv contains forward months; every number '
+                  f'below mixes holdout into the backtest')
 
     df = load_panel()
     F = factor.factors(df)

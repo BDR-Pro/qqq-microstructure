@@ -20,7 +20,10 @@
 #
 # Files (commit both -- the log IS the evidence):
 #   reports/xsec_paper.csv        one row per month: the pre-registered basket
-#   reports/xsec_paper_daily.csv  one row per graded session
+#   reports/xsec_paper_daily.csv  one row per graded session -- tilt_bps is the
+#                                 raw night; tilt_masked applies the backtest's
+#                                 split/backstop mask so RESULTS 19's paper-log
+#                                 KILL row is compared like-for-like
 #
 #   python src/xsec_live.py        # emit this month's basket if new, grade the rest
 
@@ -28,7 +31,7 @@ import os, argparse, datetime as dt, json
 from zoneinfo import ZoneInfo
 import numpy as np, pandas as pd
 import lightgbm as lgb
-from xsec_backtest import load_panel, ETF, MIN_CC_DAYS
+from xsec_backtest import load_panel, ETF, MIN_CC_DAYS, SPLIT_LOGR, SPLIT_TOL, BACKSTOP
 from xsec_ml import build_table, rank_pm, FEATS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -91,6 +94,17 @@ def parity_check(df, t, agg, months):
     return d < 1e-9
 
 
+def _masked(on_bps):
+    """The backtest's split-band / >40%-backstop mask applied to a live
+    overnight return, so the paper log carries BOTH the raw night and the
+    like-for-like masked night (audit 2026-09, B1#1/#12)."""
+    on = on_bps / 1e4
+    near = np.abs(on - SPLIT_LOGR).min()
+    if (near < SPLIT_TOL and abs(on) > np.log(1.25)) or abs(on) > BACKSTOP:
+        return np.nan
+    return on_bps
+
+
 def grade(log, daily):
     import yfinance as yf
     today = dt.datetime.now(ET).strftime('%Y%m%d')
@@ -132,10 +146,13 @@ def grade(log, daily):
                 continue
             qqq = float(np.log(series['QQQ'].Open[Dn]
                                / series['QQQ'].Close[D]) * 1e4)
+            onm = [x for x in (_masked(x) for x in ons) if np.isfinite(x)]
+            q5m = float(np.mean(onm)) if onm else np.nan
             daily = pd.concat([daily, pd.DataFrame([dict(
                 date=D, month=r.month, n=len(ons),
                 q5_on_bps=float(np.mean(ons)), qqq_on_bps=qqq,
-                tilt_bps=float(np.mean(ons)) - qqq)])], ignore_index=True)
+                tilt_bps=float(np.mean(ons)) - qqq,
+                q5_on_masked=q5m, tilt_masked=q5m - qqq)])], ignore_index=True)
             done.add(D)
             print(f'graded {D}: basket {np.mean(ons):+.1f}  QQQ {qqq:+.1f}  '
                   f'tilt {np.mean(ons) - qqq:+.1f} bps')
@@ -162,9 +179,13 @@ def main():
             'n_scored', 'q5', 'q1']
     log = pd.read_csv(LOG, dtype=str) if os.path.exists(LOG) \
         else pd.DataFrame(columns=cols)
-    dcols = ['date', 'month', 'n', 'q5_on_bps', 'qqq_on_bps', 'tilt_bps']
+    dcols = ['date', 'month', 'n', 'q5_on_bps', 'qqq_on_bps', 'tilt_bps',
+             'q5_on_masked', 'tilt_masked']
     daily = pd.read_csv(DAILY, dtype={'date': str, 'month': str}) \
         if os.path.exists(DAILY) else pd.DataFrame(columns=dcols)
+    for c in dcols:                      # older logs predate the masked columns
+        if c not in daily:
+            daily[c] = np.nan
 
     if cur in set(log.month):
         print(f'{cur} already pre-registered '

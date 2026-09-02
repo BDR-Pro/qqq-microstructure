@@ -5,9 +5,13 @@
 # record and sends the scorecard. The division of labor, on the record:
 #
 #   VM (next to IB Gateway, localhost only -- see install_ibkr.sh):
-#     runs the order legs and captures fills, then pushes. Crontab:
+#     registers/grades daily (xsec_live is idempotent -- it emits the basket
+#     only on a new month, so the 1st is never missed), runs the order legs,
+#     captures fills, pushes. The open leg liquidates EVERY held position,
+#     basket or not, so a month rollover can never strand Aug-31 buys. Crontab:
 #
 #       CRON_TZ=America/New_York
+#       0  8  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/xsec_live.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "register/grade" && git push -q; }; }
 #       25 15 * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg close --submit >> $HOME/qqq.log 2>&1
 #       10 16 * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
 #       20 9  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg open --submit >> $HOME/qqq.log 2>&1
