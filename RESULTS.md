@@ -1098,7 +1098,40 @@ The era shape carries its own warning: the effect died in 2016-2019 — the wind
 which Lou-Polk-Skouras was published — and revived to +11.4 in 2024-2026. Whether
 the revival is regime or noise is not answerable in-sample.
 
-### The ML ranker doubles the rule, mechanism pre-registered
+### The exclusion mask flatters the long leg by ~1.5 bps/day — measured
+
+Splits are handled by exclusion (above), and the mask cannot know *why* a night
+gapped: a −28.6% log move is a 2:1 split or it is Lehman. `xsec_gaps.py` re-runs
+rule B with the ±40% backstop nights put back in, which is the direction of the
+bias a live book actually eats:
+
+```
+  rule-B (on_1m) monthly legs, 316 months, bps/day: default mask vs backstop kept
+             masked     kept   delta
+    q5        +9.52    +8.00   -1.52   (t of delta -3.0)
+    q1        +1.57    +0.65   -0.91   (t of delta -1.0)
+    ls        +7.95    +7.35   -0.61   (t of delta -0.5)
+    tilt      +6.02    +4.50   -1.52   (t of delta -3.0)
+```
+
+887 nights are censored across the panel — 227 in the split-ratio band, 660 at
+the backstop, of which 502 are negative and only 9 are verified splits. The
+biggest are events, not data errors: **LEH −267% (2008-09-15), BSC −224%
+(2008-03-17), HAL −796% (2004-08-23)**, and the live grade books all of them in
+full. So **every long-only overnight number in this file is optimistic by about
+1.5 bps/day (t −3.0)**, and the long/short is nearly immune (−0.61, t −0.5)
+because the mask censors both legs. Two things this is not: it is not a leak
+(the censoring is symmetric in time and known at trade time), and it is not the
+whole bias — only the backstop nights were re-inserted, so −1.52 is a **lower
+bound**. Levels in the block above come from the gaps script's own monthly-leg
+construction, not §15 B's daily series; read the delta, not the level.
+
+The frozen scoring path is untouched on purpose — widening the mask changes the
+object the frozen models were trained on and restarts the §19 forward clock — so
+the correction is applied by *reading*: subtract ~1.5 bps/day from every Q5 and
+tilt figure in this file, and leave the L/S ones alone.
+
+### The ML ranker beats the rule it was measured against, and barely beats the right one
 
 `xsec_ml.py`: LightGBM over ten features per name-month (each a published effect),
 targets rank-transformed within month so the market component cancels, walk-forward
@@ -1106,26 +1139,39 @@ by trade year, params inherited frozen from `momentum_ml.py`, and a leak canary
 (targets permuted within training months) built in. On a synthetic panel with
 planted truths the pipeline predicted, before touching real data, that the model
 would roughly double the 1-month rule by finding 12-month overnight persistence.
-On the real panel, 279 OOS months (2003-01 → 2026-03):
+On the real panel, 283 OOS months (2003-01 → 2026-07):
 
 ```
                        bps/day      t   Sharpe    maxDD%
-  rule on_1m L/S         +6.20   6.41     1.33     -26.4
-  ML L/S                +12.38  12.58     2.61     -20.5
-  canary (shuffled)      +1.60   2.54     0.53     -19.7
+  rule on_1m L/S         +6.40   6.36     1.31     -26.4
+  rule on_12m L/S       +11.44  10.98     2.26     -24.0
+  rule avg(1m,12m)      +10.88  11.00     2.27     -15.5
+  ML L/S                +12.42  11.89     2.45     -24.7
 
-  monthly rank IC +0.214 (t=17.5); top feature on_12m at 28% of gain;
-  positive in all six 4-year eras; one losing year (2022) in 24.
+  ML minus best rule (on_12m): +0.99 bps/day   daily t +1.31   monthly t +1.24
+  canary null, 5 permutation seeds: mean -0.29  sd 1.21  range [-1.42, +1.52]
+
+  monthly rank IC +0.214 (t=17.5); top feature on_12m at 29% of gain;
+  positive in all seven 4-year eras; two losing years (2022, and 2021 at +1.3) in 24.
 ```
 
-The doubling replicated with the predicted mechanism on top. The canary's +1.60 is
-inside the ±1.6 wobble observed across runs and configurations, an order of
-magnitude under the live number, and is reported rather than reasoned away. Two
-caveats: these ML rows ran on the panel one fix earlier (TESTB still present — 624
-of 1.0M rows, 2001-02 only, affecting nothing after 2003), and the target includes
-the opening print, so the model's floor — trained and evaluated on the 09:45 exit —
-is untested. Given the rule loses half its spread there, assume the ML does too
-until shown otherwise.
+The mechanism replicated — the model does find 12-month overnight persistence,
+exactly as the synthetic pre-registration said it would. **The doubling did not
+survive the right baseline.** "2×" was the model against `on_1m`, which is the
+model's *weakest* input; against `on_12m` — the thing the model itself says is
+29% of its gain, and a rule anyone can write in one line — the increment is
+**+0.99 bps/day at monthly t = 1.24**, which is not significant at any
+conventional bar. The same comparison at the floor (block C) gives +0.94 at t
+0.83. Two readings are available and only one is defensible: the model is a
+convenient wrapper around a simple ranking rule, and it is the *rule* that is
+carrying 92% of the return.
+
+The canary is now a distribution rather than one draw, and it vindicates the
+caution: over five permuted-target seeds the null spans **[−1.42, +1.52]
+bps/day**, so a single canary printing +1.5 is a construction floor, not
+evidence of leakage — and by the same token an "edge" of +0.99 over the best
+rule sits *inside* that band. One further caveat stands: the target includes
+the opening print; block C re-runs the whole pipeline at the 09:45 exit.
 
 ### Costs, and what is actually deployable
 
@@ -1183,29 +1229,43 @@ panel, where p15 equals the open, block C prints bit-for-bit identical to block 
 
 ```
                        bps/day      t   Sharpe    maxDD%
-  rule on_1m L/S         +2.46   2.21     0.46     -39.8
-  ML L/S                 +7.29   6.61     1.37     -36.2
-  canary (shuffled)      +0.04   0.05     0.01
+  rule on_1m L/S         +2.58   2.25     0.46     -39.8
+  rule on_12m L/S        +6.57   5.17     1.07     -32.5
+  ML L/S                 +7.50   6.56     1.35     -36.2
 
-  IC +0.108 (t=9.2); eras 2003-2026: +7.7 +7.2 +6.2 +11.6 +5.1 +6.6 +6.6
+  ML minus best rule (on_12m): +0.94 bps/day   daily t +0.89   monthly t +0.83
+  canary null, 5 seeds: mean +0.14  sd 1.23  range [-1.03, +1.73]
+
+  IC +0.108 (t=9.2); eras 2003-2026: +7.7 +7.2 +6.2 +11.6 +5.1 +6.6 +8.7
 ```
 
-The rule keeps 40% of its spread at the floor; the model keeps 60% — and is
-**positive in all seven 4-year eras**, including 2016-2019 where the rule went
-negative. The floor model leans on a broader feature mix (mom_12_2, rng_3m, dvol
-~11-12% each) where the ceiling model leans on on_12m at 29%: predicting the
-post-reversion residual takes more than persistence alone, and the model finds it.
+The rule keeps 40% of its spread at the floor and the model keeps 60%, and the
+model is **positive in all seven 4-year eras**, including 2016-2019 where the
+`on_1m` rule went negative. But the same correction applies here as in block B:
+`on_12m` also survives the floor at +6.57 (t 5.17), so the model's genuine
+increment over the best rule is **+0.94 bps/day at monthly t 0.83** — the same
+not-significant number, at the same place in the distribution. The broader
+feature mix the floor model leans on (mom_12_2, rng_3m, dvol ~11-12% each) is a
+real observation about what predicts the post-reversion residual; it is not, on
+this evidence, worth 0.9 bps/day of it.
 
-One number reported rather than reasoned away: the ceiling-target canary repeats
-at +1.6 to +1.8 bps/day across runs (this run +1.79, t=2.85) while the cc and
-floor canaries sit at zero. Treat ~+1.8 as that construction's achievable-by-
-chance floor; the live +12.23 clears it by 7x, and the honest subtraction still
-doubles the rule.
+The canary is now run as a distribution, and it settles a question this section
+left open. The ceiling-target canary that kept repeating at +1.6 to +1.8 was
+read here as "that construction's achievable-by-chance floor" rather than as
+leakage. Five permuted-target seeds put the null at mean −0.29, sd 1.21, range
+**[−1.42, +1.52]** — so +1.6 to +1.8 is one seed's draw from a wide null, and
+the reading was right. The uncomfortable corollary is the one above: the ML's
++0.99 over `on_12m` is *inside* that band.
 
-**Revised bottom line.** At MOO/MOC execution the ceiling stands: rule L/S +10.0
-(t=9.1), tilt over QQQ +7.1 (t=9.0), ML L/S +12.2 (Sharpe 2.6, break-even one-way
-cost ~3.1 bps), with the floor's +7.3 at t=6.6 as the robustness margin if
-execution slips 15 minutes. What remains before any capital discussion is what
+**Revised bottom line** (twice revised: once by the discriminators, once by the
+2026-09 audit's re-runs). At MOO/MOC execution the ceiling stands: rule L/S
++10.0 (t=9.1), tilt over QQQ +7.1 (t=9.0) — **less the ~1.5 bps/day censoring
+bias measured above, so call the tilt +5.6** — and ML L/S +12.4 (Sharpe 2.5),
+with the floor's +7.5 at t=6.6 as the robustness margin if execution slips 15
+minutes. What is no longer claimed: that the ML is worth roughly double the
+rule. It is worth +0.99 bps/day over `on_12m`, inside its own canary band, and
+the tradeable object is the **rule**, with the model as at best a small and
+unproven overlay. What remains before any capital discussion is what
 §12 demanded of the QQQ stack: the frozen-model forward replay as each month's
 file lands — `xsec_ml.py --save-model` freezes production models, and
 `xsec_replay.py` evaluates every month that postdates the freeze.
@@ -1721,56 +1781,73 @@ deliberate re-freeze, which is its own dated commit. Found, sized
 
 ## 21. Is it alpha or beta, and do the option numbers survive real quotes? — `factor.py`, `optbacktest.py`
 
-Two questions the earlier sections deferred, answered on the real panel.
+Two questions the earlier sections deferred, answered on the real panel. The
+factor half of this section was rebuilt after the §23 audit voided its first
+table; what follows is the re-run, not the original.
 
-### The factor decomposition: v2's alpha is real, and so is its market beta
+### The factor decomposition, rebuilt — there is MORE alpha here than §21 first said
 
-Every book regressed on QQQ + SPY overnight (and QQQ intraday), Newey-West
-HAC t-stats. The two session-orthogonality falsification checks passed —
-ON on the intraday factor beta +0.00, MOM on the overnight factor beta
-−0.01 — so no session leaks into the other.
+The table that used to sit here was wrong, and the audit (§23) is why: `factor.py`
+built its market factors from `ticker=='QQQ'` alone with an unmasked
+`close.shift(1)`, so the QQQQ era (2004-12 → 2011-03, containing 2008 — v2's best
+era) was silently dropped and the ticker rename injected a ~+3,500 bps "overnight"
+point into the regressor. Everything downstream of that — the +0.20/+1.19 QQQ/SPY
+split, the "half of v2 is beta" reading, NEU's insignificant t 1.47, and the
+collinearity paragraph written to explain them — was the signature of the bug.
+
+Rebuilt on the real panel (QQQ+QQQQ stitched, factors taken from the panel's own
+masked returns, Newey-West HAC lag 5, and an OLS identity check printed for every
+row):
 
 ```
-  book   alpha bps/d  t_HAC  residSharpe  R2   betas (mkt_on / spy_on)
-  ON        +2.45     2.81      0.71      0.75   +0.20 / +1.19
-  NEU       +1.13     1.47      0.36      0.15   -0.09 / +0.41
-  MOM       +4.42     2.70      0.56      0.00   (vs intraday: -0.03)
-  v2        +4.88     3.26      0.74      0.47   +0.18 / +1.24
-  v2n       +3.45     2.32      0.54      0.05   -0.03 / +0.37
+  book           alpha bps/d  t_HAC  residSharpe   R2   betas (mkt_on / spy_on)  raw mean
+  ON               +4.13      5.72      1.26      0.80    +0.69 / +0.73           +8.50
+  NEU              +3.79      5.25      1.16      0.25    -0.31 / +0.73           +4.09
+  MOM              +3.68      2.64      0.48      0.00    (vs intraday: -0.03)    +3.72
+  ON+MOM  (v2)     +6.13      4.51      0.90      0.48    +0.76 / +0.66          +10.65
+  NEU+MOM (v2n)    +5.79      4.26      0.85      0.07    -0.24 / +0.66           +6.24
+
+  identity check (mean = alpha + sum beta*mean F): reconciles to the printed
+  digit on every row -- ON +8.50 vs +8.50, v2 +10.65 vs +10.65, v2n +6.24 vs
+  +6.24. The void table did not reconcile; that is how the bug was caught.
+  5,841 days 20030102..20260331 (MOM: 6,887 days from 19990310).
 ```
 
-Read carefully, this is the most important table in the file, and it cuts
-both ways:
+The two session-orthogonality falsifications still pass, and pass harder: the
+overnight book cannot load on the day (ON | mkt_id beta **+0.01**, alpha +8.48 at
+t 6.16) and the intraday book cannot load on the night (MOM | mkt_on beta
+**+0.02**). Adding every factor at once moves no alpha by more than 0.03 bps/day.
 
-- **The alpha is real.** v2's intercept is **+4.88 bps/day at t_HAC = 3.26**,
-  residual Sharpe 0.74 — a return no combination of QQQ/SPY overnight and QQQ
-  intraday reproduces, significant after the HAC penalty that the
-  autocorrelation warrants. ON+MOM is its own source, not repackaged index
-  exposure. v2n keeps a significant +3.45 (t 2.32) too. MOM standalone is
-  near-**pure** alpha (R² 0.00, t 2.70) — uncorrelated with the market, just
-  noisy on its own (Sharpe 0.49).
-- **But v2 is about half market-overnight beta.** R² 0.47 and a total
-  overnight-market beta near **1.4** mean roughly half of v2's raw +10.65
-  bps/day is the overnight equity-risk premium levered ~1.4×, not selection
-  skill. That premium is real and harvestable, but it is beta — it will draw
-  down when the overnight market does, and it is not what a fee is paid for.
-  The pure-selection piece is ~+4.9 bps/day (~1%/mo).
-- **A collinearity caveat, stated so the betas are not over-read.** QQQ and
-  SPY overnight returns are ~0.9 correlated, so the individual split
-  (+0.20 QQQ / +1.24 SPY) is unstable — the regression hands the shared
-  component mostly to SPY. The trustworthy quantity is the **sum**, ~1.4,
-  which matches §20's independently measured basket overnight beta of ~1.55.
-  Do not read "v2 is a SPY trade"; read "v2 carries ~1.4 units of
-  overnight-market beta, however it is split."
+What the corrected table says, in the order it matters:
 
-The decision this forces is the one §20 already previewed, now on a rigorous
-basis: **v2** is max return but half of it is market-overnight beta (spy_on
-1.24); **v2n** is the cleaner, lower-beta expression (beta 0.37, alpha +3.45
-still significant) at a lower raw return; **NEU alone** over-hedges into
-statistically insignificant alpha (t 1.47) and is a tail tool, not a return
-source. Nothing here is killed — v2 clears the "real alpha" bar — but "v2 =
-+2.02%/mo" is honestly restated as "≈half selection alpha, ≈half levered
-overnight beta."
+- **The alpha is bigger and much more significant than claimed.** v2's intercept
+  is **+6.13 bps/day at t_HAC 4.51** (was: +4.88 at 3.26), and it is **58% of
+  v2's raw +10.65** — not "about half is beta". ON is +4.13 (t 5.72) on a raw
+  +8.50, i.e. 49% alpha.
+- **NEU's alpha was never insignificant — the bug hid it.** +3.79 at **t 5.25**,
+  against the void table's +1.13 at t 1.47, and it now agrees with the number §20
+  measured by a completely independent route (NEUb +3.40, t 4.85). The old
+  conclusion — "NEU over-hedges into statistically insignificant alpha, a tail
+  tool and not a return source" — is **withdrawn**. NEU is 93% alpha (3.79 of
+  4.09) with the second-highest residual Sharpe in the table.
+- **The beta is real but balanced, and the two hedged books carry almost none.**
+  Total overnight-market beta is **+1.42** for ON and for v2, and **+0.42** for
+  NEU and v2n. The QQQ/SPY split is now +0.69/+0.73 — two ~0.9-correlated factors
+  sharing the load about evenly, which is what collinearity actually looks like
+  when the regressor is clean. The trustworthy quantity is still the sum, and
+  ~1.42 sits below §20's independently measured basket overnight beta of ~1.55.
+- **MOM is still near-pure alpha and still the weakest book.** R² 0.00, alpha
+  +3.68 at t 2.64 — uncorrelated with everything — but residual Sharpe 0.48, and
+  §24's survival gate kills it on cost, not on significance.
+
+The decision this forces is the opposite of the one §21 printed. **v2n** is not
+"the cleaner expression at a lower return": it keeps **+5.79 of alpha — 94% of
+v2's +6.13 — while carrying 0.42 units of overnight beta instead of 1.42.** Put
+plainly, the hedge costs about 4 bps/day of *market* return and about 0.3 bps/day
+of *alpha*. If alpha is what is being underwritten, v2n is the better object, and
+v2 is v2n plus a levered overnight-index position anyone can buy without us. The
+honest restatement runs the other way from the old one: not "half of v2 is beta",
+but **"~58% of v2 is alpha, and the hedged version keeps nearly all of it."**
 
 ### The option backtest: real quotes confirm §18, and the model flatters ~3×
 
@@ -1796,9 +1873,10 @@ real-chain QQQ credit spread, +2.92 net, decaying by year (2023 +4.3 → 2026
 +0.8), and it answers to the §19 forward clock like everything else.
 
 The through-line of both tests: the edges that were real stay real under the
-harsher lens (v2 alpha t 3.26; QQQ spread at measured quotes), and the harsher
-lens is exactly what stops the flattering numbers — half of v2's raw return,
-and two-thirds of the model option Sharpe — from being mistaken for skill.
+harsher lens (v2 alpha t_HAC 4.51; QQQ spread at measured quotes), and the
+harsher lens cuts both ways — it removed two-thirds of the model option Sharpe
+as flattery, and it *added* alpha to v2 that a broken regressor had been
+hiding. A correct measurement is not a pessimistic one; it is a correct one.
 
 ---
 
@@ -1937,6 +2015,12 @@ file has been claiming:
   v2o   PROMISING BUT INSUFFICIENT EVIDENCE (follows OPT)
 ```
 
+Three of those lines carried an unresolved dependency on a re-run. **§24 has the
+settled version**: NEU's size dispute closes at +3.79 (t 5.25), ON's beta is
+measured at 1.42 (~49% of raw, not ~70%), v2n is upgraded to the preferred
+expression, MOM's deployment verdict becomes a mechanical KILL, and the ML
+overlay is added to the table as NO DEMONSTRABLE EDGE over the rule.
+
 ### What is now different in the code, and what is not
 
 Twelve changes, all off the frozen scoring path (AUDIT.md §I): the factor fix;
@@ -1953,10 +2037,10 @@ the GO/KILL tables, the era-varying MOM cost, assignment modelling — each is a
 re-freeze item, and the RESULTS 19 clock keeps running on the construction the
 frozen models were trained on.
 
-### What only the real panel can settle (run and paste)
+### What only the real panel could settle — run, and recorded in §24
 
 ```
-python src/xsec_gaps.py                      # the censoring block -> here, §15
+python src/xsec_gaps.py                      # the censoring block -> §15
 python src/factor.py                         # §21, rebuilt -- replaces the table
 python src/xsec_ml.py                        # ML vs on_12m, canary null, exclusion counts
 python src/research_report.py                # §6 inherits the factor fix
@@ -1964,7 +2048,183 @@ python src/xsec_extend.py --check 2026-03    # the Yahoo seam, never recorded
 python -m pytest tests -q
 ```
 
+All six were run on the full panel (329 months, 1,026,770 ticker-days,
+19990301..20260731). **§24 records what they printed**, and §15, §15b and §21
+have been rewritten from it.
+
 The honest one-line reading: the edge is real and the book is fundable in
-principle; several of the numbers this file quotes for it are too high by
-amounts that are now measurable instead of assumed, and one table (§21) is
-wrong and awaits its re-run.
+principle; several of the numbers this file quoted for it were wrong by amounts
+that are now measured instead of assumed — two of them downward (the long-only
+tilt, the ML's increment over the rule) and one of them **upward** (v2's alpha,
+which a broken regressor had been hiding).
+
+---
+
+## 24. The verification run: what the corrected code prints on the real panel — `xsec_gaps.py`, `factor.py`, `xsec_ml.py`, `research_report.py`
+
+§23 ended with six commands and a promise. They were run on the full panel —
+**329 months, 1,026,770 ticker-days, 1,348 names, 19990301 → 20260731** — and
+this section is what came back. Every open item from the audit closes here, and
+one of them closes in the opposite direction from the one that was expected.
+
+### The scoreboard
+
+```
+  item                       claimed              measured            direction
+  long-only tilt / Q5        as printed           -1.52 bps/day       DOWN  (t -3.0)
+  ML over the rule           "doubles the rule"   +0.99 bps/day       DOWN  (t 1.24, n.s.)
+  v2 alpha (§21)             +4.88  t_HAC 3.26    +6.13  t_HAC 4.51   UP
+  NEU alpha (§21)            +1.13  t_HAC 1.47    +3.79  t_HAC 5.25   UP (bug, not signal)
+  the +1.6 canary            "construction floor" null [-1.42,+1.52]  VINDICATED
+  MOM as a standalone book   "do not fund"        survival gate KILL  CONFIRMED
+```
+
+The three substantive re-runs are recorded where they belong — censoring in
+**§15**, the rebuilt factor table in **§21**, the ML-vs-rule increment and the
+canary null in **§15** and **§15b**. What follows is what only appears here.
+
+### The survival table, with §6 inheriting the factor fix
+
+`research_report.py` re-fits nothing; every number traces to a committed daily
+series. The gate is pre-declared: break-even cost > 2× assumed **AND** Sharpe >
+0.5 **AND** the edge is not concentrated in <1% of days.
+
+```
+  book    days  bps/d   CAGR  Shrp  Sort  maxDD Calmar   vol   win    PF
+  ON      5843   +8.5    22%  1.17  1.63   -44%   0.50   18%   58%  1.25
+  NEU     5841   +4.1    10%  1.09  1.57   -32%   0.33    9%   55%  1.23
+  MOM     6887   +3.7     8%  0.49  0.71   -48%   0.16   19%   52%  1.10
+  v2      5843  +10.7    27%  1.13  1.63   -43%   0.63   24%   55%  1.24
+  v2n     5841   +6.2    15%  0.89  1.29   -31%   0.49   18%   54%  1.18
+  v2o      749  +19.9    60%  1.93  2.79   -25%   2.39   26%   60%  1.41
+
+  FRAGILITY (mean bps/day after removing the best/worst N days)
+  book      full  -best5  -best20  -best1%  -wrst5  -wrst20
+  ON         8.5     7.9      6.6      4.2     9.4     11.1
+  NEU        4.1     3.8      3.0      1.7     4.5      5.3
+  MOM        3.7     3.1      1.8     -1.2     4.3      5.5
+  v2        10.7     9.8      8.0      5.0    11.7     13.7
+  v2n        6.2     5.5      4.2      1.9     6.8      8.2
+  v2o       19.9    15.8      8.3     14.6    24.9     34.2
+
+  COST STRESS (net bps/day at a multiple of the assumed cost)
+  book       0x   0.5x     1x     2x     3x     5x    10x   break-even
+  ON       10.5    9.5    8.5    6.5    4.5    0.5   -9.5      5.3x
+  NEU       6.4    5.3    4.1    1.7   -0.6   -5.3  -17.0      2.7x
+  MOM       4.1    3.9    3.7    3.4    3.0    2.4    0.7     12.0x
+  v2       13.0   11.8   10.7    8.3    6.0    1.3  -10.4      5.6x
+  v2n       8.9    7.6    6.2    3.6    0.9   -4.5  -17.9      3.3x
+  v2o      22.5   21.2   19.9   17.3   14.7    9.5   -3.6      8.6x
+
+  SIGNIFICANCE (circular block bootstrap, 21-day blocks)
+  book     mean     p5    p50    p95   P(mean>0)
+  ON       +8.5   +6.2   +8.5  +10.7     100.0%
+  NEU      +4.1   +2.7   +4.1   +5.5     100.0%
+  MOM      +3.7   +1.5   +3.7   +6.0      99.7%
+  v2      +10.7   +7.9  +10.7  +13.6     100.0%
+  v2n      +6.2   +4.0   +6.2   +8.4     100.0%
+  v2o     +19.9  +11.4  +20.1  +28.4     100.0%
+
+  VERDICT   ON SURVIVE   NEU SURVIVE   v2 SURVIVE   v2n SURVIVE   v2o SURVIVE
+            MOM KILL (edge in <1% of days)
+```
+
+**MOM is killed by its own fragility, not by its t-stat.** Remove the best 1% of
+days and a 27-year book at +3.7 bps/day goes to **−1.2** — the whole return is
+about seventeen sessions, which is what "concentrated in crisis regimes" looks
+like when it is measured instead of described. Its Sharpe (0.49) misses the gate
+independently. This confirms, on a mechanical rule, the "do not fund" that §15
+reached by argument. It does not contradict §21's MOM alpha of +3.68 at t 2.64:
+a return can be uncorrelated with everything and still be untradeable.
+
+The other reading worth pulling out is **NEU's break-even of 2.7×**, the thinnest
+in the table. NEU is the highest alpha *share* (93%) and the cheapest to kill
+with slippage; v2's 5.6× is the comfortable one. Cost, not significance, is the
+binding constraint on the hedged books.
+
+### Capacity, on the binding auction
+
+```
+  universe month 2026-07: 150 names; traded basket k=11
+  ADV$ median ~$1,866M, p25 ~$1,258M
+  closing cross ~8% / opening cross ~3% of ADV; participate ~10% of the binding
+  (opening) cross -> ~$5.60M per median name, ~$3.77M per p25 name
+  x11 equal-weight, least-liquid name binds:  ~$42M .. ~$62M
+```
+
+Equal weighting means the least-liquid name binds, and the exit is the *opening*
+cross, which is the thinner of the two — that is the constraint, not the closing
+auction everyone quotes. An estimate, not a claim: `fills.py` measures it live.
+
+### The Yahoo seam, finally measured
+
+`xsec_extend.py --check 2026-03` compares the Yahoo-built stopgap month against
+the HF panel's own version of that month:
+
+```
+  universe overlap:  132/150 of the HF top-150 recovered (88%)
+  |open  diff|: median  0.0 bps   p95 44.3 bps
+  |close diff|: median  1.5 bps   p95 19.3 bps
+  |p60   diff|: median  1.1 bps   p95  8.4 bps      (2,904 rows)
+  6 names look split-adjusted (Yahoo folds splits into pre-split history; the
+  panel is raw -- this is exactly what the split detector exists for);
+  6 downloads failed (SKX, CMCS-A, BPMC, FI delisted/renamed; SPLG, GTLS no data)
+```
+
+The read the script prints for itself is "overlap ≥90% and a few bps means the
+extension can be trusted". At **88%** it is just under its own bar, and the two
+missing name-classes are systematic (renames and delistings — the survivorship
+direction). The extension is fit for keeping the forward clock running between HF
+drops; it is **not** fit for re-deriving history, and §15's panel numbers do not
+use it. One more caveat the run surfaced: 2026-03 is beyond Yahoo's 15-minute
+retention, so p15/p30 were fabricated as the open and `on15` degrades to the open
+exit for that month only.
+
+### The tests, and the bug the verification run found in itself
+
+`python -m pytest tests -q` → **6 passed** (the look-ahead canary, the raw-parquet
+poisoning test, the factor stitching, the DST windows, the overlay CRN). The run
+also found one defect in the audit batch itself: `xsec_ml.py` bound its argparse
+namespace to `a` and then reused `a` as a local 100 lines later, so writing the
+`.meta.json` sidecar died with `AttributeError: 'Series' object has no attribute
+'through'` **after** the entire walk-forward had completed. Fixed, plus an AST
+regression test that fails if any script in `src/` rebinds the name it took from
+`parse_args()` — the class of bug that costs a full run to discover and nothing
+to catch statically.
+
+### Classification, settled
+
+```
+  ON     ROBUST EDGE      long-only level now corrected -1.5 bps/day (measured);
+                          beta 1.42, so ~49% of the raw return is the overnight
+                          premium levered, ~51% is selection alpha (t_HAC 5.72)
+  NEU    ROBUST EDGE      dispute CLOSED at +3.79 (t 5.25); 93% alpha; break-even
+                          2.7x is the binding risk, not significance
+  v2     ROBUST EDGE      alpha +6.13 (t 4.51) = 58% of raw; MOM increment still
+                          unproven
+  v2n    ROBUST EDGE      upgraded: keeps 94% of v2's alpha at 0.42 beta -- the
+                          preferred expression if alpha is what is underwritten
+  MOM    PROMISING BUT INSUFFICIENT EVIDENCE -- deployment verdict KILL (Sharpe
+                          0.49; -1.2 bps/day without its best 1% of days)
+  ML     NO DEMONSTRABLE EDGE over the rule: +0.99 bps/day over on_12m at monthly
+         overlay          t 1.24, inside its own permutation band [-1.42,+1.52].
+                          The ranking edge is real; the MODEL is not the edge.
+  OPT    PROMISING BUT INSUFFICIENT EVIDENCE (one regime, decaying, assignment
+  v2o                     unmodelled) -- unchanged by this run
+```
+
+### What the verification did not touch
+
+The frozen scoring path: `load_panel` defaults, `build_table`, `PARAMS/ROUNDS/
+FEATS`, `portfolio()`, `REF`, the §19 GO/KILL tables, the mask, the ETF list, the
+universe rule. Every correction above is applied by **reading** the numbers
+differently, not by re-fitting anything. The forward clock in §19 keeps running on
+the construction the frozen models were trained on; changing the mask to remove
+the −1.5 bps/day censoring bias is a dated re-freeze decision, and it is not made
+here.
+
+The one-line reading, after verification: **the overnight cross-sectional edge is
+robust, broad (§22), and worth roughly 1.5 bps/day less on the long side than
+this file used to say; its alpha is larger than §21 claimed once the regressor is
+correct; and the machine-learning layer on top of it is not, on 283 out-of-sample
+months, distinguishable from a one-line ranking rule.**

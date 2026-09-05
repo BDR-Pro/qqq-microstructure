@@ -17,6 +17,12 @@
 #       20 9  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg open --submit >> $HOME/qqq.log 2>&1
 #       40 9  * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
 #
+#   Conflicts: both sides append to reports/*.csv and both push, so a same-day
+#   content conflict in an append-only log is routine. Resolve it with
+#   `python src/merge_daily.py` (unions the rows, keeps every graded night,
+#   adopts either side's added columns) and then `git commit` -- never by
+#   picking one side, which silently drops nights the forward record needs.
+#
 #   GitHub (this file): reads what the VM pushed, telegrams the running net.
 #     15:00 UTC Tue-Sat covers Mon-Fri nights after the morning capture push.
 #
