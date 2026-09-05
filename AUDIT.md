@@ -336,3 +336,32 @@ GAPS (prioritized; container is synthetic, so every CMD below is for the user's 
 11. [LOW] No test runs anywhere: tests/test_no_lookahead.py is not invoked by monthly.yml (no pytest step, monthly.yml:51-60) or roi.yml, and it poisons prices after load_panel (LOW finding). DO: add `python -m pytest tests -q` before the "monthly ritual" step; add a poison-before-load_panel case and a membership-perturbation case; add a DST regression test for src/opra_pull.window_utc and src/opra_value.entry_chain (2024-01-15 -> 15:30Z, 2024-07-15 -> 14:30Z). CMD now: `python -m pytest tests -q`.
 
 12. [LOW] Never-examined program-level multiple testing and inference: the surviving books are the winners of >=8 strategy families across RESULTS 1-22 (market-making, QQQ momentum sign/ML, calendar, cc/on/on15 ML, XID, 0DTE long/spread/condor, IV gate), and every t in RESULTS except §21 is the iid daily t of src/xsec_backtest.py:110-111 with no HAC or month-clustering, while formation is monthly. The ML L/S t=12.6 survives any correction, but the tilt (t 8.9), NEU (t 5.2), OPT (t 4.65 on 749 days) and MOM (t 2.5) should be re-stated with a month-clustered t (monthly_ic at src/xsec_ml.py:167-172 already exists; report its t over 279 months) and a note on the number of families tried.
+
+
+---
+
+## K. Verification run — which findings the real panel closed
+
+The six commands §H asked for were run on the full panel (329 months, 1,026,770
+ticker-days, 19990301 → 20260731). Full numbers: **RESULTS §24**, with the
+re-runs folded into §15, §15b and §21. Status of the open findings:
+
+| finding | status | measured |
+|---|---|---|
+| B1 #1 — censoring flatters the long-only book | **CLOSED, upheld** | Q5 and tilt **−1.52 bps/day, t −3.0** (887 censored nights; 660 backstop, 502 negative; LEH −267%, BSC −224% among them). Lower bound: band nights not re-inserted. |
+| B1 #2 — `factor.py` QQQ-only, §21 void | **CLOSED, upheld; direction reversed** | Rebuilt table reconciles the OLS identity on every row. ON +4.13 (t_HAC 5.72), NEU **+3.79 (t 5.25)**, v2 **+6.13 (t 4.51)**, v2n +5.79 (t 4.26), MOM +3.68 (t 2.64). Beta sum 1.42 (ON, v2) and 0.42 (NEU, v2n); split +0.69/+0.73, not +0.20/+1.19. |
+| B1 #10 — "ML doubles the rule" (contested) | **CLOSED, upheld** | ML +12.42 vs `on_12m` +11.44 → **+0.99 bps/day, daily t 1.31, monthly t 1.24**. Floor: +7.50 vs +6.57 → +0.94, t 0.83. Not significant on either target. |
+| B1 #11 — one canary draw is not a null | **CLOSED; the record's reading vindicated** | 5-seed permutation null: mean −0.29, sd 1.21, **range [−1.42, +1.52]**. The historical +1.6–1.8 canary is one draw from that band, as §15b argued — and the ML's +0.99 increment sits inside it. |
+| §G — NEU "size disputed +3.4 vs +1.1" | **DISPUTE CLOSED at +3.79 (t 5.25)** | Agrees with the independently measured NEUb +3.40 (t 4.85). The +1.13/t 1.47 was the bug. |
+| §G — MOM "promising but insufficient" | **Deployment verdict now mechanical: KILL** | Sharpe 0.49 (gate 0.5); **−1.2 bps/day** with its best 1% of days removed. Break-even 12.0× is the only leg it passes. |
+| §H #11 — no test runs anywhere | **CLOSED** | `pytest` step added to `monthly.yml`; `python -m pytest tests -q` → 6 passed on the user's machine, 7 with the shadowing test added since. |
+| §H #8 — the Yahoo seam was never measured | **CLOSED, partially reassuring** | 2026-03: overlap **132/150 (88%)**, \|close\| median 1.5 bps / p95 19.3, \|p60\| median 1.1 / p95 8.4; 6 split-adjusted names, 6 failed downloads (renames + delistings — the survivorship direction). Below the script's own ≥90% bar. |
+
+One defect the verification run found in the audit batch itself: `xsec_ml.py`
+rebound its argparse namespace and crashed writing the `.meta.json` sidecar
+**after** the full walk-forward completed. Fixed, with an AST regression test
+that fails if any script in `src/` rebinds the name it took from `parse_args()`.
+
+Still open, unchanged: #8's live-vs-backtest feature drift at the seam, #9's
+wide-panel `uni[T]` conditioning measurement (needs the top-1000 extraction),
+#10's dividend numbers, and #12's program-level multiple-testing restatement.
