@@ -357,6 +357,11 @@ re-runs folded into §15, §15b and §21. Status of the open findings:
 | §H #11 — no test runs anywhere | **CLOSED** | `pytest` step added to `monthly.yml`; `python -m pytest tests -q` → 6 passed on the user's machine, 7 with the shadowing test added since. |
 | §H #8 — the Yahoo seam was never measured | **CLOSED, partially reassuring** | 2026-03: overlap **132/150 (88%)**, \|close\| median 1.5 bps / p95 19.3, \|p60\| median 1.1 / p95 8.4; 6 split-adjusted names, 6 failed downloads (renames + delistings — the survivorship direction). Below the script's own ≥90% bar. |
 
+**Also closed since: §B #5 (HIGH, ops-health).** The paper log is no longer
+header-only — the monthly workflow fires daily and has committed nine graded
+nights (20260821..20260903, 2026-08 binding). The clock in RESULTS 19 now has
+data behind it; the horizon is still under one month, so there is no verdict.
+
 One defect the verification run found in the audit batch itself: `xsec_ml.py`
 rebound its argparse namespace and crashed writing the `.meta.json` sidecar
 **after** the full walk-forward completed. Fixed, with an AST regression test

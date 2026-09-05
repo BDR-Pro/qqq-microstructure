@@ -1643,6 +1643,29 @@ caught 84% of the time. The tilt metric, with half the mean, stays honest
 longer: even at 24 months a real tilt clears its GO only 71% of the time —
 patience is the modal outcome there and that is what the power column is for.
 
+### The clock is running (status, 2026-09-05)
+
+The audit's HIGH ops finding was that this whole apparatus had no data behind
+it — `reports/xsec_paper_daily.csv` was header-only weeks after the basket was
+emitted. That is now fixed and the log is live: the monthly workflow fires
+daily, grades the elapsed nights and commits them.
+
+```
+  9 graded nights, 20260821 .. 20260903, from the 2026-08-20 frozen models
+
+  2026-08 (binding)   7 nights   q5 -15.41   qqq -15.27   tilt  -0.13 bps/day
+  2026-09             2 nights   q5 +44.21   qqq +23.10   tilt +21.11 bps/day
+  all 9               tilt mean +4.59, sd 87.9, se 29.3, t +0.16
+  q5_on_masked == q5_on_bps on 9/9 nights -- no night has hit the split mask yet
+```
+
+**No verdict, and none is due.** The elapsed horizon is under one month against
+a table whose shortest row is three, the standard error on nine nights is 29
+bps/day, and the 3-month paper-log GO (+12.5) and KILL (−5.0) are both well
+inside ±1 se of the current mean. This is recorded as evidence the pipe works
+end to end — emit, grade, commit — not as evidence about the edge. The first
+row that can say anything is November 2026.
+
 The rule, mechanical from here: average the replay's forward months into
 bps/day and compare to the row for the elapsed horizon. Above GO — the edge
 is hard to dismiss; size it off the range table, not the backtest line.
@@ -2000,8 +2023,9 @@ file has been claiming:
   numbers (§18, §21) are unaffected.
 - Ops: a month-rollover hole could have left Aug-31 positions unsold for a
   week; the Yahoo candidate pool was monotone-shrinking; the paper log had zero
-  graded nights at HEAD (the workflows had not fired). All three fixed in code;
-  the third needs the secrets and a manual dispatch.
+  graded nights at HEAD (the workflows had not fired). All three fixed in code,
+  and the third has since resolved itself: the workflow now runs daily and
+  commits the log (§19, "the clock is running").
 
 ### Classification, from the audit (AUDIT.md §G)
 
