@@ -206,12 +206,15 @@ def main():
                     help='permuted-target canary draws per target (a single '
                          'draw is not a null distribution)')
     a = ap.parse_args()
+    through = a.through          # captured here on purpose: a later local in
+                                 # this function used to shadow `a`, so reading
+                                 # a.through at the end crashed (audit 2026-09)
     df = load_panel()
     bym = {m: g[['ticker', 'day', 'cc_bps', 'on_bps', 'on15_bps']]
            for m, g in df.groupby('month')}
     t = build_table(df)
-    if a.through:
-        t = t[t.tmonth <= a.through].reset_index(drop=True)
+    if through:
+        t = t[t.tmonth <= through].reset_index(drop=True)
     print(f'\nfeature table: {len(t):,} name-months, '
           f'{t.tmonth.nunique()} trade months {t.tmonth.min()} .. {t.tmonth.max()}')
     if a.save_model:
@@ -307,12 +310,12 @@ def main():
           f'{"ml_on15":>9}   bps/day')
     for y in sorted(t[runs['cc']['oos']].year.unique()):
         ys = str(y)
-        a = runs['cc']['ls'][runs['cc']['ls'].index.str[:4] == ys].ls
-        b = runs['on']['ls'][runs['on']['ls'].index.str[:4] == ys].ls
-        c = runs['on15']['ls'][runs['on15']['ls'].index.str[:4] == ys].ls
+        v_cc = runs['cc']['ls'][runs['cc']['ls'].index.str[:4] == ys].ls
+        v_on = runs['on']['ls'][runs['on']['ls'].index.str[:4] == ys].ls
+        v_f = runs['on15']['ls'][runs['on15']['ls'].index.str[:4] == ys].ls
         print(f'{y:>6}{icc[icc.index.str[:4] == ys].mean():>8.3f}'
               f'{ico[ico.index.str[:4] == ys].mean():>8.3f}'
-              f'{a.mean():>9.2f}{b.mean():>9.2f}{c.mean():>9.2f}')
+              f'{v_cc.mean():>9.2f}{v_on.mean():>9.2f}{v_f.mean():>9.2f}')
 
     for tag in ('cc', 'on', 'on15'):
         m = runs[tag]['model']
@@ -332,7 +335,7 @@ def main():
     p = os.path.join(ROOT, 'data', 'xsec_ml_daily.csv')
     out.to_csv(p, float_format='%.3f')
     import json
-    json.dump({'last_tmonth': str(t.tmonth.max()), 'through': a.through,
+    json.dump({'last_tmonth': str(t.tmonth.max()), 'through': through,
                'rows': int(len(t))},
               open(p.replace('.csv', '.meta.json'), 'w'), indent=1)
     print(f'daily series -> {p}  (+ .meta.json with last_tmonth '

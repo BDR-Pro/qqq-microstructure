@@ -7,7 +7,9 @@
 #     derived on/cc/on15 columns and targets are poisoned too) must leave every
 #     past feature and target byte-identical;
 #   - opra_pull.window_utc must be DST-correct (the RESULTS 10 bug class);
-#   - the overlay verdict must use common random numbers.
+#   - the overlay verdict must use common random numbers;
+#   - no script may rebind its argparse namespace inside main() (the shadowed
+#     `a` that crashed xsec_ml.py's meta sidecar after a full walk-forward).
 #
 # Run: python -m pytest tests -q      (or: python tests/test_audit_regressions.py)
 
@@ -87,9 +89,46 @@ def test_overlay_verdict_uses_common_random_numbers():
     assert a['p50'] == b['p50'] and np.all(a['ratio'] == b['ratio'])
 
 
+def test_no_script_shadows_its_argparse_namespace():
+    """xsec_ml.main() bound `a = ap.parse_args()` and then reused `a` as a
+    loop local, so the last line -- a.through, 40 lines later -- died with
+    AttributeError AFTER the whole walk-forward had run. Cheap to check
+    statically, expensive to hit at runtime, so check it for every script."""
+    import ast
+    bad = []
+    for f in sorted(glob.glob(os.path.join(ROOT, 'src', '*.py'))):
+        tree = ast.parse(open(f, encoding='utf-8').read())
+        for fn in [n for n in ast.walk(tree)
+                   if isinstance(n, ast.FunctionDef)]:
+            ns = {t.id for st in ast.walk(fn)
+                  if isinstance(st, ast.Assign)
+                  and isinstance(st.value, ast.Call)
+                  and isinstance(st.value.func, ast.Attribute)
+                  and st.value.func.attr == 'parse_args'
+                  for t in st.targets if isinstance(t, ast.Name)}
+            if not ns:
+                continue
+            for st in ast.walk(fn):
+                tg = (st.targets if isinstance(st, ast.Assign) else
+                      [st.target] if isinstance(st, (ast.AugAssign,
+                                                     ast.AnnAssign, ast.For))
+                      else [])
+                for t in tg:
+                    if isinstance(t, ast.Name) and t.id in ns and not (
+                            isinstance(st, ast.Assign)
+                            and isinstance(st.value, ast.Call)
+                            and isinstance(st.value.func, ast.Attribute)
+                            and st.value.func.attr == 'parse_args'):
+                        bad.append(f'{os.path.basename(f)}:{t.lineno} '
+                                   f'rebinds argparse namespace "{t.id}" '
+                                   f'in {fn.name}()')
+    assert not bad, 'argparse namespace shadowed: ' + '; '.join(bad)
+
+
 if __name__ == '__main__':
     test_factor_stitches_qqq_qqqq_without_seam()
     test_poison_raw_future_months_before_load_panel()
     test_opra_window_is_dst_correct()
     test_overlay_verdict_uses_common_random_numbers()
+    test_no_script_shadows_its_argparse_namespace()
     print('audit regression tests: PASS')
