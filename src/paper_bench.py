@@ -91,7 +91,10 @@ REF = dict(tilt=6.4, tilt_cens=4.9, cost=2.0)
 #                  capped at $9.79; CAT $0.000003/sh on both sides.
 # SMART-routed API orders (what orders.py sends) may use Tiered; orders
 # directed to one exchange may not. IBKR Lite is commission-free but has no
-# TWS API, so it cannot run this pipe.
+# TWS API, so it cannot run this pipe. Fractional shares cannot fix the
+# whole-share problem either: IBKR offers them only via FIX/CTCI (not the
+# TWS API), not for at-the-open/at-the-close orders, and not in paper. At
+# small capital the per-order minimum is the cost, and capital is the lever.
 FEES = {
     'fixed':  dict(per_share=0.005, min=1.00, max_pct=0.01,
                    exch={'BUY': 0.0, 'SELL': 0.0}, clearing=0.0, passthru=0.0),
