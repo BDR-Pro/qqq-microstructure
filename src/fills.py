@@ -67,13 +67,14 @@ def capture():
     return len(new)
 
 
-def reconcile():
-    """Pair each night's buys with the next morning's sells, per symbol,
-    qty-weighted; print realized vs graded vs gap."""
-    if not os.path.exists(FILLS):
-        print('no reports/fills.csv yet -- nothing to reconcile')
-        return None
-    f = pd.read_csv(FILLS, dtype={'date': str})
+def pair_legs(f, quiet=False):
+    """Pair each sell with the latest prior buy of the same symbol, after
+    summing partial executions per (date, symbol, side). One dict per
+    round trip: night (the buy date), sym, qty, buy_px, sell_px,
+    sell_date, notional (qty x buy_px), bps (log return x 1e4), comm (both
+    legs). Shared by reconcile() and paper_bench.py so the two can never
+    pair the same fills differently."""
+    f = f.copy()
     f['notl'] = f.qty * f.price
     agg = f.groupby(['date', 'symbol', 'side'], as_index=False).agg(
         qty=('qty', 'sum'), notl=('notl', 'sum'),
@@ -81,22 +82,37 @@ def reconcile():
     agg['px'] = agg.notl / agg.qty
     buys = {(r.date, r.symbol): r for r in
             agg[agg.side == 'BOT'].itertuples()}
-    nights = {}
+    legs = []
     for s in agg[agg.side == 'SLD'].itertuples():
         prior = [d for d, sym in buys if sym == s.symbol and d < s.date]
         if not prior:
-            print(f'  {s.symbol} sold {s.date} with no prior buy on file -- '
-                  f'skipped')
+            if not quiet:
+                print(f'  {s.symbol} sold {s.date} with no prior buy on file '
+                      f'-- skipped')
             continue
         b = buys[(max(prior), s.symbol)]
         q = min(b.qty, s.qty)
-        if b.qty != s.qty:
+        if b.qty != s.qty and not quiet:
             print(f'  {s.symbol} {b.date}: buy {b.qty} vs sell {s.qty} -- '
                   f'using {q}')
-        nights.setdefault(b.date, []).append(dict(
-            sym=s.symbol, notional=q * b.px,
-            bps=float(np.log(s.px / b.px) * 1e4),
-            comm=b.comm + s.comm))
+        legs.append(dict(night=b.date, sym=s.symbol, qty=q, buy_px=b.px,
+                         sell_px=s.px, sell_date=s.date, notional=q * b.px,
+                         bps=float(np.log(s.px / b.px) * 1e4),
+                         comm=b.comm + s.comm))
+    return legs
+
+
+def reconcile():
+    """Pair each night's buys with the next morning's sells, per symbol,
+    qty-weighted; print realized vs graded vs gap."""
+    if not os.path.exists(FILLS):
+        print('no reports/fills.csv yet -- nothing to reconcile')
+        return None
+    nights = {}
+    for leg in pair_legs(pd.read_csv(FILLS, dtype={'date': str})):
+        nights.setdefault(leg['night'], []).append(dict(
+            sym=leg['sym'], notional=leg['notional'], bps=leg['bps'],
+            comm=leg['comm']))
     if not nights:
         print('no completed buy->sell nights yet')
         return None
@@ -154,6 +170,19 @@ def main():
     out = reconcile()
     if out is not None and (n or a.report):
         send(f'qqq ROI: {out[1]}' + (f' ({n} new fills)' if n else ''))
+    elif out is None and a.report:
+        # no paper round trip at all while the grader keeps grading: the VM
+        # legs are not running. This used to print to a CI log nobody reads
+        # and send nothing, which is how seven weeks of forward test went by
+        # with zero paper fills (audit 2026-10).
+        g = len(pd.read_csv(DAILY)) if os.path.exists(DAILY) else 0
+        if g:
+            msg = (f'qqq ROI: paper leg SILENT -- {g} graded nights, 0 paper '
+                   f'round trips in reports/fills.csv. The VM order legs '
+                   f'(roi.yml crontab) are not running; the forward test is '
+                   f'grading a book nobody is trading.')
+            print(msg)
+            send(msg)
     if not a.report:
         print('\ncommit reports/fills.csv with the rest of reports/')
 

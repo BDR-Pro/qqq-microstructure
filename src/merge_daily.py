@@ -12,78 +12,102 @@
 #
 #   python src/merge_daily.py --dry-run       # show the plan, touch nothing
 #   python src/merge_daily.py                 # every conflicted csv under reports/
-#   python src/merge_daily.py reports/xsec_paper_daily.csv
+#   python src/merge_daily.py --repair        # no conflict in progress, but a
+#                                             # log has markers committed in it
 #
-# Each rule below exists because the simpler version lost or corrupted rows
-# (audit 2026-10, reproduced in tests/test_merge_daily.py):
+# Each rule below exists because a simpler version lost or corrupted rows
+# (audits 2026-10, every case reproduced in tests/test_merge_daily.py):
 #
-#   - Only paths git actually holds in conflict are accepted, by name. A pasted
-#     sentence once became eight "paths" and eight false "resolve by hand"s.
-#   - Every side is read from the index (:1 base, :2 ours, :3 theirs) as raw
-#     text and parsed with the csv module, never through pandas: no float is
-#     re-formatted, and no stray first line can be mistaken for the header
-#     (pandas once read a side whose line 1 was "<<<<<<< HEAD" as a 7-level
-#     index and silently discarded every field).
-#   - Conflict markers are stripped from every side first, with the diff3 base
-#     section between "|||||||" and "=======". A side can carry markers BAKED
-#     IN by an earlier `git add . && git commit` made mid-merge; both versions
-#     of the rows between them are kept and the union settles them.
-#   - A log may switch header mid-file (a side whose header was in the
-#     conflict). Headers must form a strict append chain -- each one the
-#     previous plus new columns at the end -- so every row maps to exactly one
-#     header by its width. A RENAMED column is ambiguous and is refused.
-#   - Rows are unioned on each log's identity -- date for the paper log,
-#     exec_id for fills, month for the basket registry. The order log has no
-#     identity column (orders.py only appends runs), so it and any unknown
-#     log are unioned as a MULTISET: a row twice on either side stays twice.
-#     A side that lacks the identity column is refused, never collapsed.
+#   - The git operation is detected first. In a MERGE, stage :3 is the
+#     incoming (remote) side; in a REBASE (`git pull --rebase`) git swaps
+#     them and stage :2 is upstream. The remote's version is the shared
+#     record, so which stage is remote decides who wins a disagreement, and
+#     the continue command printed at the end is the operation's own. An
+#     operation that cannot be identified (a `git stash pop`) gets no
+#     winner: every material disagreement is refused.
+#   - Only report logs (reports/*.csv) git actually holds in conflict are
+#     accepted. A pasted sentence once became eight "paths".
+#   - Each side is read from the index as raw text and parsed with the csv
+#     module, never pandas: no float is re-formatted, and no stray first line
+#     can become the header (pandas read a side whose line 1 was "<<<<<<<"
+#     as a 7-level index and silently discarded every field).
+#   - Conflict markers are stripped from every side first, with any diff3
+#     base section. A side can carry markers BAKED IN by an earlier
+#     `git add . && git commit` made mid-merge; both versions of the rows
+#     between them are kept and the union settles them.
+#   - Headers must form a strict append chain (each is the previous plus new
+#     columns at the end), so every row maps to one header by its width. A
+#     renamed column is ambiguous and is refused.
+#   - The merge base (stage :1) is never unioned in: a night both sides
+#     deliberately removed must not come back. In a modify/delete conflict
+#     the surviving side is kept and the deletion is named.
+#   - A log is recognised by its HEADER, not its filename, and unioned on its
+#     identity: date for the graded log, exec_id for fills, month for the
+#     basket registry. The order log has no identity column (orders.py only
+#     appends runs), so it -- and any unrecognised log -- is a MULTISET: a
+#     row twice on either side stays twice.
 #   - Junk an earlier bad merge committed (a marker line with trailing
 #     commas, a duplicated header, an empty row) is dropped and named. Any
-#     other row with a malformed date/month/time/leg/mode is refused.
-#   - Two versions of one observation that agree on every shared column --
-#     up to a float's last printed digit, which is formatting, not data --
-#     are the same row, and the one with more filled fields wins. Versions
-#     that differ MATERIALLY: the remote's (theirs) wins in the graded log and
-#     is printed; in the basket registry a month pre-registered twice is an
-#     integrity event and is refused for a human to decide.
-#   - Nothing is written until EVERY conflicted file has merged and passed a
-#     safety check run on the text that would be written: every key from every
-#     side present, none twice. Output is LF and byte-exact per field.
+#     other malformed date/month/time/leg/mode is refused.
+#   - Versions of one observation that agree on every shared column -- up to
+#     a float's last printed digit, which is formatting -- are one row; the
+#     one with more filled fields wins. Versions that differ MATERIALLY: the
+#     remote's wins in the graded log and is named; in the basket registry a
+#     month pre-registered twice is an integrity event and is refused.
+#   - Nothing is written until every conflicted file has merged and passed a
+#     safety check on the text that would be written (every observation from
+#     every side present, none twice). Writes go to temp files first and are
+#     rolled back together if any one fails (a log open in Excel).
+#   - With nothing in conflict, the logs are still checked for committed
+#     markers and duplicated identities -- "nothing to do" is never said about
+#     a log that is broken.
 
 import os, io, re, csv, sys, math, argparse, subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# The column(s) that identify one observation. A log not listed here has no
-# identity column (orders.py only ever appends a run, never rewrites one), so
-# its rows are unioned as a MULTISET: a row present twice on either side is
-# present twice in the result.
-KEYS = {'xsec_paper_daily.csv': ['date'],
-        'xsec_paper.csv': ['month'],
-        'fills.csv': ['exec_id']}
-# Logs where two materially different rows for one key are an integrity
-# event, not a merge: a month pre-registered twice must be decided by a
-# human (the earlier committed basket is the pre-registration).
-STRICT = {'xsec_paper.csv'}
-# Column formats every real row satisfies; a row that fails one is either
-# junk from an earlier bad merge (dropped and named) or refused.
+# Known logs: the header columns that identify each one, its identity, its
+# sort order. identity None = multiset (no identity column).
+LOGS = {
+    'xsec_paper_daily.csv': dict(sig={'date', 'q5_on_bps'}, key=['date'],
+                                 order=['date']),
+    'fills.csv': dict(sig={'exec_id', 'symbol', 'side'}, key=['exec_id'],
+                      order=['time_et', 'exec_id']),
+    'xsec_paper.csv': dict(sig={'emitted_on', 'q5', 'q1'}, key=['month'],
+                           order=['month'], strict=True),
+    'orders_log.csv': dict(sig={'run_at_et', 'leg', 'mode'}, key=None,
+                           order=['run_at_et']),
+}
+# Column formats every real row satisfies; a row that fails one is junk from
+# an earlier bad merge (dropped and named) or it is refused.
 FORMAT = {'date': r'\d{8}', 'month': r'\d{4}-\d{2}', 'emitted_on': r'\d{8}',
           'run_at_et': r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}', 'exec_id': r'\S+',
           'leg': r'open|close', 'mode': r'dry|paper|live'}
-ORDER = {'fills.csv': ['time_et', 'exec_id'],
-         'orders_log.csv': ['run_at_et']}          # default: sort by the key
 MARKER = re.compile(r'^(<{7}|={7}|>{7}|\|{7})( |$)')
 LOOSE = re.compile(r'^(<{7}|={7}|>{7}|\|{7})')      # a marker that became a row
 
 
+class Refuse(Exception):
+    """This file needs a human; nothing will be written."""
+
+
 def _git(*args):
-    r = subprocess.run(['git'] + list(args), cwd=ROOT, capture_output=True)
+    try:
+        r = subprocess.run(['git'] + list(args), cwd=ROOT, capture_output=True)
+    except FileNotFoundError:
+        raise SystemExit('git is not on PATH in this shell -- open one where '
+                         '`git --version` works and re-run (nothing was written)')
     return (r.returncode, r.stdout.decode('utf-8', 'replace'),
             r.stderr.decode('utf-8', 'replace'))
 
 
 def unmerged():
     """{path: set of stages present} for every path git holds in conflict."""
-    _, out, _ = _git('ls-files', '-u', '-z')
+    rc, out, err = _git('ls-files', '-u', '-z')
+    if rc:
+        # e.g. Windows' safe.directory ownership guard: every git command
+        # fails, and an empty answer would read as "nothing in conflict"
+        raise SystemExit(f'git ls-files -u failed (rc {rc}): {err.strip()}\n'
+                         f'nothing was written')
     paths = {}
     for rec in filter(None, out.split('\0')):
         meta, path = rec.split('\t', 1)
@@ -91,8 +115,23 @@ def unmerged():
     return paths
 
 
-class Refuse(Exception):
-    """This file needs a human; nothing will be written."""
+def operation():
+    """(name, the stage that is the remote/shared record or None, the command
+    that finishes it)."""
+    def exists(name):
+        rc, out, _ = _git('rev-parse', '--git-path', name)
+        p = out.strip()
+        return rc == 0 and os.path.exists(p if os.path.isabs(p)
+                                          else os.path.join(ROOT, p))
+    if exists('rebase-merge') or exists('rebase-apply'):
+        return 'rebase', 2, 'git rebase --continue'
+    if exists('MERGE_HEAD'):
+        return 'merge', 3, 'git commit --no-edit'
+    if exists('CHERRY_PICK_HEAD'):
+        return 'cherry-pick', 3, 'git cherry-pick --continue'
+    if exists('REVERT_HEAD'):
+        return 'revert', 3, 'git revert --continue'
+    return 'unknown', None, 'git commit (or finish whatever left this conflict)'
 
 
 def strip_markers(text):
@@ -142,32 +181,44 @@ def parse(text, label):
     return chain[-1], out, n
 
 
-def plan(path, stages):
-    """Merge one file in memory. Returns (text to write, report lines)."""
+def recognise(path, cols):
+    """The log's spec, from its header. A known filename whose header does
+    not match its own log is refused rather than merged under the wrong
+    identity."""
     name = os.path.basename(path)
-    if 2 not in stages and 3 not in stages:
-        raise Refuse('both sides deleted it')
+    hits = [n for n, s in LOGS.items() if s['sig'] <= set(cols)]
+    if name in LOGS and name not in hits:
+        raise Refuse(f'header {cols} does not look like {name} '
+                     f'(expected columns {sorted(LOGS[name]["sig"])})')
+    if len(hits) > 1:
+        hits = [name] if name in hits else hits
+    if len(hits) != 1:
+        return None, dict(key=None, order=[])     # unknown: multiset
+    return hits[0], LOGS[hits[0]]
+
+
+def merge_texts(path, texts, remote):
+    """The merge proper. texts: {label: csv text} for the sides present;
+    remote: the label that is the shared record, or None when that cannot
+    be known. Returns (text to write, report lines)."""
     notes, sides = [], {}
-    for n, label in ((1, 'base'), (2, 'ours'), (3, 'theirs')):
-        if n not in stages:
-            continue
-        rc, text, err = _git('show', f':{n}:{path}')
-        if rc:
-            raise Refuse(f'cannot read {label} (git: {err.strip()})')
+    for label, text in texts.items():
         cols, rows, stripped = parse(text, label)
         if stripped:
             notes.append(f'{label} carried {stripped} conflict-marker line(s) '
                          f'from an earlier unresolved commit -- stripped; the '
                          f'rows on both sides of them are kept')
         sides[label] = (cols, rows)
-    if not any(sides.get(s, ([], []))[1] for s in ('ours', 'theirs')):
-        raise Refuse('no data rows on either side')
-
-    cols, hdrs = [], [h for h in [sides.get(x, ([], []))[0] for x in
-                                  ('ours', 'theirs', 'base')] if h]
+    if not any(rows for _, rows in sides.values()):
+        raise Refuse('no data rows on any side')
+    cols, hdrs = [], [h for h, _ in sides.values() if h]
     for h in hdrs:
         cols += [c for c in h if c not in cols]
-    key = KEYS.get(name)
+    kind, spec = recognise(path, cols)
+    key = spec['key']
+    if kind is None:
+        notes.append('not a log this script knows -- unioned as a multiset '
+                     'of whole rows')
     if key:
         for label, (h, rows) in sides.items():
             if rows and not all(k in h for k in key):
@@ -204,8 +255,8 @@ def plan(path, stages):
     versions, dropped = {}, []
     ident = (lambda r: tuple(r[k] for k in key)) if key else \
         (lambda r: tuple(r.get(c, '') for c in shared))
-    for label in ('base', 'ours', 'theirs'):
-        for r in sides.get(label, ([], []))[1]:
+    for label, (_, rows) in sides.items():
+        for r in rows:
             if junk(r):
                 dropped.append((label, [r.get(c, '') for c in cols][:3]))
                 continue
@@ -218,45 +269,42 @@ def plan(path, stages):
         notes.append(f'dropped a junk row from {label} (left by an earlier '
                      f'bad merge): {v}')
 
+    labels = list(sides)
     filled = lambda r: sum(bool(r.get(c)) for c in cols)
     out, material = [], []
     for k, by in versions.items():
-        o, t = by.get('ours', []), by.get('theirs', [])
         if not key:                       # multiset: keep the larger count
-            src = max((o, t, by.get('base', [])), key=len)
+            src = max((by.get(l, []) for l in labels), key=len)
             for i in range(len(src)):
-                cand = [x[i] for x in (o, t) if i < len(x)] or [src[i]]
-                out.append(max(cand, key=filled))
+                out.append(max([by[l][i] for l in labels
+                                if i < len(by.get(l, []))], key=filled))
             continue
-        if t:
-            # theirs is the version already on the remote; a side that
-            # carries committed markers may hold BOTH versions of a night,
-            # and the remote's settles which one stands
-            t0 = t[-1]
-            if not all(compatible(t0, x) for x in t[:-1]):
-                raise Refuse(f'theirs holds {"/".join(k)} twice with '
-                             f'different values')
-            if all(compatible(t0, x) for x in o):
-                out.append(max([t0] + o, key=filled))     # ties: theirs
-            elif name in STRICT:
-                raise Refuse(f'{"/".join(k)} differs between the sides '
-                             f'(ours {list(o[-1].values())[:5]} vs theirs '
-                             f'{list(t0.values())[:5]}) -- this log is a '
-                             f'pre-registration; a human decides which stands')
-            else:
-                out.append(t0)
-                material.append(k)
-        elif o:
-            if not all(compatible(o[-1], x) for x in o[:-1]):
-                raise Refuse(f'ours holds {"/".join(k)} twice with different '
-                             f'values and the remote has no version to '
-                             f'settle it')
-            out.append(max(o, key=filled))
-        else:
-            out.append(by['base'][-1])
+        allv = [r for l in labels for r in by.get(l, [])]
+        if all(compatible(allv[0], x) for x in allv[1:]):
+            # one observation, however many copies: the widest copy, the
+            # remote's on ties
+            pref = by.get(remote, []) + [r for l in labels if l != remote
+                                         for r in by.get(l, [])]
+            out.append(max(pref, key=filled))
+            continue
+        rv = by.get(remote, []) if remote else []
+        if spec.get('strict') or not rv:
+            who = (', '.join(f'{l} {[list(r.values())[:5] for r in by[l]]}'
+                             for l in labels if l in by))
+            raise Refuse(f'{"/".join(k)} has materially different versions '
+                         f'({who}) -- ' +
+                         ('this log is a pre-registration; a human decides '
+                          'which stands' if spec.get('strict') else
+                          'and no remote version settles which one stands'))
+        if not all(compatible(rv[-1], x) for x in rv[:-1]):
+            raise Refuse(f'{remote} holds {"/".join(k)} twice with '
+                         f'different values')
+        out.append(rv[-1])
+        material.append(k)
 
-    order = ORDER.get(name) or key or []
-    out.sort(key=lambda r: tuple(r.get(c, '') for c in order))
+    order = spec['order'] or (key or [])
+    if order:
+        out.sort(key=lambda r: tuple(r.get(c, '') for c in order))
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator='\n')
     w.writerow(cols)
@@ -268,25 +316,107 @@ def plan(path, stages):
     got = {}
     for r in back:
         got[ident(r)] = got.get(ident(r), 0) + 1
-    short = [k for k, by in versions.items()
-             if got.get(k, 0) < max(len(v) for v in by.values())
-             and (not key or got.get(k, 0) < 1)]
+    need = {k: (max(len(v) for v in by.values()) if not key else 1)
+            for k, by in versions.items()}
+    short = [k for k, n in need.items() if got.get(k, 0) < n]
     dup = [k for k, n in got.items() if key and n > 1]
     if short or dup or len(back) != len(out):
         raise Refuse(f'SAFETY CHECK FAILED: {len(short)} observation(s) would '
                      f'be lost, {len(dup)} duplicated')
 
-    count = (lambda side: sum(bool(by.get(side)) for by in versions.values())) \
-        if key else \
-        (lambda side: sum(len(by.get(side, [])) for by in versions.values()))
-    n_o, n_t = count('ours'), count('theirs')      # nights, or runs
-    notes.insert(0, f'ours {n_o} + theirs {n_t} rows on '
+    unit = 'nights' if kind == 'xsec_paper_daily.csv' else 'rows'
+    counts = ' + '.join(
+        f'{l} {sum(bool(by.get(l)) for by in versions.values()) if key else sum(len(by.get(l, [])) for by in versions.values())}'
+        for l in labels)
+    notes.insert(0, f'{counts} {unit} on '
                  f'{"+".join(key) if key else "the whole row (multiset)"}'
                  f' -> {len(out)} kept')
     for k in material:
-        notes.append(f'{"/".join(k)}: the sides differ materially -- kept the '
-                     f'version already on the remote (theirs)')
+        notes.append(f'{"/".join(k)}: the sides differ materially -- kept '
+                     f'the remote\'s version ({remote})')
     return text, notes
+
+
+def plan(path, stages, remote_stage):
+    """Merge one conflicted file in memory from its index stages."""
+    names = {2: 'ours', 3: 'theirs'}
+    texts = {}
+    for n in (2, 3):
+        if n in stages:
+            rc, text, err = _git('show', f':{n}:{path}')
+            if rc:
+                raise Refuse(f'cannot read {names[n]} (git: {err.strip()})')
+            texts[names[n]] = text
+    if not texts:
+        raise Refuse('both sides deleted it')
+    remote = names.get(remote_stage) if remote_stage else None
+    text, notes = merge_texts(path, texts, remote if remote in texts else None)
+    gone = [names[n] for n in (2, 3) if n not in stages]
+    if gone:
+        notes.append(f'{gone[0]} DELETED this file; it is kept with the other '
+                     f'side\'s rows -- if the deletion was meant, `git rm` it '
+                     f'after finishing')
+    if remote:
+        notes[0] += f'   [{remote} = the remote]'
+    return text, notes
+
+
+def check_logs():
+    """No conflict in progress: are the committed logs themselves sound?"""
+    problems = {}
+    rdir = os.path.join(ROOT, 'reports')
+    for fn in sorted(os.listdir(rdir)) if os.path.isdir(rdir) else []:
+        if not fn.endswith('.csv'):
+            continue
+        p = f'reports/{fn}'
+        text = open(os.path.join(ROOT, p), encoding='utf-8',
+                    errors='replace').read()
+        lines = [i + 1 for i, l in enumerate(text.splitlines())
+                 if LOOSE.match(l)]
+        msg = []
+        if lines:
+            msg.append(f'conflict-marker lines committed at line(s) '
+                       f'{lines[:6]}')
+        try:
+            merge_texts(p, {'file': text}, None)
+        except Refuse as ex:
+            msg.append(str(ex))
+        if msg:
+            problems[p] = msg
+    return problems
+
+
+def write_all(plans):
+    """Every file, or none: temp files first, then replace, and on any
+    failure restore what was already replaced."""
+    done, tmps = [], {}
+    try:
+        for p, (text, _) in plans.items():
+            full = os.path.join(ROOT, p)
+            tmp = full + '.merge_daily.tmp'
+            with open(tmp, 'w', newline='', encoding='utf-8') as f:
+                f.write(text)
+            tmps[p] = tmp
+        for p, tmp in tmps.items():
+            full = os.path.join(ROOT, p)
+            old = open(full, 'rb').read() if os.path.exists(full) else None
+            os.replace(tmp, full)
+            done.append((full, old))
+    except OSError as ex:
+        for full, old in done:
+            if old is not None:
+                with open(full, 'wb') as f:
+                    f.write(old)
+        for tmp in tmps.values():
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        raise SystemExit(f'could not write {getattr(ex, "filename", "")} '
+                         f'({ex.strerror}) -- is it open in Excel or being '
+                         f'synced? Nothing was changed.')
+    for p in plans:
+        rc, _, err = _git('add', '--', p)
+        if rc:
+            raise SystemExit(f'{p}: written, but `git add` failed: {err.strip()}')
 
 
 def main():
@@ -294,33 +424,72 @@ def main():
         description='Resolve a merge conflict in an append-only report log '
                     'by union. Touches nothing unless every file merges.')
     ap.add_argument('paths', nargs='*',
-                    help='conflicted csv paths (default: every one under reports/)')
+                    help='conflicted reports/*.csv paths (default: all of them)')
     ap.add_argument('--dry-run', action='store_true',
                     help='print the plan and write nothing')
+    ap.add_argument('--repair', action='store_true',
+                    help='no conflict in progress: rewrite a log that has '
+                         'committed markers in it, then commit it yourself')
     a = ap.parse_args()
     u = unmerged()
     if a.paths:
-        want = [os.path.relpath(os.path.abspath(p), ROOT).replace(os.sep, '/')
-                for p in a.paths]
-        bad = [p for p in want if p not in u]
+        want = []
+        for p in a.paths:
+            try:
+                want.append(os.path.relpath(os.path.abspath(p), ROOT)
+                            .replace(os.sep, '/'))
+            except ValueError:                    # another drive / a share
+                want.append(p)
+        bad = [p for p in want if p not in u or not
+               (p.startswith('reports/') and p.endswith('.csv'))]
         if bad:
             raise SystemExit(
-                'not in conflict: ' + ', '.join(bad) + '\n' +
+                'not a conflicted report log: ' + ', '.join(bad) + '\n' +
                 ('in conflict right now: ' + ', '.join(sorted(u)) if u else
                  'nothing is in conflict right now -- there is no merge to '
                  'resolve') + '\n(nothing was written)')
     else:
         want = [p for p in sorted(u)
                 if p.startswith('reports/') and p.endswith('.csv')]
-        if not want:
-            print('no conflicted csv under reports/ -- nothing to do'
+
+    if not want:
+        broken = check_logs()
+        if not broken:
+            print('no conflicted csv under reports/, and every log parses '
+                  'clean -- nothing to do'
                   + (f' (other conflicts: {", ".join(sorted(u))})' if u else ''))
             return
+        for p, msgs in broken.items():
+            print(f'{p}: not in conflict, but BROKEN:')
+            for m in msgs:
+                print(f'    {m}')
+        if not a.repair:
+            raise SystemExit('\nrun  python src/merge_daily.py --repair  to '
+                             'rewrite them, then commit (nothing was written)')
+        plans = {}
+        for p in broken:
+            text = open(os.path.join(ROOT, p), encoding='utf-8').read()
+            try:
+                plans[p] = merge_texts(p, {'file': text}, None)
+            except Refuse as ex:
+                raise SystemExit(f'{p}: {ex}\nnothing was written')
+        for p, (_, notes) in plans.items():
+            print(f'{p}: ' + '\n    '.join(notes))
+        if not a.dry_run:
+            write_all(plans)
+            print('\nrepaired and staged -- review, then:  git commit -m '
+                  '"repair report logs"')
+        return
 
+    op, remote_stage, cont = operation()
+    if op == 'unknown':
+        print('could not tell which git operation left this conflict (a '
+              '`git stash pop`?) -- no side is treated as the remote, so any '
+              'material disagreement will be refused')
     plans, failed = {}, []
     for p in want:
         try:
-            plans[p] = plan(p, u[p])
+            plans[p] = plan(p, u[p], remote_stage)
         except Refuse as ex:
             failed.append(f'{p}: {ex}')
     for p, (_, notes) in plans.items():
@@ -331,17 +500,12 @@ def main():
         raise SystemExit('\n'.join(failed) + '\nnothing was written -- '
                          'these need a human, no file was guessed at')
     if a.dry_run:
-        print('\ndry run -- nothing written')
+        print(f'\ndry run ({op}) -- nothing written')
         return
-    for p, (text, _) in plans.items():
-        with open(os.path.join(ROOT, p), 'w', newline='', encoding='utf-8') as f:
-            f.write(text)
-        rc, _, err = _git('add', '--', p)
-        if rc:
-            raise SystemExit(f'{p}: written, but `git add` failed: {err.strip()}')
+    write_all(plans)
     rest = sorted(set(unmerged()) - set(want))
-    print('\nstaged.' + (f' still in conflict: {", ".join(rest)}' if rest
-                         else ' finish the merge with:  git commit --no-edit'))
+    print(f'\nstaged ({op}).' + (f' still in conflict: {", ".join(rest)}'
+                                 if rest else f' finish with:  {cont}'))
 
 
 if __name__ == '__main__':
