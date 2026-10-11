@@ -119,6 +119,17 @@ def test_a_night_without_prints_is_reported_not_guessed():
     assert out['why'] == 'not graded yet'
 
 
+def test_a_split_night_in_paper_is_flagged_not_averaged():
+    """Paper does not process splits: 10 pre-split shares sold at the
+    post-split price look like a -90% night."""
+    legs, basket, prints = _night()
+    legs[0] = dict(legs[0], sell_px=legs[0]['sell_px'] / 10,
+                   bps=float(np.log(legs[0]['sell_px'] / 10 /
+                                    legs[0]['buy_px']) * 1e4))
+    out = pb.decompose(legs, basket, 1.0, prints)
+    assert 'corporate action' in out['why'] and 'gap' not in out
+
+
 def test_end_to_end_on_files(capsys):
     legs, basket, prints = _night()
     rows = []

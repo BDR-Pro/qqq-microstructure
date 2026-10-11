@@ -2289,3 +2289,99 @@ robust, broad (§22), and worth roughly 1.5 bps/day less on the long side than
 this file used to say; its alpha is larger than §21 claimed once the regressor is
 correct; and the machine-learning layer on top of it is not, on 283 out-of-sample
 months, distinguishable from a one-line ranking rule.**
+
+---
+
+## 25. Benchmarking against paper trading: what it costs, and what paper can measure — `paper_bench.py`
+
+The forward test (§19) grades the emitted basket at official auction prints:
+friction-free by construction. The paper account was supposed to supply the
+other half of the benchmark (fills, commissions, the account's own sizing),
+but on 2026-10-11 it had **never completed a round trip**: `orders_log.csv`
+held three dry runs from 2026-08-22, and there was no `fills.csv`. The daily
+ROI job had seen zero fills for seven weeks and said nothing; it now telegrams
+"paper leg SILENT".
+
+### Pre-trade: commissions at this size eat the edge
+
+`paper_bench.py` prices the current basket with `orders.size()` itself, under
+IBKR Pro's published schedule. Every number was re-read on the primary source
+by an independent verifier on 2026-10-11 (IBKR commissions and exchange-fee
+pages, SEC advisory 2026-2, FINRA SR-FINRA-2026-021, CAT fee alerts).
+Separately, a synthesis agent re-derived the nightly total from scratch and
+matched the script to the cent.
+
+```
+  October basket, 11 names, $25,000 -> $2,273/name, 88% deployed (SNDK buys 1 share)
+
+  capital     Fixed bps/night   Tiered bps/night   (backtest assumed 2)
+   10,000          18.1               6.6          2 names unbuyable
+   25,000           9.0               3.4
+   50,000           4.6               1.95
+  100,000           2.5               1.3
+  250,000           1.3               0.9
+
+  $25k, per night: Fixed $22.45 = 22 x $1.00 minimum + SEC $0.45
+                   Tiered $8.59 = 22 x $0.35 minimum + auction/clearing/SEC $0.89
+```
+
+The per-order **minimum** is the cost at this size: every one of the 22 nightly
+orders is 1-64 shares, below the 200 (Fixed) or 100 (Tiered) shares where the
+per-share rate overtakes it.
+
+At $25k the corrected tilt edge (+4.9 bps/night, §15/§19) pays:
+- **183% of itself** in commissions on Fixed;
+- **70%** on Tiered.
+
+The backtest's 2 bps assumption holds from about **$50k on Tiered** and
+**$100k on Fixed**.
+
+None of the obvious escapes work:
+- **IBKR Lite** is commission-free but has no TWS API.
+- **Fractional shares** are unavailable through the API, on opening/closing
+  auction orders, and in paper.
+- **Directed (non-SMART) API orders** lose Tiered pricing. `orders.py` routes
+  SMART.
+
+Capital is the lever. At small size the long-only book is mostly a leveraged
+overnight-QQQ position with its stock-picking paid to the broker.
+
+### What paper fills can and cannot measure
+
+IBKR's own paper documentation says:
+- paper trades never reach an exchange;
+- fills are simulated from the **top of the book, not the opening or closing
+  auction**;
+- partial market fills have their remainder rejected;
+- **splits and dividends are not processed**;
+- whether paper commission reports follow the account's Fixed/Tiered plan is
+  undocumented.
+
+A live MOC/MOO execution prints at the official cross by construction, so:
+
+- **Paper measures:** whether the pipe places, fills and liquidates every
+  night, and the whole-share weighting and coverage effects.
+- **Paper does not measure:** auction slippage. Its fills are the simulator's.
+
+`paper_bench.py` therefore splits realized − graded exactly into slippage
+(buy and sell legs separately), weighting, coverage and data revision. It also
+prints a **live-equivalent net** that leaves the simulator's slippage out.
+
+A leg more than 1,000 bps from the official overnight return is flagged as a
+corporate action or simulator artefact and kept out of every average. An
+unprocessed split makes a paper night look like −90%.
+
+Live also receives dividends that both paper and the graded record omit, so
+the live-equivalent net is conservative.
+
+`--panel` adds the code-vs-code check: every graded night recomputed from the
+backtest's own panel for the same basket.
+
+### What this changes
+
+Nothing on the frozen path. For the decision §19 will eventually force, a GO
+verdict is necessary but not sufficient: at the $25k the crontab names, the
+book's skill component does not survive its own commissions. A live account
+should be sized at or above the capital where the drag falls to the backtest's
+assumption, and run on Tiered. The paper leg should be switched on at that
+size; paper capital is free and resets to up to 5x production.
