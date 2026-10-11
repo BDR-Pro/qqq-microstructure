@@ -203,7 +203,7 @@ def test_refuses_paths_that_are_not_in_conflict():
     try:
         r = _resolve(w, 'resolves', 'a', 'real', 'conflict,')
         assert r.returncode != 0
-        assert 'not in conflict' in (r.stdout + r.stderr)
+        assert 'not a conflicted report log' in (r.stdout + r.stderr)
         assert 'nothing is in conflict' in (r.stdout + r.stderr)
         assert 'neither side' not in (r.stdout + r.stderr)
         assert _git(w, 'status', '--porcelain').stdout == ''  # touched nothing
@@ -422,6 +422,156 @@ def test_a_day_of_fills_keeps_every_execution():
         shutil.rmtree(w, ignore_errors=True)
 
 
+def test_rebase_swaps_the_sides_and_the_continue_command():
+    """`git pull --rebase`: stage :2 is UPSTREAM and stage :3 is the local
+    commit being replayed. The remote's version must still win, and the
+    command printed must be the rebase's own."""
+    w = _repo(NEW + '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n')
+    try:
+        _branch_commit(w, 'remote', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0,6.0,5.0\n', 'remote')
+        _branch_commit(w, 'local', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,7.7,6.0,7.7\n', 'local')
+        assert _git(w, 'rebase', 'remote').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert 'git rebase --continue' in r.stdout
+        assert 'git commit --no-edit' not in r.stdout
+        by = {x['date']: x for x in _rows(w)}
+        assert by['20260902']['tilt_bps'] == '5.0'      # the remote's grade
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_night_both_sides_removed_does_not_come_back():
+    base = NEW + ('20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n'
+                  '20260999,2026-09,10,0,0,0,0,0\n')        # a bogus night
+    w = _repo(base)
+    try:
+        good = '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n'
+        _branch_commit(w, 'a', 'main', LOG, NEW + good +
+                       '20260902,2026-09,10,6.0,1.0,5.0,6.0,5.0\n', 'a')
+        _branch_commit(w, 'b', 'main', LOG, NEW + good +
+                       '20260903,2026-09,10,1.0,0.5,0.5,1.0,0.5\n', 'b')
+        assert _git(w, 'merge', 'a').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert [x['date'] for x in _rows(w)] == ['20260901', '20260902',
+                                                 '20260903']
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_log_is_recognised_by_its_header_not_its_name():
+    """A renamed graded log must still be merged on date -- as a multiset a
+    re-graded night would appear twice."""
+    P = 'reports/graded_v2.csv'
+    w = _repo('')
+    try:
+        _conflict(w, P, NEW,
+                  '20260831,2026-08,10,-157.2,-131.6,-25.613501702212854,,\n',
+                  '20260831,2026-08,10,-157.2,-131.6,-25.61350170221285,,\n'
+                  '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n')
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert [x['date'] for x in _rows(w, P)] == ['20260831', '20260901']
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_committed_markers_are_found_without_a_conflict_and_repaired():
+    """The state BEFORE the second pull: markers committed, nothing in
+    conflict. 'nothing to do' would be a false all-clear."""
+    broken = (NEW + '20260821,2026-08,10,-158.6,-53.1,-105.5,-158.6,-105.5\n'
+              '<<<<<<< HEAD\n'
+              '20260831,2026-08,10,-157.2,-131.6,-25.613501702212854,,\n'
+              '=======\n'
+              '20260831,2026-08,10,-157.2,-131.6,-25.61350170221285,,\n'
+              '20260902,2026-09,11,-67.6,22.7,-90.3,-67.6,-90.3\n'
+              '>>>>>>> 1f99899\n')
+    w = _repo(broken)
+    try:
+        r = _resolve(w)
+        assert r.returncode != 0 and 'BROKEN' in r.stdout, r.stdout + r.stderr
+        assert open(os.path.join(w, LOG)).read() == broken      # untouched
+        r = _resolve(w, '--repair')
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert [x['date'] for x in _rows(w)] == ['20260821', '20260831',
+                                                 '20260902']
+        assert _resolve(w).returncode == 0          # clean now
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_an_unidentifiable_operation_refuses_material_disagreements():
+    """`git stash pop` leaves no MERGE_HEAD or rebase directory, so there is
+    no knowing which side is the shared record."""
+    w = _repo(NEW + '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n')
+    try:
+        _write(w, LOG, NEW + '20260901,2026-09,10,5.0,2.0,9.9,5.0,9.9\n')
+        _git(w, 'stash')
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,4.4,5.0,4.4\n', 'up')
+        assert _git(w, 'stash', 'pop').returncode != 0
+        r = _resolve(w)
+        assert r.returncode != 0, r.stdout
+        assert 'no remote version settles' in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_modify_delete_keeps_the_file_and_says_so():
+    w = _repo(NEW + '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n')
+    try:
+        _git(w, 'checkout', '-q', '-B', 'del', 'main')
+        _git(w, 'rm', '-q', LOG); _git(w, 'commit', '-qm', 'rm')
+        _branch_commit(w, 'keep', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0,6.0,5.0\n', 'append')
+        assert _git(w, 'merge', 'del').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert 'DELETED' in r.stdout
+        assert len(_rows(w)) == 2
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_failed_write_rolls_every_file_back(monkeypatch):
+    """Two logs to write, the second cannot be (open in Excel): the first
+    must be restored, not left half-resolved."""
+    sys.path.insert(0, os.path.join(ROOT, 'src'))
+    import merge_daily as md
+    w = tempfile.mkdtemp()
+    try:
+        os.makedirs(os.path.join(w, 'reports'))
+        for f in ('a.csv', 'b.csv'):
+            _write(w, f'reports/{f}', 'orig ' + f)
+        monkeypatch.setattr(md, 'ROOT', w)
+        real, calls = os.replace, []
+
+        def flaky(src, dst):
+            calls.append(dst)
+            if len(calls) == 2:
+                raise PermissionError(13, 'Permission denied', dst)
+            return real(src, dst)
+        monkeypatch.setattr(md.os, 'replace', flaky)
+        try:
+            md.write_all({'reports/a.csv': ('new a', []),
+                          'reports/b.csv': ('new b', [])})
+            assert False, 'expected SystemExit'
+        except SystemExit as ex:
+            assert 'Nothing was changed' in str(ex)
+        assert open(os.path.join(w, 'reports/a.csv')).read() == 'orig a.csv'
+        assert open(os.path.join(w, 'reports/b.csv')).read() == 'orig b.csv'
+        assert not [f for f in os.listdir(os.path.join(w, 'reports'))
+                    if f.endswith('.tmp')]
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
 def test_the_grader_rewrites_the_forward_log_byte_for_byte():
     """The ROOT CAUSE of the routine conflicts: xsec_live re-read the log with
     pandas' inexact default float parser and wrote it all back, so every run
@@ -448,6 +598,7 @@ def test_the_grader_rewrites_the_forward_log_byte_for_byte():
 
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
-        if name.startswith('test_'):
+        if name.startswith('test_') and 'monkeypatch' not in \
+                fn.__code__.co_varnames[:fn.__code__.co_argcount]:
             fn()
             print(f'{name}: PASS')
