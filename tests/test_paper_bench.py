@@ -138,7 +138,10 @@ def test_end_to_end_on_files(capsys):
     r = t.iloc[0]
     assert math.isclose(r.slippage + r.weighting + r.coverage + r.data,
                         r.gap, abs_tol=1e-9)
-    assert 'REALIZED vs GRADED: 1 paper night' in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert 'REALIZED vs GRADED: 1 paper night' in out
+    live = r.graded + r.weighting + r.coverage + r.data - r.comm
+    assert f'LIVE-EQUIVALENT net' in out and f'{live:+.2f}' in out
 
 
 if __name__ == '__main__':

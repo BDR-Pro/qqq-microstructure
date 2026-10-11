@@ -291,6 +291,16 @@ def realized_section(fills, paper, daily, prints_fn, plans):
               f'{(g.realized - g.comm).mean() - g.graded.mean():+.2f} bps/night;'
               f' commissions {g.comm.mean():.2f} vs the backtest\'s '
               f'{REF["cost"]:.0f}')
+        # In a live auction every execution prints at the one cross price,
+        # so a filled MOC/MOO order has no slippage against the official
+        # print. What a live account would have kept is the graded night
+        # plus what the account's own sizing did, minus what it paid. The
+        # paper simulator's fills do not come from the auction, so its
+        # slippage column is the simulator, not the market.
+        live = (g.graded + g.weighting + g.coverage + g.data - g.comm)
+        print(f'  LIVE-EQUIVALENT net (graded + weighting + coverage + data - '
+              f'commissions): {live.mean():+.2f} bps/night vs graded '
+              f'{g.graded.mean():+.2f}')
     return t
 
 
