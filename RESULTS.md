@@ -1643,28 +1643,58 @@ caught 84% of the time. The tilt metric, with half the mean, stays honest
 longer: even at 24 months a real tilt clears its GO only 71% of the time —
 patience is the modal outcome there and that is what the power column is for.
 
-### The clock is running (status, 2026-09-05)
+### The clock is running (status, 2026-10-11)
 
-The audit's HIGH ops finding was that this whole apparatus had no data behind
-it — `reports/xsec_paper_daily.csv` was header-only weeks after the basket was
-emitted. That is now fixed and the log is live: the monthly workflow fires
-daily, grades the elapsed nights and commits them.
+The audit's HIGH ops finding was that this apparatus had no data behind it —
+`reports/xsec_paper_daily.csv` was header-only weeks after the basket was
+emitted. Fixed: the monthly workflow fires daily, grades the elapsed nights and
+commits them, and the log has run unattended since.
 
 ```
-  9 graded nights, 20260821 .. 20260903, from the 2026-08-20 frozen models
+  33 graded nights, 20260821 .. 20261008, frozen models of 2026-08-20
 
-  2026-08 (binding)   7 nights   q5 -15.41   qqq -15.27   tilt  -0.13 bps/day
-  2026-09             2 nights   q5 +44.21   qqq +23.10   tilt +21.11 bps/day
-  all 9               tilt mean +4.59, sd 87.9, se 29.3, t +0.16
-  q5_on_masked == q5_on_bps on 9/9 nights -- no night has hit the split mask yet
+  2026-08 (binding)    7 nights   q5 -15.41   qqq -15.27   tilt  -0.13
+  2026-09             20 nights   q5 +25.97   qqq  +8.23   tilt +17.74
+  2026-10 (partial)    6 nights   q5 -52.81   qqq +19.54   tilt -72.35
+  all 33              tilt -2.43 bps/day   sd 152.3   se 26.5   t -0.09
+                      95% CI [-54.4, +49.5];  tilt > 0 on 48% of nights
+  q5_on_masked == q5_on_bps on 33/33 nights -- no night has hit the split mask
 ```
 
-**No verdict, and none is due.** The elapsed horizon is under one month against
-a table whose shortest row is three, the standard error on nine nights is 29
-bps/day, and the 3-month paper-log GO (+12.5) and KILL (−5.0) are both well
-inside ±1 se of the current mean. This is recorded as evidence the pipe works
-end to end — emit, grade, commit — not as evidence about the edge. The first
-row that can say anything is November 2026.
+**No verdict, and none is due.** 48 calendar days (~1.6 months) have elapsed
+against a table whose shortest row is three months; that row becomes readable
+around 2026-11-21. The interval spans both the 3-month GO (+12.5) and KILL
+(−5.0) many times over.
+
+One thing the first seven weeks *do* show, recorded as a diagnostic and not
+acted on — changing the metric or the bands now would void the pre-registration:
+**the live basket is far more volatile and far more market-loaded than the
+backtest it is judged against.**
+
+```
+                                live (33 nights)        backtest
+  Q5 overnight beta to QQQ      2.37  (se ~0.3)         ~1.42   (§21, ON)
+  beta left inside the tilt     ~1.37                   ~0.42   (§21, NEU)
+  tilt daily sd, bps            152   (MAD 121)         ~66     (§15: +7.14 at t 8.9)
+```
+
+The baskets explain it. October's is MU, BE, STX, SNDK, NBIS, IREN, LRCX, WDC,
+AMAT, INTC, CAT — memory, storage, semiconductor equipment and AI
+infrastructure, one theme eleven times. The worst night, 2026-09-11, was the
+basket −7.3% overnight against QQQ −1.6%: one sector gap, not eleven
+independent draws. Two consequences:
+
+1. **The power column above is optimistic for as long as this lasts.** It was
+   computed from backtest-volatility blocks; at ~2.3× the sd the variance is
+   ~5×, and a 3-month read under that variance discriminates about as well as
+   the table's design would at a few weeks. Treat any 3-month read as close to
+   a coin flip in both directions. Even the 12-month row would, at this
+   volatility, have roughly the power the table assigns to its 3-month row.
+2. **The paper-log metric is currently ~1.4 units of overnight-market beta
+   plus selection.** Over a short window its sign is mostly the overnight
+   market's sign. A beta-adjusted residual (Q5 − β̂·QQQ, β̂ from a trailing
+   window) is worth printing beside it as a non-binding readout; it does not
+   replace the pre-registered metric.
 
 The rule, mechanical from here: average the replay's forward months into
 bps/day and compare to the row for the elapsed horizon. Above GO — the edge
@@ -2102,6 +2132,13 @@ one of them closes in the opposite direction from the one that was expected.
   the +1.6 canary            "construction floor" null [-1.42,+1.52]  VINDICATED
   MOM as a standalone book   "do not fund"        survival gate KILL  CONFIRMED
 ```
+
+**Re-run on 2026-10-11 against a 330-month panel (19990301 → 20260831, one
+month longer than the run above): `factor.py` reprints every alpha, t_HAC,
+residual Sharpe, R² and beta in §21 to the printed digit.** The regression
+windows end where the overnight books end (20260331), so a longer panel
+cannot move them; the point is that the table is reproducible, which the void
+one was not.
 
 The three substantive re-runs are recorded where they belong — censoring in
 **§15**, the rebuilt factor table in **§21**, the ML-vs-rule increment and the
