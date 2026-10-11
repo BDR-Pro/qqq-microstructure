@@ -304,6 +304,56 @@ def realized_section(fills, paper, daily, prints_fn, plans):
     return t
 
 
+def panel_parity(daily, paper, df):
+    """CODE vs CODE: every graded night recomputed from the backtest's own
+    panel (load_panel's masked on_bps, ln(open / previous close)) for the
+    same emitted basket. If the live grader and the backtest measure the
+    same thing, the two series agree to data noise. A panel month built from
+    Yahoo (xsec_extend, src='yahoo') shares the grader's source, so it is a
+    consistency check there, not an independent one -- reported per month."""
+    cal = sorted(df.day.unique())
+    nxt = dict(zip(cal[:-1], cal[1:]))
+    on = df.set_index(['ticker', 'day']).on_bps
+    src = (df.assign(src=df['src'].fillna('hf')).groupby('month').src.first()
+           if 'src' in df else pd.Series(dtype=str))
+    baskets = {r.month: r.q5.split(';') for r in paper.itertuples()}
+    rows = []
+    for r in daily.itertuples():
+        Dn = nxt.get(r.date)
+        names = baskets.get(r.month)
+        if Dn is None or not names or not np.isfinite(r.q5_on_masked):
+            continue
+        v = [on.get((n, Dn)) for n in names]
+        v = [x for x in v if x is not None and np.isfinite(x)]
+        if len(v) < 5:
+            continue
+        rows.append(dict(date=r.date, month=r.month, panel=float(np.mean(v)),
+                         logged=float(r.q5_on_masked), n_panel=len(v),
+                         n_logged=int(r.n)))
+    t = pd.DataFrame(rows)
+    print(f'\n== CODE vs CODE: graded nights recomputed from the backtest '
+          f'panel ==')
+    if t.empty:
+        print('  no graded night is covered by the panel yet (the panel ends '
+              f'{cal[-1]}; the log starts {daily.date.min()})')
+        return t
+    d = t.logged - t.panel
+    print(f'  {len(t)} nights {t.date.min()} .. {t.date.max()}:  corr '
+          f'{np.corrcoef(t.logged, t.panel)[0, 1]:+.4f}   mean(log - panel) '
+          f'{d.mean():+.2f}   sd {d.std(ddof=1) if len(t) > 1 else 0:.2f}   '
+          f'max |diff| {d.abs().max():.2f} bps')
+    for m, g in t.groupby('month'):
+        print(f'    {m}: {len(g):2d} nights  mean diff {(g.logged - g.panel).mean():+6.2f}'
+              f'  names {g.n_panel.min()}-{g.n_panel.max()} panel vs '
+              f'{g.n_logged.min()}-{g.n_logged.max()} log   panel source '
+              f'{src.get(m, "?")}')
+    worst = t.loc[d.abs().sort_values(ascending=False).index[:3]]
+    for r in worst.itertuples():
+        print(f'    largest: {r.date}  log {r.logged:+.1f}  panel {r.panel:+.1f}'
+              f'  ({r.n_logged} vs {r.n_panel} names)')
+    return t
+
+
 def status(paper, daily, fills, olog):
     nights = 0 if fills is None else len({l['night'] for l in
                                           pair_legs(fills, quiet=True)})
@@ -331,6 +381,9 @@ def main():
                     default='both')
     ap.add_argument('--prices', default=None,
                     help='offline: a CSV of SYM,price instead of Yahoo')
+    ap.add_argument('--panel', action='store_true',
+                    help='also recompute every graded night from the backtest '
+                         'panel (data/xsec) -- code vs code')
     a = ap.parse_args()
     plans = ['fixed', 'tiered'] if a.plan == 'both' else [a.plan]
     read = lambda p, **k: pd.read_csv(p, **k) if os.path.exists(p) else None
@@ -362,6 +415,9 @@ def main():
     pretrade(names, px, a.capital, plans)
     if fills is not None:
         realized_section(fills, paper, daily, official_prints, plans)
+    if a.panel:
+        from xsec_backtest import load_panel
+        panel_parity(daily, paper, load_panel())
 
 
 if __name__ == '__main__':

@@ -144,7 +144,30 @@ def test_end_to_end_on_files(capsys):
     assert f'LIVE-EQUIVALENT net' in out and f'{live:+.2f}' in out
 
 
+def test_panel_parity_matches_on_the_next_day_and_names_the_source(capsys):
+    """Night D (buy at D's close, sell at D+1's open) is the panel's on_bps
+    on day D+1. A one-day misalignment would still correlate a little; it
+    must instead agree exactly on synthetic data."""
+    rng = np.random.default_rng(3)
+    days = ['20260901', '20260902', '20260903', '20260904']
+    names = [f'N{i}' for i in range(6)]
+    rows = [dict(ticker=n, day=d, month='2026-09', on_bps=float(rng.normal()),
+                 src='yahoo') for n in names for d in days]
+    df = pd.DataFrame(rows)
+    on = df.set_index(['ticker', 'day']).on_bps
+    daily = pd.DataFrame([dict(date=d, month='2026-09', n=6,
+                               q5_on_masked=float(np.mean([on[(n, nx)]
+                                                           for n in names])))
+                          for d, nx in zip(days[:-1], days[1:])])
+    paper = pd.DataFrame([dict(month='2026-09', q5=';'.join(names))])
+    t = pb.panel_parity(daily, paper, df)
+    assert len(t) == 3
+    assert np.allclose(t.logged, t.panel)
+    out = capsys.readouterr().out
+    assert 'panel source yahoo' in out
+
+
 if __name__ == '__main__':
     for n, fn in list(globals().items()):
-        if n.startswith('test_') and n != 'test_end_to_end_on_files':
+        if n.startswith('test_') and 'capsys' not in fn.__code__.co_varnames:
             fn(); print(f'{n}: PASS')
