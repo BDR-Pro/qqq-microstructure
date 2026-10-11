@@ -29,6 +29,18 @@
 #   data        the basket recomputed at official prints minus the logged
 #               grade (a data revision between grading and now)
 #
+# What IBKR paper can and cannot tell you (IBKR's paper-trading guide and API
+# docs, read 2026-10-11): paper trades never reach an exchange; fills are
+# simulated from the top of the book, not from the opening or closing
+# auction; partial market fills have their remainder rejected; splits and
+# dividends are not processed; whether paper commission reports follow the
+# account's Fixed/Tiered plan is undocumented. So paper MEASURES whether the
+# pipe places, fills and liquidates every night, and the integer-share
+# effects. It does NOT measure auction slippage -- a live MOC/MOO execution
+# prints at the official cross by construction -- which is why the report
+# prints a LIVE-EQUIVALENT net that leaves the simulator's slippage out. Live
+# also receives dividends the graded record omits, so it is conservative.
+#
 # And before a single order exists, the PRE-TRADE benchmark: at this capital
 # and this commission plan, what do minimums, integer shares and fees cost
 # per night, against the edge they are paid out of?
@@ -89,6 +101,12 @@ FEES = {
 }
 REG = dict(sec_rate=20.60e-6, cat=0.000003, taf=0.000195, taf_cap=9.79,
            taf_holiday=('20261001', '20261231'))
+
+
+# a fill whose overnight return differs from the official one by more than
+# this is not slippage (a real auction fill IS the official print): it is a
+# split or dividend the paper engine did not process, or a simulator outlier
+OUTLIER = 1000.0
 
 
 def order_cost(plan, shares, price, side, day=None):
@@ -216,6 +234,18 @@ def decompose(legs, basket, graded, prints):
     ro = {l['sym']: r_off(l['sym']) for l in legs}
     if any(v is None for v in ro.values()):
         out['why'] = 'official prints missing for a filled name'
+        return out
+    # IBKR paper does not process splits or dividends: across a split the
+    # account sells its pre-split share count at the post-split price, and
+    # the fill return is a fiction of the simulator. A leg that disagrees with
+    # the official overnight return by more than OUTLIER bps is reported, and
+    # the night is kept out of every average.
+    odd = {s: l['bps'] - ro[s] for s, l in ((l['sym'], l) for l in legs)
+           if abs(l['bps'] - ro[l['sym']]) > OUTLIER}
+    if odd:
+        out['why'] = ('corporate action or simulator artefact: ' +
+                      ', '.join(f'{s} fill vs official {v:+.0f} bps'
+                                for s, v in odd.items()))
         return out
     rb = [x for x in (r_off(s) for s in basket) if x is not None]
     buy = {l['sym']: float(np.log(l['buy_px'] / prints[(l['sym'], D)][1]) * 1e4)
