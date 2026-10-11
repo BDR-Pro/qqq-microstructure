@@ -32,33 +32,47 @@
 #     conflict). Headers must form a strict append chain -- each one the
 #     previous plus new columns at the end -- so every row maps to exactly one
 #     header by its width. A RENAMED column is ambiguous and is refused.
-#   - Rows are unioned on each log's natural key -- date for the paper log,
-#     (run_at_et, leg, mode) for the order log, exec_id for fills, month for
-#     the basket registry -- and on the whole row for any other file, so two
-#     legitimate rows can never collapse into one.
-#   - A row whose key is not in the log's key format is junk (a marker line
-#     with trailing commas, a duplicated header) only if its other fields are
-#     empty or it repeats a header; it is dropped and named. Anything else with
-#     a malformed key is refused, not guessed at.
-#   - Where the sides carry the same key with different text, the row with
-#     more filled fields wins, then theirs (the shared record), and every such
-#     key is printed.
+#   - Rows are unioned on each log's identity -- date for the paper log,
+#     exec_id for fills, month for the basket registry. The order log has no
+#     identity column (orders.py only appends runs), so it and any unknown
+#     log are unioned as a MULTISET: a row twice on either side stays twice.
+#     A side that lacks the identity column is refused, never collapsed.
+#   - Junk an earlier bad merge committed (a marker line with trailing
+#     commas, a duplicated header, an empty row) is dropped and named. Any
+#     other row with a malformed date/month/time/leg/mode is refused.
+#   - Two versions of one observation that agree on every shared column --
+#     up to a float's last printed digit, which is formatting, not data --
+#     are the same row, and the one with more filled fields wins. Versions
+#     that differ MATERIALLY: the remote's (theirs) wins in the graded log and
+#     is printed; in the basket registry a month pre-registered twice is an
+#     integrity event and is refused for a human to decide.
 #   - Nothing is written until EVERY conflicted file has merged and passed a
 #     safety check run on the text that would be written: every key from every
 #     side present, none twice. Output is LF and byte-exact per field.
 
-import os, io, re, csv, sys, argparse, subprocess
+import os, io, re, csv, sys, math, argparse, subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The column(s) that identify one observation. A log not listed here has no
+# identity column (orders.py only ever appends a run, never rewrites one), so
+# its rows are unioned as a MULTISET: a row present twice on either side is
+# present twice in the result.
 KEYS = {'xsec_paper_daily.csv': ['date'],
         'xsec_paper.csv': ['month'],
-        'orders_log.csv': ['run_at_et', 'leg', 'mode'],
         'fills.csv': ['exec_id']}
-KEYFMT = {'date': r'\d{8}', 'month': r'\d{4}-\d{2}',
+# Logs where two materially different rows for one key are an integrity
+# event, not a merge: a month pre-registered twice must be decided by a
+# human (the earlier committed basket is the pre-registration).
+STRICT = {'xsec_paper.csv'}
+# Column formats every real row satisfies; a row that fails one is either
+# junk from an earlier bad merge (dropped and named) or refused.
+FORMAT = {'date': r'\d{8}', 'month': r'\d{4}-\d{2}', 'emitted_on': r'\d{8}',
           'run_at_et': r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}', 'exec_id': r'\S+',
-          'leg': r'(open|close)', 'mode': r'(dry|paper|live)'}
-ORDER = {'fills.csv': ['time_et', 'exec_id']}      # default: sort by the key
+          'leg': r'open|close', 'mode': r'dry|paper|live'}
+ORDER = {'fills.csv': ['time_et', 'exec_id'],
+         'orders_log.csv': ['run_at_et']}          # default: sort by the key
 MARKER = re.compile(r'^(<{7}|={7}|>{7}|\|{7})( |$)')
+LOOSE = re.compile(r'^(<{7}|={7}|>{7}|\|{7})')      # a marker that became a row
 
 
 def _git(*args):
@@ -149,71 +163,129 @@ def plan(path, stages):
     if not any(sides.get(s, ([], []))[1] for s in ('ours', 'theirs')):
         raise Refuse('no data rows on either side')
 
-    cols = []
-    for label in ('ours', 'theirs', 'base'):
-        for c in sides.get(label, ([], []))[0]:
-            if c not in cols:
-                cols.append(c)
+    cols, hdrs = [], [h for h in [sides.get(x, ([], []))[0] for x in
+                                  ('ours', 'theirs', 'base')] if h]
+    for h in hdrs:
+        cols += [c for c in h if c not in cols]
     key = KEYS.get(name)
-    if key and not all(k in cols for k in key):
-        raise Refuse(f'expected key {key} not in header {cols}')
-    kf = (lambda r: tuple(r.get(k, '') for k in key)) if key else \
-        (lambda r: tuple(r.get(c, '') for c in cols))
+    if key:
+        for label, (h, rows) in sides.items():
+            if rows and not all(k in h for k in key):
+                raise Refuse(f'{label} has no {"+".join(key)} column, so its '
+                             f'rows cannot be matched: header {h}')
+    shared = [c for c in cols if all(c in h for h in hdrs)]
 
-    def valid(r):
-        return not key or all(re.fullmatch(KEYFMT.get(k, r'.+'), r.get(k, ''))
-                              for k in key)
+    def junk(r):
+        v = [r.get(c, '') for c in cols]
+        return (not any(v) or LOOSE.match(v[0] or '') is not None
+                or any(v[:len(h)] == h for h in hdrs))
 
-    rank = {'base': 0, 'ours': 1, 'theirs': 2}
-    best, seen, first, junk = {}, {}, {}, []
+    def bad_format(r):
+        return [c for c in cols if c in FORMAT and r.get(c) and
+                not re.fullmatch(FORMAT[c], r[c])] + \
+               [k for k in (key or []) if not r.get(k)]
+
+    def compatible(a, b):
+        """Same observation? Compared on shared columns only; an empty cell
+        is a schema difference, and a float that differs only in its last
+        printed digit is the same number."""
+        for c in shared:
+            x, y = a.get(c, ''), b.get(c, '')
+            if x == y or not x or not y:
+                continue
+            try:
+                if math.isclose(float(x), float(y), rel_tol=1e-9, abs_tol=1e-9):
+                    continue
+            except ValueError:
+                pass
+            return False
+        return True
+
+    versions, dropped = {}, []
+    ident = (lambda r: tuple(r[k] for k in key)) if key else \
+        (lambda r: tuple(r.get(c, '') for c in shared))
     for label in ('base', 'ours', 'theirs'):
         for r in sides.get(label, ([], []))[1]:
-            if not valid(r):
-                vals = [v for c, v in r.items() if c not in key]
-                if not any(vals) or list(r.values()) == list(r.keys()) or \
-                        MARKER.match(next(iter(r.values()), '') + ' '):
-                    junk.append((label, list(r.values())[:3]))
-                    continue
-                raise Refuse(f'{label} has a row whose key is not '
-                             f'{"/".join(KEYFMT.get(k, k) for k in key)}: '
-                             f'{list(r.values())[:4]}')
-            k = kf(r)
-            full = tuple(r.get(c, '') for c in cols)
-            seen.setdefault(label, {})[k] = full
-            first.setdefault(k, len(first))
-            cand = (sum(bool(v) for v in full), rank[label], full)
-            if k not in best or cand[:2] >= best[k][:2]:
-                best[k] = cand
-    for label, v in junk:
+            if junk(r):
+                dropped.append((label, [r.get(c, '') for c in cols][:3]))
+                continue
+            bad = bad_format(r)
+            if bad:
+                raise Refuse(f'{label} has a row with a malformed '
+                             f'{"/".join(bad)}: {[r.get(c, "") for c in cols][:4]}')
+            versions.setdefault(ident(r), {}).setdefault(label, []).append(r)
+    for label, v in dropped:
         notes.append(f'dropped a junk row from {label} (left by an earlier '
                      f'bad merge): {v}')
 
-    order = ORDER.get(name) or key
-    sk = (lambda k: tuple(dict(zip(cols, best[k][2])).get(c, '')
-                          for c in order)) if order else (lambda k: first[k])
-    out = [best[k][2] for k in sorted(best, key=sk)]
+    filled = lambda r: sum(bool(r.get(c)) for c in cols)
+    out, material = [], []
+    for k, by in versions.items():
+        o, t = by.get('ours', []), by.get('theirs', [])
+        if not key:                       # multiset: keep the larger count
+            src = max((o, t, by.get('base', [])), key=len)
+            for i in range(len(src)):
+                cand = [x[i] for x in (o, t) if i < len(x)] or [src[i]]
+                out.append(max(cand, key=filled))
+            continue
+        if t:
+            # theirs is the version already on the remote; a side that
+            # carries committed markers may hold BOTH versions of a night,
+            # and the remote's settles which one stands
+            t0 = t[-1]
+            if not all(compatible(t0, x) for x in t[:-1]):
+                raise Refuse(f'theirs holds {"/".join(k)} twice with '
+                             f'different values')
+            if all(compatible(t0, x) for x in o):
+                out.append(max([t0] + o, key=filled))     # ties: theirs
+            elif name in STRICT:
+                raise Refuse(f'{"/".join(k)} differs between the sides '
+                             f'(ours {list(o[-1].values())[:5]} vs theirs '
+                             f'{list(t0.values())[:5]}) -- this log is a '
+                             f'pre-registration; a human decides which stands')
+            else:
+                out.append(t0)
+                material.append(k)
+        elif o:
+            if not all(compatible(o[-1], x) for x in o[:-1]):
+                raise Refuse(f'ours holds {"/".join(k)} twice with different '
+                             f'values and the remote has no version to '
+                             f'settle it')
+            out.append(max(o, key=filled))
+        else:
+            out.append(by['base'][-1])
+
+    order = ORDER.get(name) or key or []
+    out.sort(key=lambda r: tuple(r.get(c, '') for c in order))
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator='\n')
     w.writerow(cols)
-    w.writerows(out)
+    w.writerows([r.get(c, '') for c in cols] for r in out)
     text = buf.getvalue()
 
     # the safety check runs on what would be WRITTEN, parsed back from text
     _, back, _ = parse(text, 'result')
-    got = [kf(r) for r in back]
-    want = {k for s in seen.values() for k in s}
-    lost, dup = want - set(got), len(got) - len(set(got))
-    if lost or dup or len(back) != len(out):
-        raise Refuse(f'SAFETY CHECK FAILED: {len(lost)} key(s) would be lost, '
-                     f'{dup} duplicated')
+    got = {}
+    for r in back:
+        got[ident(r)] = got.get(ident(r), 0) + 1
+    short = [k for k, by in versions.items()
+             if got.get(k, 0) < max(len(v) for v in by.values())
+             and (not key or got.get(k, 0) < 1)]
+    dup = [k for k, n in got.items() if key and n > 1]
+    if short or dup or len(back) != len(out):
+        raise Refuse(f'SAFETY CHECK FAILED: {len(short)} observation(s) would '
+                     f'be lost, {len(dup)} duplicated')
 
-    o, t = seen.get('ours', {}), seen.get('theirs', {})
-    notes.insert(0, f'ours {len(o)} + theirs {len(t)} rows on '
-                 f'{"+".join(key) if key else "the whole row (no natural key known)"}'
+    count = (lambda side: sum(bool(by.get(side)) for by in versions.values())) \
+        if key else \
+        (lambda side: sum(len(by.get(side, [])) for by in versions.values()))
+    n_o, n_t = count('ours'), count('theirs')      # nights, or runs
+    notes.insert(0, f'ours {n_o} + theirs {n_t} rows on '
+                 f'{"+".join(key) if key else "the whole row (multiset)"}'
                  f' -> {len(out)} kept')
-    for k in sorted(x for x in o if x in t and o[x] != t[x]):
-        notes.append(f'{"/".join(k) if key else "a row"}: the sides differ -- '
-                     f'kept the {"theirs" if best[k][1] == 2 else "ours"} version')
+    for k in material:
+        notes.append(f'{"/".join(k)}: the sides differ materially -- kept the '
+                     f'version already on the remote (theirs)')
     return text, notes
 
 

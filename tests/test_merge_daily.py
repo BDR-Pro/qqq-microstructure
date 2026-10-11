@@ -321,6 +321,107 @@ def test_nothing_is_written_unless_every_file_merges():
         shutil.rmtree(w, ignore_errors=True)
 
 
+def _conflict(w, path, header, ours_rows, theirs_rows):
+    """Commit `ours_rows` on branch a and `theirs_rows` on branch b (both on
+    top of a header-only base), check out a and merge b."""
+    _write(w, path, header); _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'h')
+    _branch_commit(w, 'b', 'main', path, header + theirs_rows, 'theirs')
+    _branch_commit(w, 'a', 'main', path, header + ours_rows, 'ours')
+    assert _git(w, 'merge', 'b').returncode != 0, 'expected a conflict'
+
+
+def test_order_log_is_a_multiset_of_runs():
+    """No identity column: two identical dry runs are two runs."""
+    H = 'run_at_et,month,leg,mode,names,notional,capital,placed\n'
+    P = 'reports/orders_log.csv'
+    dry = '2026-09-02 15:08,2026-09,close,dry,MU;LRCX,2628.44,5000.00,\n'
+    w = _repo('')
+    try:
+        _conflict(w, P, H, dry + dry,
+                  dry + '2026-09-03 09:20,2026-09,open,paper,MU,0,25000,2\n')
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        rows = _rows(w, P)
+        assert len(rows) == 3, rows                  # 2 dry + 1 paper
+        assert sum(x['mode'] == 'dry' for x in rows) == 2
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_month_pre_registered_twice_is_refused():
+    """The VM and Actions can both emit a basket on the 1st. Picking one
+    silently would decide the pre-registration by merge direction."""
+    H = 'emitted_on,month,universe_month,model_frozen,n_scored,q5,q1\n'
+    P = 'reports/xsec_paper.csv'
+    w = _repo('')
+    try:
+        _conflict(w, P, H,
+                  '20261001,2026-10,2026-09,2026-08-20,57,MU;BE,MSFT;SGOV\n',
+                  '20261001,2026-10,2026-09,2026-08-20,56,MU;STX,MSFT;WMT\n')
+        before = open(os.path.join(w, P), 'rb').read()
+        r = _resolve(w)
+        assert r.returncode != 0, r.stdout
+        assert 'pre-registration' in (r.stdout + r.stderr)
+        assert open(os.path.join(w, P), 'rb').read() == before
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_digit_noise_is_not_a_disagreement_but_a_real_one_is_named():
+    w = _repo('')
+    try:
+        _conflict(w, LOG, NEW,
+                  '20260831,2026-08,10,-157.2,-131.6,-25.613501702212854,,\n'
+                  '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n',
+                  '20260831,2026-08,10,-157.2,-131.6,-25.61350170221285,,\n'
+                  '20260901,2026-09,10,5.0,2.0,9.9,5.0,9.9\n')
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert '20260831' not in r.stdout          # formatting, not data
+        assert '20260901: the sides differ materially' in r.stdout
+        by = {x['date']: x for x in _rows(w)}
+        assert by['20260901']['tilt_bps'] == '9.9'    # the remote's version
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_side_without_the_key_column_is_refused():
+    w = _repo('')
+    try:
+        _conflict(w, LOG, NEW, '20260901,2026-09,10,5.0,2.0,3.0,5.0,3.0\n',
+                  '20260902,2026-09,10,6.0,1.0,5.0,6.0,5.0\n')
+        # rewrite theirs' stage without a date column: simulate by a branch
+        _git(w, 'merge', '--abort')
+        _branch_commit(w, 'b', 'b', LOG,
+                       NEW.replace('date,', 'day,') +
+                       '20260902,2026-09,10,6.0,1.0,5.0,6.0,5.0\n', 'renamed')
+        _git(w, 'checkout', '-q', 'a')
+        assert _git(w, 'merge', 'b').returncode != 0
+        r = _resolve(w)
+        assert r.returncode != 0, r.stdout
+        assert 'nothing was written' in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_day_of_fills_keeps_every_execution():
+    H = 'exec_id,time_et,date,symbol,side,qty,price,commission\n'
+    P = 'reports/fills.csv'
+    w = _repo('')
+    try:
+        _conflict(w, P, H,
+                  '0001.a,2026-09-02 15:59:01,20260902,MU,BOT,10,100.0,1.0\n'
+                  '0001.b,2026-09-02 15:59:01,20260902,LRCX,BOT,5,90.0,1.0\n',
+                  '0001.a,2026-09-02 15:59:01,20260902,MU,BOT,10,100.0,1.0\n'
+                  '0002.a,2026-09-03 09:30:02,20260903,MU,SLD,10,101.0,1.0\n')
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert [x['exec_id'] for x in _rows(w, P)] == ['0001.a', '0001.b',
+                                                       '0002.a']
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
 def test_the_grader_rewrites_the_forward_log_byte_for_byte():
     """The ROOT CAUSE of the routine conflicts: xsec_live re-read the log with
     pandas' inexact default float parser and wrote it all back, so every run
