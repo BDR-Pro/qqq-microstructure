@@ -1,21 +1,21 @@
 # Part of qqq-microstructure.
 #
-# The VM and GitHub Actions both append to reports/*.csv and both push, so a
-# content conflict in an append-only log is a routine event, not an accident.
-# The one unacceptable outcome is a LOST GRADED NIGHT: the forward record in
-# RESULTS 19 is the only thing the probation clock runs on. This test builds a
-# real conflict in a throwaway repo -- both sides appending, one side also
-# adding the masked columns -- and asserts the resolver keeps every row and
-# every column.
+# The VM, GitHub Actions and anyone's own checkout all write reports/*.csv and
+# all commit, so a content conflict in an append-only log is routine. The one
+# unacceptable outcome is a LOST or DOUBLED graded night: the forward record
+# in RESULTS 19 is the only thing the probation clock runs on. Every test here
+# builds a real conflict in a throwaway repo and runs the real resolver --
+# and the last one checks the cause, not the symptom: the grader itself must
+# be able to rewrite the log without changing a byte.
 #
 # Run: python -m pytest tests -q     (or: python tests/test_merge_daily.py)
 
-import os, sys, shutil, subprocess, tempfile
-import pandas as pd
+import os, sys, csv, shutil, subprocess, tempfile
 
 ROOT = os.path.join(os.path.dirname(__file__), '..')
 OLD = 'date,month,n,q5_on_bps,qqq_on_bps,tilt_bps\n'
 NEW = OLD.rstrip('\n') + ',q5_on_masked,tilt_masked\n'
+LOG = 'reports/xsec_paper_daily.csv'
 
 
 def _git(w, *a):
@@ -23,54 +23,330 @@ def _git(w, *a):
                           text=True)
 
 
-def test_merge_keeps_every_graded_night_and_both_schemas():
+def _repo(base_text):
     w = tempfile.mkdtemp()
+    os.makedirs(os.path.join(w, 'src'))
+    os.makedirs(os.path.join(w, 'reports'))
+    shutil.copy(os.path.join(ROOT, 'src', 'merge_daily.py'),
+                os.path.join(w, 'src'))
+    _git(w, 'init', '-q', '-b', 'main', '.')
+    _git(w, 'config', 'user.email', 't@t')
+    _git(w, 'config', 'user.name', 't')
+    _git(w, 'config', 'core.autocrlf', 'false')
+    _write(w, LOG, base_text)
+    _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'base')
+    return w
+
+
+def _write(w, path, text):
+    with open(os.path.join(w, path), 'w', newline='') as f:
+        f.write(text)
+
+
+def _branch_commit(w, branch, start, path, text, msg):
+    _git(w, 'checkout', '-q', '-B', branch, start)
+    _write(w, path, text)
+    _git(w, 'add', '-A'); _git(w, 'commit', '-qm', msg)
+
+
+def _resolve(w, *args):
+    return subprocess.run([sys.executable, 'src/merge_daily.py'] + list(args),
+                          cwd=w, capture_output=True, text=True)
+
+
+def _rows(w, path=LOG):
+    raw = open(os.path.join(w, path), 'rb').read()
+    assert b'\r' not in raw, 'resolver wrote CRLF -- every line would churn'
+    return list(csv.DictReader(raw.decode().splitlines()))
+
+
+def test_both_sides_append_and_one_adds_columns():
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
     try:
-        os.makedirs(os.path.join(w, 'src'))
-        os.makedirs(os.path.join(w, 'reports'))
-        shutil.copy(os.path.join(ROOT, 'src', 'merge_daily.py'),
-                    os.path.join(w, 'src'))
-        log = os.path.join(w, 'reports', 'xsec_paper_daily.csv')
-        _git(w, 'init', '-q', '.')
-        _git(w, 'config', 'user.email', 't@t')
-        _git(w, 'config', 'user.name', 't')
-        open(log, 'w').write(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
-        _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'base')
-
-        # the VM appends two nights on the old schema
-        _git(w, 'checkout', '-qb', 'vm')
-        open(log, 'a').write('20260902,2026-09,10,6.0,1.0,5.0\n'
-                             '20260903,2026-09,10,-2.0,-1.0,-1.0\n')
-        _git(w, 'commit', '-qam', 'vm')
-
-        # Actions re-grades with the masked columns and adds a night of its own
-        base = _git(w, 'rev-parse', 'HEAD~1').stdout.strip()
-        _git(w, 'checkout', '-q', base)
-        _git(w, 'checkout', '-qb', 'actions')
-        open(log, 'w').write(NEW +
-                             '20260901,2026-09,10,5.0,2.0,3.0,4.5,2.5\n'
-                             '20260902,2026-09,10,6.0,1.0,5.0,5.5,4.5\n'
-                             '20260904,2026-09,10,1.0,0.5,0.5,1.0,0.5\n')
-        _git(w, 'commit', '-qam', 'actions')
-
+        _branch_commit(w, 'vm', 'main', LOG, OLD +
+                       '20260901,2026-09,10,5.0,2.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0\n'
+                       '20260903,2026-09,10,-2.0,-1.0,-1.0\n', 'vm')
+        _branch_commit(w, 'actions', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,4.5,2.5\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0,5.5,4.5\n'
+                       '20260904,2026-09,10,1.0,0.5,0.5,1.0,0.5\n', 'actions')
         assert _git(w, 'merge', 'vm').returncode != 0, 'expected a conflict'
-        r = subprocess.run([sys.executable, 'src/merge_daily.py'], cwd=w,
-                           capture_output=True, text=True)
+        r = _resolve(w)
         assert r.returncode == 0, r.stdout + r.stderr
-
-        out = pd.read_csv(log, dtype=str)
-        assert list(out.date) == ['20260901', '20260902', '20260903',
-                                  '20260904'], 'a graded night was lost'
-        assert 'q5_on_masked' in out.columns, 'the newer schema was dropped'
-        # the richer row wins where both sides have the same night ...
-        assert out.set_index('date').loc['20260902', 'q5_on_masked'] == '5.5'
-        # ... and the side that never had the column keeps its row anyway
-        assert pd.isna(out.set_index('date').loc['20260903', 'q5_on_masked'])
+        rows = _rows(w)
+        assert [x['date'] for x in rows] == ['20260901', '20260902',
+                                             '20260903', '20260904']
+        by = {x['date']: x for x in rows}
+        assert by['20260902']['q5_on_masked'] == '5.5'   # the richer row wins
+        assert by['20260903']['q5_on_masked'] == ''      # ...and the thin one stays
         assert _git(w, 'commit', '-qm', 'merged').returncode == 0
     finally:
         shutil.rmtree(w, ignore_errors=True)
 
 
+def test_markers_committed_mid_merge_then_a_second_conflict():
+    """The exact sequence seen on a real checkout: a conflict, then
+    `git add . && git commit` WITHOUT resolving (markers now live in a commit),
+    then upstream appends more nights and the next pull conflicts again."""
+    w = _repo(OLD)
+    try:
+        # the local checkout graded two nights on its own (old pandas digits)
+        _branch_commit(w, 'local', 'main', LOG, NEW +
+                       '20260821,2026-08,10,-158.6,-53.1,-105.5,-158.6,-105.5\n'
+                       '20260831,2026-08,10,-157.2,-131.6,-25.613501702212854,'
+                       '-157.2,-25.613501702212854\n', 'local run')
+        # Actions graded the same nights (digits drifted) plus one more
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260821,2026-08,10,-158.6,-53.1,-105.5,-158.6,-105.5\n'
+                       '20260831,2026-08,10,-157.2,-131.6,-25.61350170221285,'
+                       '-157.2,-25.61350170221285\n'
+                       '20260902,2026-09,11,-67.6,22.7,-90.3,-67.6,-90.3\n',
+                       'forward log (actions)')
+        _git(w, 'checkout', '-q', 'local')
+        assert _git(w, 'merge', 'main').returncode != 0
+        # the mistake: commit the conflict markers
+        _git(w, 'add', '.'); _git(w, 'commit', '-qm', 'update')
+        assert '<<<<<<<' in open(os.path.join(w, LOG)).read()
+        # upstream keeps appending
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260821,2026-08,10,-158.6,-53.1,-105.5,-158.6,-105.5\n'
+                       '20260831,2026-08,10,-157.2,-131.6,-25.61350170221285,'
+                       '-157.2,-25.61350170221285\n'
+                       '20260902,2026-09,11,-67.6,22.7,-90.3,-67.6,-90.3\n'
+                       '20260903,2026-09,11,156.0,23.5,132.5,156.0,132.5\n',
+                       'forward log (actions)')
+        _git(w, 'checkout', '-q', 'local')
+        m = _git(w, 'merge', 'main')
+        assert m.returncode != 0, 'expected the second conflict'
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert 'conflict-marker' in r.stdout          # it says what it did
+        text = open(os.path.join(w, LOG)).read()
+        assert '<<<<<<<' not in text and '=======' not in text
+        rows = _rows(w)
+        dates = [x['date'] for x in rows]
+        assert dates == ['20260821', '20260831', '20260902', '20260903'], dates
+        assert len(set(dates)) == len(dates), 'a night was doubled'
+        # where the digits drifted, the shared record (theirs) wins
+        assert {x['date']: x for x in rows}['20260831']['tilt_bps'] \
+            == '-25.61350170221285'
+        assert _git(w, 'commit', '-qm', 'resolved').returncode == 0
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_conflict_in_the_header_itself():
+    """An older checkout without the masked columns: the HEADER line is in
+    the conflict hunk. Every row must land under the header whose width it
+    has, not be shifted into the wrong columns."""
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
+    try:
+        _branch_commit(w, 'old', 'main', LOG, OLD +
+                       '20260901,2026-09,10,5.0,2.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0\n', 'old schema')
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,4.5,2.5\n'
+                       '20260903,2026-09,10,1.0,0.5,0.5,1.0,0.5\n', 'new')
+        _git(w, 'checkout', '-q', 'old')
+        assert _git(w, 'merge', 'main').returncode != 0
+        _git(w, 'add', '.'); _git(w, 'commit', '-qm', 'update')   # markers in
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.0,4.5,2.5\n'
+                       '20260903,2026-09,10,1.0,0.5,0.5,1.0,0.5\n'
+                       '20260904,2026-09,10,2.0,1.0,1.0,2.0,1.0\n', 'more')
+        _git(w, 'checkout', '-q', 'old')
+        assert _git(w, 'merge', 'main').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        rows = _rows(w)
+        assert [x['date'] for x in rows] == ['20260901', '20260902',
+                                             '20260903', '20260904']
+        by = {x['date']: x for x in rows}
+        assert by['20260902']['tilt_bps'] == '5.0'     # not shifted
+        assert by['20260904']['tilt_masked'] == '1.0'
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_order_log_keeps_both_legs_of_the_same_minute():
+    """orders_log has two legitimate rows per session (close and open legs,
+    dry and paper). A single-column key would collapse them."""
+    H = 'run_at_et,month,leg,mode,names,notional,capital,placed\n'
+    P = 'reports/orders_log.csv'
+    w = _repo('')
+    try:
+        _write(w, P, H); _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'h')
+        _branch_commit(w, 'vm', 'main', P, H +
+                       '2026-09-02 15:25,2026-09,close,paper,MU;LRCX,24000,25000,2\n'
+                       '2026-09-03 09:20,2026-09,open,paper,MU;LRCX,0,25000,2\n',
+                       'vm')
+        _branch_commit(w, 'main', 'main', P, H +
+                       '2026-09-02 15:25,2026-09,close,dry,MU;LRCX,24000,25000,\n',
+                       'dry run')
+        _git(w, 'checkout', '-q', 'vm')
+        assert _git(w, 'merge', 'main').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        rows = _rows(w, P)
+        assert len(rows) == 3, [tuple(x.values()) for x in rows]
+        assert {(x['leg'], x['mode']) for x in rows} == {
+            ('close', 'paper'), ('open', 'paper'), ('close', 'dry')}
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_refuses_paths_that_are_not_in_conflict():
+    """A pasted sentence once became eight 'paths'. The answer must name the
+    problem, not report 'neither side has content' eight times."""
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
+    try:
+        r = _resolve(w, 'resolves', 'a', 'real', 'conflict,')
+        assert r.returncode != 0
+        assert 'not in conflict' in (r.stdout + r.stderr)
+        assert 'nothing is in conflict' in (r.stdout + r.stderr)
+        assert 'neither side' not in (r.stdout + r.stderr)
+        assert _git(w, 'status', '--porcelain').stdout == ''  # touched nothing
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_line_one_marker_and_diff3_style():
+    """git's diff3 style puts the BASE lines between ||||||| and =======; a
+    stale base row must not come back. And with the header in the hunk, line
+    1 of the committed side is a marker."""
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
+    try:
+        _git(w, 'config', 'merge.conflictStyle', 'diff3')
+        _branch_commit(w, 'old', 'main', LOG, OLD +
+                       '20260901,2026-09,10,5.0,2.0,3.1\n', 'regrade')
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.2,4.5,2.5\n', 'new')
+        _git(w, 'checkout', '-q', 'old')
+        assert _git(w, 'merge', 'main').returncode != 0
+        _git(w, 'add', '.'); _git(w, 'commit', '-qm', 'update')
+        assert open(os.path.join(w, LOG)).read().startswith('<<<<<<<')
+        _branch_commit(w, 'main', 'main', LOG, NEW +
+                       '20260901,2026-09,10,5.0,2.0,3.2,4.5,2.5\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0,5.5,4.5\n', 'more')
+        _git(w, 'checkout', '-q', 'old')
+        assert _git(w, 'merge', 'main').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        by = {x['date']: x for x in _rows(w)}
+        assert sorted(by) == ['20260901', '20260902']
+        assert by['20260901']['tilt_bps'] == '3.2'       # never the base 3.0
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_junk_rows_an_earlier_bad_merge_committed_are_dropped_and_named():
+    """The previous resolver wrote marker lines and duplicated headers into
+    the log as rows ('=======,,,,,,,'). They must go, and be reported."""
+    junk = (NEW + '20260901,2026-09,10,5.0,2.0,3.0,4.5,2.5\n'
+            '<<<<<<< HEAD,,,,,,,\n=======,,,,,,,\n>>>>>>> 48bb912,,,,,,,\n')
+    w = _repo(junk)
+    try:
+        _branch_commit(w, 'a', 'main', LOG, junk +
+                       '20260902,2026-09,10,6.0,1.0,5.0,5.5,4.5\n', 'a')
+        _branch_commit(w, 'b', 'main', LOG, junk + NEW.rstrip('\n') + '\n' +
+                       '20260903,2026-09,10,1.0,0.5,0.5,1.0,0.5\n', 'b')
+        assert _git(w, 'merge', 'a').returncode != 0
+        r = _resolve(w)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert 'junk row' in r.stdout
+        assert [x['date'] for x in _rows(w)] == ['20260901', '20260902',
+                                                 '20260903']
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_a_renamed_column_is_refused_not_guessed():
+    """Both sides rename the same column differently, the header lands in the
+    hunk, and the markers get committed. Two same-width headers with different
+    names: which one does each row belong to? Unknowable -- refuse."""
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
+    try:
+        g = OLD.replace('q5_on_bps', 'q5_on_gross')
+        n = OLD.replace('q5_on_bps', 'q5_on_net')
+        _branch_commit(w, 'a', 'main', LOG, g +
+                       '20260901,2026-09,10,5.0,2.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0\n', 'gross')
+        _branch_commit(w, 'b', 'main', LOG, n +
+                       '20260901,2026-09,10,5.0,2.0,3.0\n'
+                       '20260903,2026-09,10,1.0,0.5,0.5\n', 'net')
+        assert _git(w, 'merge', 'a').returncode != 0
+        _git(w, 'add', '.'); _git(w, 'commit', '-qm', 'update')  # markers in
+        _branch_commit(w, 'a', 'a', LOG, g +
+                       '20260901,2026-09,10,5.0,2.0,3.0\n'
+                       '20260902,2026-09,10,6.0,1.0,5.0\n'
+                       '20260904,2026-09,10,2.0,1.0,1.0\n', 'more')
+        _git(w, 'checkout', '-q', 'b')
+        assert _git(w, 'merge', 'a').returncode != 0
+        before = open(os.path.join(w, LOG), 'rb').read()
+        r = _resolve(w)
+        assert r.returncode != 0, r.stdout
+        assert 'nothing was written' in (r.stdout + r.stderr)
+        assert open(os.path.join(w, LOG), 'rb').read() == before
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_nothing_is_written_unless_every_file_merges():
+    """Two conflicted logs, one unmergeable: the good one must not be
+    half-applied either -- a half-resolved merge is worse than none."""
+    H = 'run_at_et,month,leg,mode,names,notional,capital,placed\n'
+    P = 'reports/orders_log.csv'
+    w = _repo(OLD + '20260901,2026-09,10,5.0,2.0,3.0\n')
+    try:
+        _write(w, P, H); _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'h')
+        _git(w, 'checkout', '-q', '-B', 'a', 'main')
+        _write(w, LOG, OLD + '20260901,2026-09,10,5.0,2.0,3.0\n'
+                            '20260902,2026-09,10,6.0,1.0,5.0\n')
+        _write(w, P, H + 'not-a-time,2026-09,close,paper,MU,1,2,1\n')
+        _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'a')
+        _git(w, 'checkout', '-q', '-B', 'b', 'main')
+        _write(w, LOG, OLD + '20260901,2026-09,10,5.0,2.0,3.0\n'
+                            '20260903,2026-09,10,1.0,0.5,0.5\n')
+        _write(w, P, H + '2026-09-02 15:25,2026-09,close,paper,MU,1,2,1\n')
+        _git(w, 'add', '-A'); _git(w, 'commit', '-qm', 'b')
+        assert _git(w, 'merge', 'a').returncode != 0
+        before = open(os.path.join(w, LOG), 'rb').read()
+        r = _resolve(w)
+        assert r.returncode != 0, r.stdout
+        assert 'orders_log.csv' in (r.stdout + r.stderr)
+        assert open(os.path.join(w, LOG), 'rb').read() == before, \
+            'the mergeable file was written although another file failed'
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
+def test_the_grader_rewrites_the_forward_log_byte_for_byte():
+    """The ROOT CAUSE of the routine conflicts: xsec_live re-read the log with
+    pandas' inexact default float parser and wrote it all back, so every run
+    changed the previous night's last digit (124.14844117239305 -> ...304),
+    and two writers then edited the same line. Reading and writing the
+    committed logs through the grader's own helpers must change no byte."""
+    sys.path.insert(0, os.path.join(ROOT, 'src'))
+    import xsec_live
+    w = tempfile.mkdtemp()
+    try:
+        a = os.path.join(ROOT, 'reports', 'xsec_paper.csv')
+        b = os.path.join(ROOT, 'reports', 'xsec_paper_daily.csv')
+        if not (os.path.exists(a) and os.path.exists(b)):
+            return                              # a fresh clone with no log yet
+        log, daily = xsec_live.read_logs(a, b)
+        o1, o2 = os.path.join(w, 'p.csv'), os.path.join(w, 'd.csv')
+        xsec_live.write_logs(log, daily, o1, o2)
+        assert open(o1, 'rb').read() == open(a, 'rb').read()
+        assert open(o2, 'rb').read() == open(b, 'rb').read(), \
+            'a read->write round trip changed the forward record'
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
 if __name__ == '__main__':
-    test_merge_keeps_every_graded_night_and_both_schemas()
-    print('merge_daily test: PASS')
+    for name, fn in list(globals().items()):
+        if name.startswith('test_'):
+            fn()
+            print(f'{name}: PASS')
