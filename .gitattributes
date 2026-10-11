@@ -1,0 +1,4 @@
+# The report logs are written on Windows, a Linux VM and GitHub Actions, and
+# merged between all three. Store and check out every csv with LF so a
+# platform's line ending can never turn one new row into a whole-file conflict.
+*.csv text eol=lf

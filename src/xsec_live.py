@@ -159,6 +159,40 @@ def grade(log, daily):
     return daily
 
 
+COLS = ['emitted_on', 'month', 'universe_month', 'model_frozen',
+        'n_scored', 'q5', 'q1']
+DCOLS = ['date', 'month', 'n', 'q5_on_bps', 'qqq_on_bps', 'tilt_bps',
+         'q5_on_masked', 'tilt_masked']
+
+
+def read_logs(log_path=None, daily_path=None):
+    """The basket registry and the graded-night log, read so that writing
+    them straight back is byte-identical. round_trip matters: the default C
+    float parser is not exact, so every run used to rewrite the previous
+    night's last digit (124.14844117239305 -> ...304) -- and with Actions,
+    the VM and a local checkout all writing, every pull then conflicted on
+    the forward record."""
+    lp, dp = log_path or LOG, daily_path or DAILY
+    log = pd.read_csv(lp, dtype=str) if os.path.exists(lp) \
+        else pd.DataFrame(columns=COLS)
+    daily = pd.read_csv(dp, dtype={'date': str, 'month': str},
+                        float_precision='round_trip') \
+        if os.path.exists(dp) else pd.DataFrame(columns=DCOLS)
+    for c in DCOLS:                      # older logs predate the masked columns
+        if c not in daily:
+            daily[c] = np.nan
+    return log, daily
+
+
+def write_logs(log, daily, log_path=None, daily_path=None):
+    """LF on every platform -- pandas defaults to os.linesep, i.e. CRLF on
+    Windows, which turns one new row into a whole-file conflict."""
+    lp, dp = log_path or LOG, daily_path or DAILY
+    os.makedirs(os.path.dirname(lp), exist_ok=True)
+    log[COLS].to_csv(lp, index=False, lineterminator='\n')
+    daily[DCOLS].to_csv(dp, index=False, lineterminator='\n')
+
+
 def main():
     argparse.ArgumentParser().parse_args()
     df = load_panel()
@@ -175,17 +209,7 @@ def main():
         print(f'WARNING: panel ends {months[-1]} but current month is {cur} -- '
               f'run xsec_extend.py first; emitting anyway on stale features')
 
-    cols = ['emitted_on', 'month', 'universe_month', 'model_frozen',
-            'n_scored', 'q5', 'q1']
-    log = pd.read_csv(LOG, dtype=str) if os.path.exists(LOG) \
-        else pd.DataFrame(columns=cols)
-    dcols = ['date', 'month', 'n', 'q5_on_bps', 'qqq_on_bps', 'tilt_bps',
-             'q5_on_masked', 'tilt_masked']
-    daily = pd.read_csv(DAILY, dtype={'date': str, 'month': str}) \
-        if os.path.exists(DAILY) else pd.DataFrame(columns=dcols)
-    for c in dcols:                      # older logs predate the masked columns
-        if c not in daily:
-            daily[c] = np.nan
+    log, daily = read_logs()
 
     if cur in set(log.month):
         print(f'{cur} already pre-registered '
@@ -215,9 +239,7 @@ def main():
         print('  ' + '  '.join(q5))
 
     daily = grade(log, daily)
-    os.makedirs(os.path.dirname(LOG), exist_ok=True)
-    log[cols].to_csv(LOG, index=False)
-    daily[dcols].to_csv(DAILY, index=False)
+    write_logs(log, daily)
 
     if len(daily):
         g = daily.astype({'q5_on_bps': float, 'qqq_on_bps': float,
