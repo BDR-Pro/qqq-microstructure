@@ -28,7 +28,12 @@ name: guard
 on:
   schedule:
     - cron: '17 6 * * 1-5'        # 02:17 EDT / 01:17 EST, the decision day
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Ask and print only; write nothing (tests the job any time)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -43,6 +48,8 @@ jobs:
       DECIDER_MODEL: tev1:4b-q4_K_M
       MODEL_DIGEST: 07be32e6e5e3dcc6b2deae7c68b89321e99daeedb08521e92771cc155473cbd9
       DECIDER_URL: http://127.0.0.1:11434/v1/systemone
+      # a scheduled run decides; a dispatched dry run only asks and prints
+      MODE: ${{ inputs.dry_run && '--dry-run' || '--decide' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +59,7 @@ jobs:
           python-version: '3.11'
       - run: pip install --quiet numpy pandas yfinance lxml
       - name: the control (earnings rule)
-        run: python src/guard.py --decide --backend rule
+        run: python src/guard.py $MODE --backend rule
       - name: Ollama, pinned and verified, CPU only
         if: ${{ !cancelled() }}       # each decider runs even if the other failed
         run: |
@@ -71,9 +78,9 @@ jobs:
           [ "$got" = "$MODEL_DIGEST" ] || { echo "::error::$DECIDER_MODEL digest $got is not the pinned $MODEL_DIGEST -- a changed decider is a new record (RESULTS 27); refusing"; exit 1; }
       - name: the decider (Tev1-4B)
         if: ${{ !cancelled() }}
-        run: python src/guard.py --decide --backend http
+        run: python src/guard.py $MODE --backend http
       - name: commit the decisions before the close
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && !inputs.dry_run }}
         run: |
           git config user.name 'qqq-guard[bot]'
           git config user.email 'actions@users.noreply.github.com'

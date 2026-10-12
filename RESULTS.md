@@ -2679,7 +2679,8 @@ decided). Both builds gave identical answers on a rerun.
 This was declared before any decided night had an outcome. The reasons:
 - it was trained for these question types, unlike a chat model read through
   its next-token logits;
-- of the local options it scores closest to Jev;
+- it scores 73.3% against Jev's 76.0% on Ollama's comparison (vendor-reported).
+  Nimble scores higher (75.7%) but is a 9B model and a 9.5 GB download;
 - it runs on CPU in seconds and needs no key.
 
 `guard.yml` runs it in GitHub Actions in the small hours of every weekday
