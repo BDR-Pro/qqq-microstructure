@@ -123,12 +123,29 @@ def connect_paper(client_offset=0):
     return ib
 
 
+def close_quantities(rows, held):
+    """Shares to BUY at the close: the target minus what the account already
+    holds, never below zero. If last night's open leg failed, buying the full
+    target again would double a 2.4-beta, one-theme basket overnight (review,
+    2026-10-12); this tops up to the target and no further."""
+    return [(n, p, max(0, q - held.get(n.replace('.', ' '), 0)), v)
+            for n, p, q, v in rows]
+
+
 def submit_paper(rows, leg, now):
     from ib_insync import Stock, Order
     ib = connect_paper()
     working = {t.contract.symbol for t in ib.openTrades()
                if t.order.orderType in ('MOC', 'MKT')}
     placed = 0
+    if leg == 'close':
+        held = {p.contract.symbol: int(p.position) for p in ib.positions()
+                if p.position > 0 and p.contract.secType == 'STK'}
+        if held:
+            print(f'  WARNING: {len(held)} position(s) still open at the close '
+                  f'-- did the open leg fail? Buying only up to target: '
+                  + ' '.join(f'{k} {v}' for k, v in sorted(held.items())))
+        rows = close_quantities(rows, held)
     if leg == 'open':
         # the open leg SELLS WHATEVER THE ACCOUNT HOLDS -- every long stock
         # position, whether or not it is in the current basket. The first
