@@ -105,10 +105,32 @@ def _masked(on_bps):
     return on_bps
 
 
-def grade(log, daily):
+REGRADE_DAYS = 5          # an incomplete night is retried this long after D+1
+
+
+def grade(log, daily, today=None, download=None, force=()):
+    """Grade every elapsed night of every registered basket: the equal-weight
+    overnight return of the emitted names at Yahoo's official prints.
+
+    Two rules, both from a real loss of coverage (audit 2026-10): GEV was
+    dropped from the nights of 2026-08-27 and -28, and the second of those
+    was graded at -24.3 instead of the basket's -52.0.
+      - A night needs only D's close and D+1's open, and is checked for
+        exactly those. Grading runs during D+1's session, when Yahoo's
+        in-progress bar can carry an open and no close; dropping the whole
+        row for the missing close threw the open away with it.
+      - A night graded on fewer names than the basket is retried on later
+        runs for REGRADE_DAYS after D+1 and rewritten if more names have
+        arrived. After that it is final -- a halted or delisted name never
+        completes, and the record must stop moving.
+    force: nights to retry regardless of age (xsec_live.py --regrade). A
+    regrade only ever ADDS names the original grade missed; it never touches
+    a complete night and never replaces a grade with a thinner one."""
     import yfinance as yf
-    today = dt.datetime.now(ET).strftime('%Y%m%d')
-    done = set(daily.date) if len(daily) else set()
+    download = download or yf.download
+    today = today or dt.datetime.now(ET).strftime('%Y%m%d')
+    done = dict(zip(daily.date, pd.to_numeric(daily.n, errors='coerce'))) \
+        if len(daily) else {}
     for _, r in log.iterrows():
         m0 = r.month.replace('-', '')
         names = r.q5.split(';')
@@ -116,14 +138,15 @@ def grade(log, daily):
         d1 = (d0.replace(day=28) + dt.timedelta(days=12)).replace(day=1) \
             + dt.timedelta(days=9)
         try:
-            v = yf.download([n.replace('.', '-') for n in names + ['QQQ']],
-                            start=d0 - dt.timedelta(days=3), end=d1,
-                            interval='1d', auto_adjust=False, actions=False,
-                            group_by='ticker', progress=False)
+            v = download([n.replace('.', '-') for n in names + ['QQQ']],
+                         start=d0 - dt.timedelta(days=3), end=d1,
+                         interval='1d', auto_adjust=False, actions=False,
+                         group_by='ticker', progress=False)
             series = {}
             for n in names + ['QQQ']:
                 try:
-                    s = v[n.replace('.', '-')][['Open', 'Close']].dropna()
+                    s = v[n.replace('.', '-')][['Open', 'Close']]
+                    s = s[s.notna().any(axis=1)]
                     s.index = s.index.strftime('%Y%m%d')
                     series[n] = s
                 except KeyError:
@@ -137,25 +160,48 @@ def grade(log, daily):
         qd = series['QQQ'].index
         for k in range(len(qd) - 1):
             D, Dn = qd[k], qd[k + 1]
-            if (D[:6] != m0[:6] or D < r.emitted_on or D >= today or D in done):
+            if D[:6] != m0[:6] or D < r.emitted_on or D >= today:
+                continue
+            prev = done.get(D)
+            stale = (dt.datetime.strptime(today, '%Y%m%d')
+                     - dt.datetime.strptime(Dn, '%Y%m%d')).days > REGRADE_DAYS
+            if prev is not None and (prev >= len(names) or
+                                     (stale and D not in force)):
+                continue
+
+            def has(n, day, col):
+                s = series.get(n)
+                return s is not None and day in s.index and \
+                    pd.notna(s[col].get(day))
+            if not (has('QQQ', D, 'Close') and has('QQQ', Dn, 'Open')):
                 continue
             ons = [float(np.log(series[n].Open[Dn] / series[n].Close[D]) * 1e4)
-                   for n in names if n in series
-                   and D in series[n].index and Dn in series[n].index]
-            if len(ons) < 5:
+                   for n in names if has(n, D, 'Close') and has(n, Dn, 'Open')]
+            if len(ons) < 5 or (prev is not None and len(ons) <= prev):
                 continue
             qqq = float(np.log(series['QQQ'].Open[Dn]
                                / series['QQQ'].Close[D]) * 1e4)
             onm = [x for x in (_masked(x) for x in ons) if np.isfinite(x)]
             q5m = float(np.mean(onm)) if onm else np.nan
-            daily = pd.concat([daily, pd.DataFrame([dict(
-                date=D, month=r.month, n=len(ons),
-                q5_on_bps=float(np.mean(ons)), qqq_on_bps=qqq,
-                tilt_bps=float(np.mean(ons)) - qqq,
-                q5_on_masked=q5m, tilt_masked=q5m - qqq)])], ignore_index=True)
-            done.add(D)
-            print(f'graded {D}: basket {np.mean(ons):+.1f}  QQQ {qqq:+.1f}  '
-                  f'tilt {np.mean(ons) - qqq:+.1f} bps')
+            row = dict(date=D, month=r.month, n=len(ons),
+                       q5_on_bps=float(np.mean(ons)), qqq_on_bps=qqq,
+                       tilt_bps=float(np.mean(ons)) - qqq,
+                       q5_on_masked=q5m, tilt_masked=q5m - qqq)
+            if prev is None:
+                daily = pd.concat([daily, pd.DataFrame([row])],
+                                  ignore_index=True)
+                print(f'graded {D}: basket {np.mean(ons):+.1f}  QQQ {qqq:+.1f}'
+                      f'  tilt {np.mean(ons) - qqq:+.1f} bps'
+                      + (f'   ({len(ons)} of {len(names)} names -- retried '
+                         f'for {REGRADE_DAYS} days)' if len(ons) < len(names)
+                         else ''))
+            else:
+                at = daily.index[daily.date == D]
+                for c, x in row.items():
+                    daily.loc[at, c] = x
+                print(f'REGRADED {D}: {int(prev)} -> {len(ons)} of {len(names)} '
+                      f'names, basket {np.mean(ons):+.1f} bps')
+            done[D] = len(ons)
     return daily
 
 
@@ -194,7 +240,27 @@ def write_logs(log, daily, log_path=None, daily_path=None):
 
 
 def main():
-    argparse.ArgumentParser().parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--regrade', default=None,
+                    help='YYYYMMDD[,YYYYMMDD...]: re-grade these nights of the '
+                         'forward log from Yahoo -- only nights graded on fewer '
+                         'names than the basket, and only if more names are '
+                         'available now. Touches nothing else; no panel needed.')
+    a = ap.parse_args()
+    if a.regrade:
+        log, daily = read_logs()
+        want = set(a.regrade.split(','))
+        before = daily.set_index('date').n.to_dict()
+        daily = grade(log, daily, force=want)
+        after = daily.set_index('date').n.to_dict()
+        changed = [d for d in sorted(want) if after.get(d) != before.get(d)]
+        for d in sorted(want - set(changed)):
+            print(f'{d}: unchanged ({before.get(d, "not in the log")})')
+        if changed:
+            write_logs(log, daily)
+            print(f'rewrote {len(changed)} night(s): {", ".join(changed)} -- '
+                  f'commit reports/ with a message that says so')
+        return
     df = load_panel()
     months = sorted(df.month.unique())
     agg = month_aggs(df)
