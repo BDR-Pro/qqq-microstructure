@@ -14,15 +14,20 @@
 # different decider, so the job refuses instead of silently pooling it into
 # this one's record (a new decider starts its own 63-night record).
 #
-# The state uses nothing from the decision day (yesterday's close and before,
-# plus the earnings calendar), so deciding at 13:30 ET loses nothing and
-# leaves room for GitHub's late schedules. guard.py refuses at/after 15:50.
+# When: GitHub starts scheduled jobs late. monthly.yml, set for 15:00 UTC,
+# started 2h45m-6h45m late on every run in Sept-Oct 2026, so a midday
+# decider would land after the 15:50 ET cutoff (guard.py refuses there) and
+# lose the night. The state uses nothing from the decision day (yesterday's
+# close and before, plus the earnings calendar), so deciding in the small
+# hours loses nothing: 06:17 UTC is 02:17 EDT / 01:17 EST on the decision
+# day itself, and even a 7-hour delay finishes before 10:00 ET. A missed run
+# only shortens the record; it cannot bias it (it happens before the night).
 # On a market holiday it still decides; the grader skips nights with no
 # graded row.
 name: guard
 on:
   schedule:
-    - cron: '30 17 * * 1-5'       # 13:30 EDT / 12:30 EST
+    - cron: '17 6 * * 1-5'        # 02:17 EDT / 01:17 EST, the decision day
   workflow_dispatch: {}
 permissions:
   contents: write

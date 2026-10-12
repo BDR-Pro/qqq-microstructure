@@ -2682,8 +2682,11 @@ This was declared before any decided night had an outcome. The reasons:
 - of the local options it scores closest to Jev;
 - it runs on CPU in seconds and needs no key.
 
-`guard.yml` runs it in GitHub Actions every weekday at 13:30 ET, with the
-earnings rule beside it:
+`guard.yml` runs it in GitHub Actions in the small hours of every weekday
+(06:17 UTC, the decision day in ET), with the earnings rule beside it:
+- The early slot is forced: GitHub started `monthly.yml` 2h45m–6h45m late on
+  every run in Sept–Oct 2026, which would push a midday run past the cutoff.
+  The state uses nothing from the decision day, so nothing is lost.
 - Ollama is a released build, checked against its published sha256, CPU
   libraries only.
 - The job refuses a model whose digest differs from the pinned one.
