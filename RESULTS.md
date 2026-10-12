@@ -2414,3 +2414,83 @@ book's skill component does not survive its own commissions. A live account
 should be sized at or above the capital where the drag falls to the backtest's
 assumption, and run on Tiered. The paper leg should be switched on at that
 size; paper capital is free and resets to up to 5x production.
+
+---
+
+## 26. One year, on the real fan: what the traded book pays against just holding QQQ — `roi_year.py`
+
+"So in a year, what does the ROI look like?" — answered for the book `orders.py`
+trades (long the frozen model's Q5 overnight, unhedged), on the owner's machine
+on 2026-10-12, at the commission plan §25 recommends. The method is in the
+script header.
+
+- **Worlds:** five mean-shifted, block-bootstrapped worlds built from the real
+  2003-01 → 2026-03 walk-forward nights.
+- **Account model:** a fixed-notional account with whole-share deployment and
+  IBKR Tiered costs.
+- **Benchmarks:** the same money held in QQQ, and QQQ held overnight only.
+
+Two independent reviewers had corrected the method before this run (fixed
+notional, arithmetic-mean stress, two-factor alpha, benchmark rows).
+
+**Read as the year after a GO verdict, not this year:** §19's rule is no live
+money until the forward test passes.
+
+The run reproduces §21 exactly (gross +10.50 bps/night, selection alpha
++6.13 on QQQ+SPY overnight), so the worlds are anchored to the adjudicated
+decomposition.
+
+```
+  ONE YEAR, backtest volatility, 21-day blocks           MEDIAN    p5  P(loss)  dip p50  dip 1/20
+  $25,000 Tiered (88% deployed; costs 3.44 bps/night = -8.7%/yr certain)
+    as backtested                                          +13%  -12%     18%     -10%      -26%
+    half the edge                                           +8%  -17%     28%     -11%      -28%
+    recent era (2016+)                                      +8%  -21%     31%     -12%      -33%
+    no edge (beta only)                                     +3%  -22%     42%     -13%      -31%
+    nothing (zero drift)                                    -8%  -34%     73%     -17%      -39%
+    QQQ, bought and held                                   +15%  -17%     24%     -16%      -32%
+    QQQ, overnight only                                    +10%  -10%     18%      -8%      -22%
+
+  $100,000 Tiered (96% deployed; costs 1.26 bps/night = -3.2%/yr certain)
+    as backtested                                          +21%   -7%     10%     -10%      -26%
+    half the edge                                          +15%  -13%     17%     -11%      -28%
+    recent era (2016+)                                     +15%  -17%     20%     -12%      -32%
+    no edge (beta only)                                     +9%  -18%     27%     -12%      -30%
+    nothing (zero drift)                                    -3%  -30%     58%     -16%      -37%
+    QQQ, bought and held                                   +15%  -17%     24%     -16%      -32%
+    QQQ, overnight only                                    +11%  -10%     17%      -8%      -22%
+```
+
+What it says, in the order it matters:
+
+- **At $25k the stock-picking does not pay for itself.**
+  - *Versus QQQ held:* even as backtested, the book's median (+13%) is below
+    QQQ held (+15%), though with a better left tail (p5 −12% vs −17%, P(loss)
+    18% vs 24%).
+  - *Versus QQQ overnight only:* the book adds 3 points of median as
+    backtested and trails it in every other world. Commissions alone are a
+    certain −8.7%/yr.
+- **At $100k it does, if at least about half the edge is real.**
+  - *As backtested:* the median is +21% (p5 −7%, P(loss) 10%). That is ahead
+    of QQQ held on median, left tail and loss probability; QQQ keeps the
+    larger upside (p95 +54% vs +45%).
+  - *Half the edge, or the 2016+ era:* the median ties QQQ held (+15%) with a
+    shallower left tail.
+  - *With no selection edge:* the book (+9%) trails both QQQ lines.
+- **The 2016+ era is rougher than "half the edge" at the same median** (p5
+  −21% vs −17% at $25k). The post-publication nights were more volatile, not
+  just less profitable.
+- **The tails are not an artefact of the block length.** At 63- and 126-day
+  blocks, p5 moves from −12% to −13%/−15% at $25k and from −7% to −8%/−10% at
+  $100k. The 1-in-20 dip moves from −26% to −28%/−29% at both sizes.
+- **At the live basket's volatility, the bad tail roughly doubles.**
+  - The live sd is 207 bps/night, 90% CI [141, 265], from 33 nights.
+  - As backtested at $25k: p5 −31%, P(loss) 30%, 1-in-20 dip −48%.
+  - As backtested at $100k: p5 −28%, P(loss) 22%, 1-in-20 dip −49%.
+  - The QQQ lines do not move. The basket's extra beta is risk the
+    alternatives do not carry.
+
+**The decision this supports:** run the book only at a size where costs fall to
+about 1 bps/night (≈$100k on Tiered), and only once the forward test has
+established that at least half the edge survives. At $25k, holding QQQ is the
+better trade in every world but the best one.
