@@ -117,7 +117,7 @@ def parse_answers(resp, names):
 
 
 def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
-             opener=urllib.request.urlopen):
+             opener=urllib.request.urlopen, timeout=None):
     body = json.dumps(request_body(state, names, model)).encode()
     headers = {'Content-Type': 'application/json'}
     if key:
@@ -127,7 +127,10 @@ def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
         try:
             req = urllib.request.Request(url, data=body, headers=headers,
                                          method='POST')
-            with opener(req, timeout=30) as r:
+            # hosted Jev answers in ~0.1 s; a local model on a CPU can take
+            # minutes for a dozen questions, so the wait is configurable
+            to = timeout or float(os.environ.get('DECIDER_TIMEOUT', 600))
+            with opener(req, timeout=to) as r:
                 resp = json.loads(r.read().decode())
             return parse_answers(resp, names), resp.get('model', model), \
                 int((time.time() - t0) * 1000)
