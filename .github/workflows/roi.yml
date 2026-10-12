@@ -12,10 +12,16 @@
 #
 #       CRON_TZ=America/New_York
 #       0  8  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/xsec_live.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "register/grade" && git push -q; }; }
+#       15 15 * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/guard.py --decide >> $HOME/qqq.log 2>&1; git add reports/guard_log.csv && { git diff --cached --quiet || { git commit -qm "guard: decisions before the close" && git push -q; }; }
 #       25 15 * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg close --submit >> $HOME/qqq.log 2>&1
 #       10 16 * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
 #       20 9  * * 1-5  cd $HOME/qqq-microstructure && git pull -q && python3 src/orders.py --capital 25000 --leg open --submit >> $HOME/qqq.log 2>&1
 #       40 9  * * 1-5  cd $HOME/qqq-microstructure && python3 src/fills.py >> $HOME/qqq.log 2>&1; git add reports && { git diff --cached --quiet || { git commit -qm "rehearsal fills" && git push -q; }; }
+#
+#   The 15:15 line is the SHADOW decision model (guard.py, RESULTS 27): it
+#   commits tonight's hold/hedge answers BEFORE the close so they can be graded
+#   honestly; it never trades. Needs DECIDER_URL (and DECIDER_KEY if hosted)
+#   in the VM's environment, or use --backend rule.
 #
 #   Conflicts: both sides append to reports/*.csv and both push, so a same-day
 #   content conflict in an append-only log is routine. Resolve it with
