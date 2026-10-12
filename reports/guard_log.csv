@@ -1,0 +1,25 @@
+date,decided_et,backend,model,question,ticker,p,decision,latency_ms,state_sha
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,MU,0.3970,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,BE,0.3808,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,STX,0.3737,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,SNDK,0.3848,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,NBIS,0.3782,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,IREN,0.4061,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,LRCX,0.3503,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,WDC,0.3764,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,AMAT,0.3986,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,INTC,0.3883,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hold,CAT,0.3557,hold,202105,7cbd98fa8d11
+20261012,2026-10-12 14:59:20,http,local:Qwen/Qwen3.5-0.8B,hedge_book,BOOK,0.2858,none,202105,7cbd98fa8d11
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,MU,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,BE,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,STX,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,SNDK,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,NBIS,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,IREN,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,LRCX,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,WDC,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,AMAT,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,INTC,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hold,CAT,1.0000,hold,0,a76f5a8f9866
+20261012,2026-10-12 15:18:20,rule,rule-earnings-v1,hedge_book,BOOK,0.0000,none,0,a76f5a8f9866
