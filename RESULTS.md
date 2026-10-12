@@ -2436,9 +2436,10 @@ notional, arithmetic-mean stress, two-factor alpha, benchmark rows).
 **Read as the year after a GO verdict, not this year:** §19's rule is no live
 money until the forward test passes.
 
-The run reproduces §21 exactly (gross +10.50 bps/night, selection alpha
-+6.13 on QQQ+SPY overnight), so the worlds are anchored to the adjudicated
-decomposition.
+The run's gross +10.50 bps/night and selection alpha +6.13 (on QQQ+SPY
+overnight) match §21's **ON** row (long Q5 overnight: raw +8.50, alpha +4.13)
+once §21's assumed 2 bps/night cost is added back. That +6.13 is not §21's v2
+row, which happens to print the same number.
 
 ```
   ONE YEAR, backtest volatility, 21-day blocks           MEDIAN    p5  P(loss)  dip p50  dip 1/20
@@ -2461,36 +2462,60 @@ decomposition.
     QQQ, overnight only                                    +11%  -10%     17%      -8%      -22%
 ```
 
-What it says, in the order it matters:
+What it says, in the order it matters. Every comparison below is at the
+backtest's volatility unless it says otherwise; the live-volatility stress
+reverses several of them.
 
-- **At $25k the stock-picking does not pay for itself.**
-  - *Versus QQQ held:* even as backtested, the book's median (+13%) is below
-    QQQ held (+15%), though with a better left tail (p5 −12% vs −17%, P(loss)
-    18% vs 24%).
-  - *Versus QQQ overnight only:* the book adds 3 points of median as
-    backtested and trails it in every other world. Commissions alone are a
-    certain −8.7%/yr.
-- **At $100k it does, if at least about half the edge is real.**
+- **At $25k the book does not beat holding QQQ in any world.**
+  - *Even as backtested*, its median (+13%) trails QQQ held (+15%). It trades
+    that for a shallower left tail (p5 −12% vs −17%, P(loss) 18% vs 24%) at
+    backtest volatility. At the live basket's volatility that tail is worse
+    than QQQ's (p5 −31%, P(loss) 30%).
+  - *Against costs:* the stock-picking covers its costs only as backtested.
+    The edge adds about 4.1 bps/night of expected net over the beta-only
+    world, against 3.44 bps/night of costs. At half the edge it adds about 2.0
+    and does not.
+  - The costs (commissions plus exchange, clearing and SEC fees) are a certain
+    −8.7%/yr.
+- **At $100k the comparison turns.**
   - *As backtested:* the median is +21% (p5 −7%, P(loss) 10%). That is ahead
     of QQQ held on median, left tail and loss probability; QQQ keeps the
-    larger upside (p95 +54% vs +45%).
-  - *Half the edge, or the 2016+ era:* the median ties QQQ held (+15%) with a
-    shallower left tail.
-  - *With no selection edge:* the book (+9%) trails both QQQ lines.
-- **The 2016+ era is rougher than "half the edge" at the same median** (p5
-  −21% vs −17% at $25k). The post-publication nights were more volatile, not
-  just less profitable.
-- **The tails are not an artefact of the block length.** At 63- and 126-day
-  blocks, p5 moves from −12% to −13%/−15% at $25k and from −7% to −8%/−10% at
-  $100k. The 1-in-20 dip moves from −26% to −28%/−29% at both sizes.
-- **At the live basket's volatility, the bad tail roughly doubles.**
-  - The live sd is 207 bps/night, 90% CI [141, 265], from 33 nights.
-  - As backtested at $25k: p5 −31%, P(loss) 30%, 1-in-20 dip −48%.
-  - As backtested at $100k: p5 −28%, P(loss) 22%, 1-in-20 dip −49%.
-  - The QQQ lines do not move. The basket's extra beta is risk the
-    alternatives do not carry.
+    larger upside (p95 +54% vs +45%). At the live basket's volatility only the
+    median lead survives (p5 −28% vs −17%, P(loss) 22% vs 24%).
+  - *At half the edge:* the median ties QQQ held (+15%) with a shallower left
+    tail (p5 −13% vs −17%). The mean and upside still trail (E +5.8 vs +6.2
+    bps/night, p95 +40% vs +54%), and at live volatility the left tail is far
+    worse (p5 −34%, P(loss) 29%).
+  - *2016+ era:* the median also ties (+15%), with the same p5 as QQQ held
+    (−17%) and a lower P(loss) (20% vs 24%).
+  - *With no selection edge:* the book's median (+9%), p5 (−18%) and P(loss)
+    (27%) trail both QQQ lines.
+- **The 2016+ nights give a wider one-year fan, not just a lower one.**
+  - At the same median as "half the edge", p5 is −21% vs −17% at $25k.
+  - It stays wider even with both worlds scaled to the live sd (p5 −41% vs
+    −36%), so nightly volatility is not the whole explanation.
+- **Longer blocks deepen the tails, but only modestly.** The check covers the
+  as-backtested world only.
+  - p5 goes from −12% to −13%/−15% at $25k, and from −7% to −8%/−10% at $100k.
+  - The 1-in-20 dip goes from −26% to −28%/−29% at both sizes.
+  - The 21-day figures understate the tails by up to about 3 points.
+- **At the live basket's volatility the bad tail worsens a lot.** The live sd
+  is 207 bps/night, 90% CI [141, 265], from 33 nights. As backtested:
+  - p5 −12% → −31% at $25k and −7% → −28% at $100k;
+  - P(<−20%) 2% → 10% and 1% → 8%;
+  - the 1-in-20 dip −26% → −48%/−49%.
 
-**The decision this supports:** run the book only at a size where costs fall to
-about 1 bps/night (≈$100k on Tiered), and only once the forward test has
-established that at least half the edge survives. At $25k, holding QQQ is the
-better trade in every world but the best one.
+  The QQQ rows are not stressed; they keep their own volatility. So the gap is
+  the basket's extra live volatility, from its higher beta (2.37) and its
+  single-theme concentration (§19).
+
+**The decision this supports.**
+- Run the book only at a size where costs fall to about 1.3 bps/night (1.26
+  at $100k on Tiered; about 1 needs ~$250k, §25).
+- Run it only after a GO verdict (§19). GO rules out no edge; it does not
+  establish that half the edge survives.
+- Run it only while the basket's volatility is near the backtest's. At the
+  live basket's volatility so far, the book's left tail is worse than holding
+  QQQ in every world.
+- At $25k, holding QQQ has the higher median in every world, the best one
+  included.
