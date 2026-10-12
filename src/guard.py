@@ -68,6 +68,14 @@ COLS = ['date', 'decided_et', 'backend', 'model', 'question', 'ticker', 'p',
         'decision', 'latency_ms', 'state_sha']
 GATE_NIGHTS, GATE_T = 63, 2.0
 BOOK = 'BOOK'
+# PRE-DECLARED DECISION RULE (fixed 2026-10-12, before any decided night had
+# an outcome): skip a name only if p(hold) < 0.5 AND it sits at least
+# SKIP_MARGIN below the night's median p. A small local model answers with a
+# constant lean -- Qwen3.5-0.8B's first run put all 11 names at 0.35-0.41 --
+# and a bare p < 0.5 would skip everything every night; the median test
+# ignores a shared bias and acts only on a name the model singles out. For a
+# calibrated decider (hosted Jev) it reduces to the plain rule. Hedge: p >= 0.5.
+SKIP_MARGIN = 0.10
 
 
 # ---------------------------------------------------------------- the API --
@@ -224,6 +232,8 @@ def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
                          f'{CUTOFF[1]:02d} cutoff -- too late to decide '
                          f'tonight honestly')
     p, model, ms = ask(state, names)
+    held = [p[n] for n in names if n in p]
+    med = float(np.median(held)) if held else 0.5
     sha = hashlib.sha256(json.dumps(state, sort_keys=True)
                          .encode()).hexdigest()[:12]
     new = not os.path.exists(path)
@@ -235,7 +245,8 @@ def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
             if k not in p:
                 continue
             q = 'hedge_book' if k == BOOK else 'hold'
-            yes = p[k] >= 0.5
+            yes = p[k] >= 0.5 if k == BOOK else \
+                not (p[k] < 0.5 and p[k] < med - SKIP_MARGIN)
             w.writerow([today, now_et.strftime('%Y-%m-%d %H:%M:%S'), backend,
                         model, q, k, f'{p[k]:.4f}',
                         ('hedge' if yes else 'none') if k == BOOK else

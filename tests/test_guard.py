@@ -61,6 +61,26 @@ def test_the_client_speaks_the_documented_api(monkeypatch):
         srv.shutdown()
 
 
+def test_a_shared_bias_skips_nothing_but_an_outlier_is_skipped(tmp_path):
+    """The first real run: every name at 0.35-0.41. A bare p < 0.5 would skip
+    all of them every night; the pre-declared rule skips only a name the
+    model singles out."""
+    early = dt.datetime(2026, 10, 13, 15, 20, tzinfo=g.ET)
+    names = ['A', 'B', 'C', 'D', 'E']
+    flat = lambda s, n: ({'A': .35, 'B': .38, 'C': .40, 'D': .41, 'E': .37,
+                          g.BOOK: .29}, 'm', 1)
+    path = str(tmp_path / 'a.csv')
+    g.decide('http', names, '20261013', early, {}, path, flat)
+    assert set(g.read_log(path).decision) == {'hold', 'none'}
+    odd = lambda s, n: ({'A': .12, 'B': .38, 'C': .40, 'D': .41, 'E': .37,
+                         g.BOOK: .7}, 'm', 1)
+    path = str(tmp_path / 'b.csv')
+    g.decide('http', names, '20261013', early, {}, path, odd)
+    d = g.read_log(path).set_index('ticker').decision
+    assert d['A'] == 'skip' and (d.drop(['A', g.BOOK]) == 'hold').all()
+    assert d[g.BOOK] == 'hedge'
+
+
 def test_decide_appends_once_and_refuses_late_or_repeated(tmp_path):
     path = str(tmp_path / 'guard_log.csv')
     ask = lambda s, n: ({'MU': 0.9, 'STX': 0.1, g.BOOK: 0.7}, 'm1', 12)
