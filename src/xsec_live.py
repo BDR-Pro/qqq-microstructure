@@ -251,11 +251,18 @@ def main():
         log, daily = read_logs()
         want = set(a.regrade.split(','))
         before = daily.set_index('date').n.to_dict()
-        daily = grade(log, daily, force=want)
-        after = daily.set_index('date').n.to_dict()
-        changed = [d for d in sorted(want) if after.get(d) != before.get(d)]
+        graded = grade(log, daily.copy(), force=want).set_index('date')
+        changed = [d for d in sorted(want) if d in before and
+                   graded.n.get(d) != before[d]]
         for d in sorted(want - set(changed)):
             print(f'{d}: unchanged ({before.get(d, "not in the log")})')
+        # only the named nights move: a NEW night belongs to the daily run,
+        # and writing it here too would put two writers on the same line
+        for d in changed:
+            at = daily.index[daily.date == d]
+            for c in DCOLS:
+                if c != 'date':
+                    daily.loc[at, c] = graded.loc[d, c]
         if changed:
             write_logs(log, daily)
             print(f'rewrote {len(changed)} night(s): {", ".join(changed)} -- '

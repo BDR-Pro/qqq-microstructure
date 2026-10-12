@@ -1652,19 +1652,48 @@ commits them, and the log has run unattended since.
 
 ```
   33 graded nights, 20260821 .. 20261008, frozen models of 2026-08-20
+  (three nights corrected 2026-10-12 -- see below)
 
-  2026-08 (binding)    7 nights   q5 -15.41   qqq -15.27   tilt  -0.13
-  2026-09             20 nights   q5 +25.97   qqq  +8.23   tilt +17.74
+  2026-08 (binding)    7 nights   q5 -19.08   qqq -15.27   tilt  -3.81
+  2026-09             20 nights   q5 +25.14   qqq  +8.23   tilt +16.90
   2026-10 (partial)    6 nights   q5 -52.81   qqq +19.54   tilt -72.35
-  all 33              tilt -2.43 bps/day   sd 152.3   se 26.5   t -0.09
-                      95% CI [-54.4, +49.5];  tilt > 0 on 48% of nights
+  all 33              tilt -3.72 bps/day   sd 152.3   se 26.5   t -0.14
+                      95% CI [-55.7, +48.3];  tilt > 0 on 48% of nights
   q5_on_masked == q5_on_bps on 33/33 nights -- no night has hit the split mask
 ```
+
+**A measurement correction to the binding record, made against the
+strategy.** `paper_bench.py --panel` recomputed the August nights from the
+backtest panel and found two that disagreed by up to 28 bps. A scan of all 33
+found three nights the grader had graded on fewer names than the basket:
+
+```
+  night      names   q5 as logged -> full basket   missing
+  20260827   9/10      -74.23 ->  -72.31           GEV
+  20260828   9/10      -24.35 ->  -52.00           GEV (-301 bps that night)
+  20260922   8/11      +11.36 ->   -5.29           CAT, ASML, GEV
+```
+
+The grader runs during D+1's session. Yahoo's in-progress bar can carry an
+open and no close yet, and the grader dropped the whole row, taking the open
+it needed with it. It then never revisited the night. The pre-registered
+metric is the *emitted basket*, equal weight, at official prints, so a night
+graded on a subset is a measurement error, not a definition.
+
+The three rows were re-graded from Yahoo with `xsec_live.py --regrade`, which
+only ever adds missing names, at the owner's decision. The commit names them,
+and git keeps the originals.
+
+The correction moves the all-night tilt from −2.43 to **−3.72** bps/day.
+The drops had flattered the record by about 1.3 bps/night. The grader now
+checks exactly the two prices a night needs and retries an incomplete night
+for five days (§19's numbers above are the corrected ones).
 
 **No verdict, and none is due.** 48 calendar days (~1.6 months) have elapsed
 against a table whose shortest row is three months; that row becomes readable
 around 2026-11-21. The interval spans both the 3-month GO (+12.5) and KILL
-(−5.0) many times over.
+(−5.0) many times over: the corrected mean (−3.72) sits 1.3 bps above the KILL
+line and 16 bps below GO, both well inside one standard error (26.5).
 
 One thing the first seven weeks *do* show, recorded as a diagnostic and not
 acted on — changing the metric or the bands now would void the pre-registration:
