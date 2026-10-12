@@ -30,10 +30,15 @@
 #     question is the one with evidence behind it.
 #
 # Integrity rules, enforced, not hoped for:
-#   - one decision per night per question; a night is never re-decided
+#   - one decision per night per backend (the decider, and the earnings-rule
+#     control it is compared with); a night is never re-decided
 #   - a decision time-stamped at or after 15:50 ET on its night is ignored by
 #     the grader (it could have seen the close)
-#   - the log is append-only and committed by the crontab before the close
+#   - the log is append-only and committed before the close (guard.yml, in
+#     GitHub Actions: Tev1-4B via a pinned Ollama, digest-checked)
+#   - one record per (backend, model): a new decider starts its own record and
+#     its own 63-night clock, never pooled with the old one
+#   - --dry-run asks and prints, writes nothing: for trying a decider by hand
 #
 # PRE-DECLARED GATE: the shadow book may be proposed for a dated re-freeze only
 # if, over at least 63 decided-and-graded nights, its paired nightly
@@ -92,11 +97,8 @@ def request_body(state, names, model):
                 f'-- bought at today\'s closing auction and sold at '
                 f'tomorrow\'s opening auction?'),
             'criteria': {
-                'true': 'hold it: no reason in the state to expect tonight to '
-                        'be worse for this name than an ordinary night',
-                'false': 'skip it tonight: the state shows a specific reason, '
-                         'such as an earnings report before tomorrow\'s open '
-                         'or an extreme recent move'}}
+                'true': 'hold: an ordinary night for this name',
+                'false': 'skip: earnings tonight or an extreme recent move'}}
     q['hedge_book'] = {
         'type': 'noul',
         'instructions': (
@@ -104,8 +106,7 @@ def request_body(state, names, model):
             'short position in QQQ, held from today\'s close to tomorrow\'s '
             'open?'),
         'criteria': {
-            'true': 'hedge: the basket is concentrated in one theme or the '
-                    'state shows elevated risk of a market-wide overnight gap',
+            'true': 'hedge: elevated risk of a market-wide overnight gap',
             'false': 'do not hedge: an ordinary night'}}
     return {'state': state, 'model': model, 'questions': q}
 
@@ -167,17 +168,24 @@ def ask_rule(state, names):
 
 # -------------------------------------------------------------- the state --
 
+STATE_SCHEMA = 2      # 1: raw 5-night series (2026-10-12 only); 2: summaries
+
+
 def build_state(names, today, download=None, earnings=None):
-    """What the model sees: per name, recent overnight and intraday moves,
-    20-day volatility and whether it reports earnings tonight; QQQ the same.
-    Numbers only, all known before today's close."""
+    """What the model sees, computed in code ("keep math in code" is
+    TypeSafe's own advice for jev-1.13, and small local deciders cap the
+    prompt near 2,000 tokens): per name, last night's overnight move, the
+    5-night overnight mean, the 5-day return, 20-day volatility (all bps,
+    rounded) and whether it reports earnings tonight; the same for QQQ. All
+    known before today's close."""
     import yfinance as yf
     download = download or yf.download
     v = download([n.replace('.', '-') for n in names + ['QQQ']],
                  period='3mo', interval='1d', auto_adjust=False,
                  actions=False, group_by='ticker', progress=False)
-    st = {'date': today, 'strategy': 'long an 11-name basket overnight, '
-          'buy at the close auction, sell at the next open auction',
+    st = {'schema': STATE_SCHEMA, 'date': today,
+          'book': 'long these names overnight: buy at the close auction, '
+                  'sell at the next open auction; moves in basis points',
           'names': {}}
     for n in names + ['QQQ']:
         try:
@@ -187,12 +195,17 @@ def build_state(names, today, download=None, earnings=None):
         s = s[s.index.strftime('%Y%m%d') < today]   # nothing from today
         on = np.log(s.Open / s.Close.shift()).dropna() * 1e4
         cc = np.log(s.Close / s.Close.shift()).dropna() * 1e4
-        row = {'overnight_bps_last5': [round(x, 1) for x in on.tail(5)],
-               'close_to_close_bps_last5': [round(x, 1) for x in cc.tail(5)],
-               'vol_20d_bps': round(float(cc.tail(20).std()), 1)}
-        if n != 'QQQ':
+        if len(on) < 5 or len(cc) < 20:
+            continue
+        row = {'last_night': int(round(on.iloc[-1])),
+               'nights5_avg': int(round(on.tail(5).mean())),
+               'ret5d': int(round(cc.tail(5).sum())),
+               'vol20d': int(round(cc.tail(20).std()))}
+        if n == 'QQQ':
+            st['QQQ'] = row
+        else:
             row['earnings_tonight'] = bool((earnings or {}).get(n))
-        (st.setdefault('market', {}) if n == 'QQQ' else st['names'])[n] = row
+            st['names'][n] = row
     return st
 
 
@@ -208,7 +221,9 @@ def earnings_tonight(names, today):
             e = yf.Ticker(n.replace('.', '-')).get_earnings_dates(limit=8)
             ts = [t.tz_convert(ET) for t in (e.index if e is not None else [])]
             out[n] = any(lo <= t <= hi for t in ts)
-        except Exception:
+        except Exception as ex:                 # unknown reads as no report;
+            print(f'earnings lookup failed for {n}: {ex}',   # say so
+                  file=sys.stderr)
             out[n] = False
     return out
 
@@ -221,19 +236,19 @@ def read_log(path=GLOG):
 
 
 def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
-    """Ask once for tonight and append. Refuses a night already decided, and
-    a decision at or after the MOC cutoff."""
+    """Ask once for tonight and append. Refuses a night this backend already
+    decided (the decider and the earnings-rule baseline each decide once),
+    and a decision at or after the MOC cutoff."""
     log = read_log(path)
-    if (log.date == today).any():
-        raise SystemExit(f'{today} already decided -- a night is never '
-                         f're-decided')
+    if ((log.date == today) & (log.backend == backend)).any():
+        raise SystemExit(f'{today} already decided by the {backend} backend '
+                         f'-- a night is never re-decided')
     if (now_et.hour, now_et.minute) >= CUTOFF:
         raise SystemExit(f'{now_et:%H:%M} ET is at or past the {CUTOFF[0]}:'
                          f'{CUTOFF[1]:02d} cutoff -- too late to decide '
                          f'tonight honestly')
     p, model, ms = ask(state, names)
-    held = [p[n] for n in names if n in p]
-    med = float(np.median(held)) if held else 0.5
+    d = rule(p, names)
     sha = hashlib.sha256(json.dumps(state, sort_keys=True)
                          .encode()).hexdigest()[:12]
     new = not os.path.exists(path)
@@ -244,14 +259,23 @@ def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
         for k in names + [BOOK]:
             if k not in p:
                 continue
-            q = 'hedge_book' if k == BOOK else 'hold'
-            yes = p[k] >= 0.5 if k == BOOK else \
-                not (p[k] < 0.5 and p[k] < med - SKIP_MARGIN)
             w.writerow([today, now_et.strftime('%Y-%m-%d %H:%M:%S'), backend,
-                        model, q, k, f'{p[k]:.4f}',
-                        ('hedge' if yes else 'none') if k == BOOK else
-                        ('hold' if yes else 'skip'), ms, sha])
+                        model, 'hedge_book' if k == BOOK else 'hold', k,
+                        f'{p[k]:.4f}', d[k], ms, sha])
     return p
+
+
+def rule(p, names):
+    """The pre-declared rule (RESULTS 27): skip a name only if p < 0.5 AND p
+    is at least SKIP_MARGIN below the night's median p(hold); hedge the book
+    iff p >= 0.5."""
+    held = [p[n] for n in names if n in p]
+    med = float(np.median(held)) if held else 0.5
+    d = {n: 'skip' if p[n] < 0.5 and p[n] < med - SKIP_MARGIN else 'hold'
+         for n in names if n in p}
+    if BOOK in p:
+        d[BOOK] = 'hedge' if p[BOOK] >= 0.5 else 'none'
+    return d
 
 
 # -------------------------------------------------------------- the grade --
@@ -321,10 +345,13 @@ def main():
                                  'trades.')
     ap.add_argument('--decide', action='store_true')
     ap.add_argument('--grade', action='store_true')
+    ap.add_argument('--dry-run', action='store_true',
+                    help='ask and print tonight\'s answers; write nothing '
+                         '(any machine, any time -- the record is untouched)')
     ap.add_argument('--backend', choices=['http', 'rule'], default='http')
     a = ap.parse_args()
     paper = pd.read_csv(PAPER, dtype=str)
-    if a.decide:
+    if a.decide or a.dry_run:
         now = dt.datetime.now(ET)
         today = now.strftime('%Y%m%d')
         names = paper.iloc[-1].q5.split(';')
@@ -341,6 +368,14 @@ def main():
                 os.environ.get('DECIDER_MODEL', 'jev-latest'))
         else:
             ask = ask_rule
+        if a.dry_run:
+            p, model, ms = ask(state, names)
+            d = rule(p, names)
+            print(f'{today} DRY RUN, nothing written -- {model}, {ms} ms')
+            for k in names + [BOOK]:
+                if k in p:
+                    print(f'  {k:6s} {p[k]:.4f}  {d[k]}')
+            return
         p = decide(a.backend, names, today, now, state, ask=ask)
         print(f'{today}: ' + '  '.join(f'{k} {v:.2f}' for k, v in p.items())
               + '  -> reports/guard_log.csv (commit before the close)')
@@ -356,8 +391,10 @@ def main():
         prints = official_prints(names, lo.strftime('%Y-%m-%d'),
                                  (pd.Timestamp.today() + pd.Timedelta(days=1))
                                  .strftime('%Y-%m-%d'))
-        for b, g in log.groupby('backend'):
-            print(f'[{b}] ' + verdict(grade(g, paper, daily, prints)))
+        # one record per decider: a change of model starts its own record
+        # (and its own 63-night gate), it never pools with the old one
+        for (b, m), g in log.groupby(['backend', 'model']):
+            print(f'[{b} {m}] ' + verdict(grade(g, paper, daily, prints)))
 
 
 if __name__ == '__main__':

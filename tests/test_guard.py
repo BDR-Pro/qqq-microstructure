@@ -95,6 +95,17 @@ def test_decide_appends_once_and_refuses_late_or_repeated(tmp_path):
         except SystemExit as ex:
             assert 'already decided' in str(ex) or 'cutoff' in str(ex)
     assert len(g.read_log(path)) == 3                 # nothing appended
+    # the earnings-rule baseline decides the same night once, on its own
+    # record; a second rule decision is refused like any other
+    g.decide('rule', ['MU', 'STX'], '20261013', early, {'names': {}}, path,
+             g.ask_rule)
+    try:
+        g.decide('rule', ['MU'], '20261013', early, {'names': {}}, path,
+                 g.ask_rule)
+        assert False, 'must refuse'
+    except SystemExit as ex:
+        assert 'already decided by the rule backend' in str(ex)
+    assert list(g.read_log(path).backend) == ['http'] * 3 + ['rule'] * 3
 
 
 def _prints():
@@ -147,3 +158,46 @@ def test_the_rule_baseline_skips_earnings_and_never_hedges():
     st = {'names': {'MU': {'earnings_tonight': True}, 'STX': {}}}
     p, model, _ = g.ask_rule(st, ['MU', 'STX'])
     assert p == {'MU': 0.0, 'STX': 1.0, g.BOOK: 0.0}
+
+
+def test_rule_reads_tev1s_opposite_leans_the_same_way():
+    """Tev1 0.8B and 4B on 2026-10-12 (dry run, RESULTS 27): one leans to
+    hold, the other to skip, on every name. The rule judges each against its
+    own night's median, so neither skips the basket wholesale; only the 4B's
+    one outlier (SNDK, 0.0584 under a 0.0597 bar) goes."""
+    names = ['MU', 'BE', 'STX', 'SNDK', 'NBIS', 'IREN', 'LRCX', 'WDC', 'AMAT',
+             'INTC', 'CAT']
+    small = dict(zip(names, [.8097, .9977, .9950, .9992, .9970, .7933, .9098,
+                             .9403, .6352, .8270, .9662]), **{g.BOOK: .8811})
+    big = dict(zip(names, [.3462, .2213, .1196, .0584, .0635, .1597, .1515,
+                           .3179, .2095, .0883, .2849]), **{g.BOOK: .6131})
+    assert set(g.rule(small, names).values()) == {'hold', 'hedge'}
+    d = g.rule(big, names)
+    assert [n for n in names if d[n] == 'skip'] == ['SNDK']
+    assert d[g.BOOK] == 'hedge'
+
+
+def test_the_state_fits_a_small_deciders_prompt():
+    """Ollama's Tev1 refuses a prompt over 2,050 tokens and never truncates
+    (it refused schema 1 at 2,762). Schema 2 sends summaries: an 11-name
+    state stays far inside, at well under 4 characters a token."""
+    names = ['MU', 'BE', 'STX', 'SNDK', 'NBIS', 'IREN', 'LRCX', 'WDC', 'AMAT',
+             'INTC', 'CAT']
+    idx = pd.bdate_range('2026-07-01', '2026-10-12')
+    rng = np.random.default_rng(0)
+    cols = pd.MultiIndex.from_product([names + ['QQQ'], ['Open', 'Close']])
+    px = pd.DataFrame(100 * np.exp(rng.normal(0, .02, (len(idx), len(cols)))
+                                   .cumsum(0)), index=idx, columns=cols)
+    st = g.build_state(names, '20261012', download=lambda *a, **k: px,
+                       earnings={'MU': True})
+    assert st['schema'] == g.STATE_SCHEMA == 2
+    assert set(st['names']) == set(names) and 'QQQ' in st
+    assert st['names']['MU']['earnings_tonight'] is True
+    # nothing from the decision day itself
+    early = g.build_state(names, '20261012', download=lambda *a, **k:
+                          px[px.index < '2026-10-12'])
+    assert early['names'] == {**st['names'], 'MU': {**st['names']['MU'],
+                                                     'earnings_tonight': False}}
+    body = g.request_body(st, names, 'm')
+    for q in body['questions'].values():
+        assert len(json.dumps(st)) + len(json.dumps(q)) < 2050 * 2

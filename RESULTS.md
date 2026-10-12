@@ -2519,3 +2519,185 @@ reverses several of them.
   QQQ in every world.
 - At $25k, holding QQQ has the higher median in every world, the best one
   included.
+
+---
+
+## 27. A Jev-style decision model, added in shadow mode — `guard.py`, `jev_local.py`
+
+The owner asked to add "a locally hosted decision model like Jev for better
+performance". Jev turned out to be real: TypeSafe AI's "System One" decision
+model, launched 2026-09-15. It is after this file's other sources, so
+everything below about it was read on primary sources (TypeSafe's docs and
+API reference, the projects' repositories, the papers) and re-checked by an
+independent verifier on 2026-10-12.
+
+### What Jev is, and what can be run locally
+
+**Jev itself:**
+- **API:** `POST /v1/systemone` with a `state` and typed `questions` (`noul`
+  yes/no, `choice`, `score`). It answers with probabilities in about 0.1 s.
+- **Hosting:** hosted only, early access, an API key. No weights, no
+  on-premises option, no disclosed training cutoff, no finance evaluation.
+- **Known weaknesses** (TypeSafe's own notes for jev-1.13): numeric precision
+  ("keep math in code"), and dates read as text.
+
+**Local, Jev-API options:**
+- **Ollama ≥ 0.35** serves `/v1/systemone` (release notes and source code
+  verified). It runs purpose-trained decision models: Together AI's Tev1
+  (Qwen3.5 4B / 0.8B) and Bespoke Labs' Nimble (9B). On Ollama's 13-dataset
+  comparison Tev1 scores 73.3% (4B) and 63.5% (0.8B), Nimble 75.7%, against
+  76.0% for Jev 1.13. These are vendor-reported, and none of the datasets is
+  financial.
+- **Laya** serves the same API from a 421M encoder on CPU. Its own benchmark
+  puts it near chance zero-shot. Its server binds `0.0.0.0:8000` (every
+  interface) by default, so on the VM it would be reachable from outside.
+- **Kev** matches the API but is GPU-oriented.
+- **SemIf** reads option probabilities from a frozen Qwen3.5-4B but has no
+  HTTP server.
+
+`jev_local.py` is that SemIf method behind the documented API: no generated
+text, the model's own next-token probabilities. It runs Qwen3.5-0.8B on CPU in
+the cloud environment: p(yes) 0.956 vs 0.053 on a sanity question, and
+deterministic.
+
+### Why it can only be tested forward
+
+The literature on language models in return prediction is unambiguous:
+- **Models memorise outcomes before their cutoff, most strongly for prominent
+  stocks.** Anonymisation fails for mega-caps (Lopez-Lira, Tang & Zhu 2025),
+  and a model "knew" Kodak's +318% day from the ticker and date alone (Gao,
+  Jiang & Yan 2025).
+- **Backtests shrink badly once the data moves past the model.** Published
+  LLM trading agents lost 51–62% of their Sharpe ratio when re-run after the
+  model's release (Profit Mirage, 2025), and leading LLMs lost money in live
+  forward tests (DeepFund 2025; LiveTradeBench 2025).
+- **The recommended designs** are point-in-time models (ChronoGPT, DatedGPT,
+  Time Machine GPT) or forward tests. Closed hosted models with undisclosed
+  training data should be avoided for prediction claims (Ludwig, Mullainathan
+  & Rambachan 2024).
+
+An 11-name basket of mega-caps is the worst case for memorisation. So
+`guard.py` never backtests and never trades:
+- Each afternoon, before the 15:50 ET MOC cutoff, it asks the decider
+  "hold {name} tonight?" per name and "hedge the basket 1:1 with QQQ
+  tonight?" for the book.
+- It commits the answers, time-stamped and stamped with the model version,
+  and grades the implied shadow book against the frozen book later, on
+  identical nights at official prints.
+
+Integrity is enforced in code:
+- one decision per night per backend (the decider, and the control below);
+- refused at or after the cutoff;
+- a late row in the log is dropped by the grader;
+- one record per decider: a new model starts its own record and its own
+  63-night clock, and is never pooled with the old one.
+
+**The control:** a code-only rule (`--backend rule`) that skips a name
+reporting earnings before the next open and never hedges. It is logged and
+graded on the same nights, so the decider has to beat a rule, not just the
+frozen book.
+
+**Gate (pre-declared):** at least 63 graded nights, paired mean > 0 and
+paired t > 2, before the shadow book may even be proposed for a dated
+re-freeze.
+
+### What a decision layer could fix, measured first
+
+On the 33 live nights, only **1 of 356** held name-nights crossed an earnings
+report (MU, −1.0%). The losses were the basket falling together:
+- 2026-09-11: all 11 names fell 4–9% overnight;
+- 2026-10-06: all 11 fell.
+
+A per-name veto has almost nothing to act on. The book-level question has
+evidence behind it. Hedging with QQQ on the same nights cut the nightly sd
+from 207 bps to:
+- 152 (hedged 1:1);
+- 134 (hedged at the backtest beta, 1.42);
+- 115 (hedged at the in-sample live beta, 2.37).
+
+The worst night fell from −734 to between −570 and −346 bps. §21 has the
+backtest support: the 1:1-hedged book keeps 93% of the alpha.
+
+### The first run, and the rule it forced
+
+Qwen3.5-0.8B's answers on 2026-10-12 put **all 11 names at p(hold) 0.35–0.41,
+and the hedge at 0.29**: a constant lean toward "No", not a view on any name.
+A bare p < 0.5 would skip the whole basket every night, and the test would
+degenerate into "flat vs the frozen book".
+
+The rule was therefore fixed before any decided night had an outcome:
+- skip a name only if p < 0.5 **and** p sits at least 0.10 below the night's
+  median;
+- hedge if p ≥ 0.5.
+
+For a calibrated decider this reduces to the plain rule.
+
+**The first forward decisions, 2026-10-12:**
+- **Qwen3.5-0.8B through `jev_local.py`:** decided 14:59:20 ET, committed
+  15:03 ET. Hold all 11, no hedge.
+- **The earnings rule:** decided 15:18:20 ET, committed 15:18:38 ET. Hold all
+  11 (none reports tonight), no hedge.
+
+### Tev1 through Ollama, and the decider from 2026-10-13
+
+Ollama 0.40.3 was installed in the cloud environment with both Tev1 builds:
+`tev1:0.8b-q8_0` and `tev1:4b-q4_K_M` (digest `07be32e6e5e3`). Ollama
+answers `/v1/systemone` natively, on localhost, with no API key.
+
+**The prompt limit forced a smaller state.** Tev1 refused the first request:
+"prompt 0 has 2762 tokens; expected 1–2050 (input is never truncated)".
+- **Schema 1** (used for 2026-10-12 only) sent raw five-night series per name.
+- **Schema 2** sends computed summaries instead, which is TypeSafe's own
+  advice ("keep math in code"). Per name, in bps and rounded: last night's
+  overnight move, the 5-night overnight mean, the 5-day return and 20-day
+  volatility, plus the earnings flag. QQQ gets the same row. Nothing is taken
+  from the decision day.
+
+**Tonight's questions, asked again without logging** (the night was already
+decided). Both builds gave identical answers on a rerun.
+
+| | Tev1 0.8B | Tev1 4B |
+|---|---|---|
+| p(hold), range | 0.64–1.00 | 0.06–0.35 |
+| median p(hold) | 0.94 | 0.16 |
+| skipped under the rule | none | SNDK (0.0584, bar 0.0597) |
+| p(hedge) | 0.88: hedge | 0.61: hedge |
+| 12 questions, CPU, warm (cold) | 4 s (20 s) | 12 s (80–84 s) |
+
+**What the table shows:**
+- **The two sizes lean in opposite directions on every name.** The 0.8B leans
+  to hold, the 4B to skip, and Qwen3.5-0.8B through `jev_local.py` leaned to
+  "No". The level of p from a small decider is a lean, not information. This
+  is why the rule is relative to each night's median, and it held: no leaning
+  model skipped the basket wholesale.
+- **Both Tev1 builds would have hedged tonight.** Every name is down 3–16%
+  over five days while QQQ is flat (+0.2%). A QQQ hedge does not address a
+  sell-off confined to the basket's theme, so this answer is not obviously
+  sensible. Either way it is one night and carries no evidence.
+
+**The decider from 2026-10-13 is Tev1-4B** (`tev1:4b-q4_K_M`, digest above).
+This was declared before any decided night had an outcome. The reasons:
+- it was trained for these question types, unlike a chat model read through
+  its next-token logits;
+- of the local options it scores closest to Jev;
+- it runs on CPU in seconds and needs no key.
+
+`guard.yml` runs it in GitHub Actions every weekday at 13:30 ET, with the
+earnings rule beside it:
+- Ollama is a released build, checked against its published sha256, CPU
+  libraries only.
+- The job refuses a model whose digest differs from the pinned one.
+- The job holds no secrets and never trades.
+
+Qwen3.5-0.8B's single night stays its own one-night record.
+`python src/guard.py --dry-run` asks a decider and prints the answers without
+writing anything, for trying one by hand.
+
+### Reading
+
+A decision model's speed is irrelevant to a book that trades twice a day in
+auctions. What it might add is judgment on the nights where the basket's
+shared risk is high. That can only be measured forward, and only the gate
+decides whether it ever touches capital. Until then, the evidence-backed lever
+for this book's risk is the book-level hedge (§21, and the numbers above), and
+that is a change of the traded object for the owner to decide.
