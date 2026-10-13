@@ -120,6 +120,38 @@ def test_proxy_auth_sends_no_key_at_all(env, monkeypatch):
     assert all('Authorization' not in h for _, h, _ in o.calls)
 
 
+def test_the_default_request_is_byte_identical_to_every_logged_night():
+    """request_body grew options (order, version, ids, provider, view) for
+    the battery (RESULTS 27); its defaults must send exactly the bytes the
+    record was declared with, pinned on the real state of 2026-10-13."""
+    import hashlib
+    s0 = json.load(open(os.path.join(os.path.dirname(HERE), 'bench',
+                                     'battery', 's0_20261013.json')))
+    b = json.dumps(g.request_body(s0['state'], s0['names'],
+                                  'perplexity/pplx-decider-v1.1-27b'))
+    assert hashlib.sha256(b.encode()).hexdigest() == \
+        '5489fee7f67aa8d81d9649e6df590956b4a592db49158634e0e20abf2dbfb220'
+
+
+def test_a_seeded_order_moves_questions_and_names_together():
+    s0 = json.load(open(os.path.join(os.path.dirname(HERE), 'bench',
+                                     'battery', 's0_20261013.json')))
+    qids = [f'hold_{n}' for n in s0['names']] + ['hedge_book']
+    o = g.question_order('20261013|abc|0|order-v1|http', qids)
+    assert o == g.question_order('20261013|abc|0|order-v1|http', qids)
+    assert o != qids and sorted(o) == sorted(qids)
+    b = g.request_body(s0['state'], s0['names'], 'm', order=o)
+    assert list(b['questions']) == o
+    assert [f'hold_{n}' for n in b['state']['names']] == \
+        [q for q in o if q != 'hedge_book']
+    assert list(s0['state']['names']) == s0['names']    # shared state intact
+
+
+def test_hosted_never_names_a_moving_alias():
+    assert not any(v.startswith('~') or ':free' in v
+                   for v in dl.HOSTED.values())
+
+
 def test_the_record_gate_is_split_three_ways():
     # three records can pass (decider, reference, control): Bonferroni on the
     # one-sided 2.5% of t > 2 at 62 df

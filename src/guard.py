@@ -48,6 +48,15 @@
 # (2.46: three records can pass, so 2's 2.5% level is split three ways).
 # Otherwise the frozen book stands, and that is a recorded result.
 #
+# Under the gate line, never instead of it, the grade also prints
+# randomization inference (RESULTS 27): a sign-flip p for the mean
+# difference, and an activity-matched null -- the same number of skips each
+# night on names drawn at random, the same number of hedged nights drawn at
+# random -- which tells an edge that comes from how much a record skips and
+# hedges (exposure) from one that comes from which names and nights it picks
+# (selection). Only the three GATED records (the decider, the reference, the
+# control) share the gate's split; any other prints as '[not a gated record]'.
+#
 # Backends:
 #   http   any Jev-compatible endpoint (DECIDER_URL, DECIDER_KEY,
 #          DECIDER_MODEL for a dry run). In the record, decide_local.py runs:
@@ -61,7 +70,8 @@
 #   python src/guard.py --dry-run                # try a server by hand
 #   python src/guard.py --grade
 
-import os, sys, csv, json, time, argparse, hashlib, datetime as dt
+import os, sys, re, csv, json, math, time, zlib, argparse, hashlib, itertools
+import datetime as dt
 import urllib.request, urllib.error
 from zoneinfo import ZoneInfo
 import numpy as np, pandas as pd
@@ -95,30 +105,66 @@ SKIP_MARGIN = 0.10
 
 # ---------------------------------------------------------------- the API --
 
-def request_body(state, names, model):
+# The questions' wording, by version. 'q1' is the wording every logged night
+# so far was asked with; a new version is a new record (its suffix is
+# logged with the model), never an edit of q1.
+QUESTIONS = {'q1': {
+    'hold': ('Should the long position in `{n}` be held overnight tonight '
+             '-- bought at today\'s closing auction and sold at '
+             'tomorrow\'s opening auction?',
+             {'true': 'hold: an ordinary night for this name',
+              'false': 'skip: earnings tonight or an extreme recent move'}),
+    'hedge': ('Should tonight\'s whole basket be hedged with an equal-dollar '
+              'short position in QQQ, held from today\'s close to '
+              'tomorrow\'s open?',
+              {'true': 'hedge: elevated risk of a market-wide overnight gap',
+               'false': 'do not hedge: an ordinary night'})}}
+
+
+def question_order(seed, qids):
+    """A seeded, reproducible order of question ids: sha256 of seed|id. The
+    battery and the runtime share it, so the bytes tested are the bytes
+    sent (RESULTS 27)."""
+    return sorted(qids, key=lambda q: hashlib.sha256(
+        f'{seed}|{q}'.encode()).hexdigest())
+
+
+def request_body(state, names, model, order=None, version='q1', ids=None,
+                 provider=None, view=None):
     """The documented POST /v1/systemone body: a state, a model, and typed
-    questions keyed by ids we choose (ids are not sent to the model)."""
+    questions keyed by ids we choose (ids are not sent to the model).
+
+    Defaults reproduce the bytes every logged night was asked with (a test
+    pins their sha256). order: question ids (hold_{name}, hedge_book) in the
+    order to ask them; the state's names follow the same order. ids:
+    {question id: id sent}, e.g. opaque ids. provider: OpenRouter's
+    provider-routing object. view: a function of the state that returns
+    what is sent (the shared state, and its sha, are unchanged)."""
+    w = QUESTIONS[version]
     q = {}
     for n in names:
         q[f'hold_{n}'] = {
             'type': 'noul',
-            'instructions': (
-                f'Should the long position in `{n}` be held overnight tonight '
-                f'-- bought at today\'s closing auction and sold at '
-                f'tomorrow\'s opening auction?'),
-            'criteria': {
-                'true': 'hold: an ordinary night for this name',
-                'false': 'skip: earnings tonight or an extreme recent move'}}
+            'instructions': w['hold'][0].format(n=n),
+            'criteria': dict(w['hold'][1])}
     q['hedge_book'] = {
         'type': 'noul',
-        'instructions': (
-            'Should tonight\'s whole basket be hedged with an equal-dollar '
-            'short position in QQQ, held from today\'s close to tomorrow\'s '
-            'open?'),
-        'criteria': {
-            'true': 'hedge: elevated risk of a market-wide overnight gap',
-            'false': 'do not hedge: an ordinary night'}}
-    return {'state': state, 'model': model, 'questions': q}
+        'instructions': w['hedge'][0],
+        'criteria': dict(w['hedge'][1])}
+    if order is not None:
+        assert sorted(order) == sorted(q), 'order must be a permutation'
+        q = {k: q[k] for k in order}
+        held = [k[5:] for k in order if k.startswith('hold_')]
+        state = dict(state, names={n: state['names'][n] for n in held
+                                   if n in state['names']})
+    if view is not None:
+        state = view(state)
+    if ids is not None:
+        q = {ids.get(k, k): v for k, v in q.items()}
+    body = {'state': state, 'model': model, 'questions': q}
+    if provider is not None:
+        body['provider'] = provider
+    return body
 
 
 def parse_answers(resp, names):
@@ -372,12 +418,51 @@ def rule(p, names):
 
 # -------------------------------------------------------------- the grade --
 
+# Randomization inference, printed under the gate line (RESULTS 27). Fixed
+# 2026-10-13, before any record had a graded night. Each record draws from
+# its own stream, keyed by (backend, model), so one record's p never depends
+# on which other records are in the log.
+GRADE_SEED = 20261013
+RAND_B = 20000                  # activity-matched draws (exact when fewer)
+FLIP_DRAWS = 100_000            # sign-flip draws above 20 nights (exact below)
+RAND_ALPHA = 0.05 / 3           # three gated records, the same split as GATE_T
+
+# The gated records: (backend, regex the logged model must fullmatch). Only
+# these three share GATE_T's split; any other record (an older decider, an
+# undated build, an undeclared handling suffix such as '#perm3.q1') is graded
+# the same way but printed as '[not a gated record]'. Declaring a new decider
+# or a suffix for it changes this one line: (pin, suffix), or (pin, suffix,
+# False) for a model the API serves under an undated build (the battery's
+# selection says which: its decider's 'dated').
+DECIDER = ('perplexity/pplx-decider-v1.1-27b', '')
+
+
+def decider_slot(pin, suffix='', dated=True):
+    """The decider's record: any dated build of the pin (or, for a model
+    served undated, the pin itself or a dated build of it), from one named
+    provider, carrying exactly the declared suffix."""
+    build = r'-\d{8}' if dated else r'(-\d{8})?'
+    return re.escape(pin) + build + r'@[^@#]+' + re.escape(suffix)
+
+
+GATED = (('rule', 'rule-earnings-v1'),
+         ('http', decider_slot(*DECIDER)),
+         ('jev', r'typesafe/jev-1\.13-\d{8}@[^@#]+'))
+
+
+def gated(backend, model):
+    return any(b == backend and re.fullmatch(rx, str(model))
+               for b, rx in GATED)
+
+
 def grade(log, paper, daily, prints):
     """Per decided night: the frozen book (every basket name, unhedged) vs the
     SHADOW book (skipped names left out, flat if all are; minus QQQ when the
     model said hedge), both at official prints. prints:
     {(sym, YYYYMMDD): (open, close)} incl. QQQ. Decisions at/after the cutoff
-    are dropped."""
+    are dropped. Each night also keeps its detail for the randomization
+    inference: rr (graded name -> overnight bps), kept (the names held) and
+    q (QQQ's overnight bps)."""
     ok = log[pd.to_datetime(log.decided_et).dt.strftime('%H%M')
              < f'{CUTOFF[0]:02d}{CUTOFF[1]:02d}']
     ok = ok[pd.to_datetime(ok.decided_et).dt.strftime('%Y%m%d') == ok.date]
@@ -410,11 +495,13 @@ def grade(log, paper, daily, prints):
         rows.append(dict(date=D, frozen=frozen, shadow=shadow,
                          diff=shadow - frozen, skipped=len(rr) - len(kept),
                          hedged=bool(hedge),
-                         backend=g.backend.iloc[0], model=g.model.iloc[0]))
+                         backend=g.backend.iloc[0], model=g.model.iloc[0],
+                         rr=rr, kept=kept, q=q))
     return pd.DataFrame(rows)
 
 
-def verdict(t):
+# the gate, exactly as declared: verdict() prints these lines first, unchanged
+def gate_verdict(t):
     if t.empty:
         return 'no decided-and-graded nights yet'
     n, m = len(t), t['diff'].mean()
@@ -431,6 +518,249 @@ def verdict(t):
                        f'may be proposed for a dated re-freeze')
     return head + f'\n  gate: not passed (t > {GATE_T} needed) -- the frozen ' \
         f'book stands'
+
+
+def _stream(backend, model):
+    return np.random.default_rng(
+        [GRADE_SEED, zlib.crc32(f'{backend}|{model}'.encode())])
+
+
+def _who(t, backend, model):
+    """The record's (backend, model) for its stream: given, else its own."""
+    pick = lambda v, c: v if v is not None else \
+        (str(t[c].iloc[0]) if c in t and len(t) else '')
+    return pick(backend, 'backend'), pick(model, 'model')
+
+
+def _at_least(T, Ts):
+    """#{T* >= T}. The observed assignment is among the draws, summed in
+    another order, so a tie must count whatever the float rounding."""
+    tol = 1e-9 * (1 + abs(T)) if np.isfinite(T) else 0.0
+    return int((Ts >= T - tol).sum())
+
+
+def signflip_p(diff, backend='', model=''):
+    """One-sided p for mean(diff) > 0 when each night's difference is as
+    likely + as -: exact over all 2^n signs for n <= 20, else FLIP_DRAWS
+    draws from the record's stream, p = (1 + #{T* >= T}) / (1 + draws)."""
+    x = np.asarray(diff, float)
+    if len(x) == 0:
+        return float('nan')
+    T = x.sum()                     # the mean's order, for a fixed n
+    if len(x) <= 20:
+        s = np.zeros(1)
+        for v in x:
+            s = np.concatenate([s + v, s - v])
+        return _at_least(T, s) / len(s)
+    rng, hits = _stream(backend, model), 0
+    for a in range(0, FLIP_DRAWS, 10_000):
+        sg = rng.integers(0, 2, (min(10_000, FLIP_DRAWS - a), len(x))) * 2 - 1
+        hits += _at_least(T, sg @ x)
+    return (1 + hits) / (1 + FLIP_DRAWS)
+
+
+def _nights(t):
+    """A record as arrays, names padded to the widest night: rr [n, M],
+    valid [n, M], observed skips [n, M], q [n], hedged [n]."""
+    n, M = len(t), max(len(r) for r in t.rr)
+    R, V, S = (np.zeros((n, M)), np.zeros((n, M), bool),
+               np.zeros((n, M), bool))
+    for i, (rr, kept) in enumerate(zip(t.rr, t.kept)):
+        kept = set(kept)
+        R[i, :len(rr)] = list(rr.values())
+        V[i, :len(rr)] = True
+        S[i, :len(rr)] = [x not in kept for x in rr]
+    return R, V, S, t.q.to_numpy(float), t.hedged.to_numpy(bool)
+
+
+def _tstat(skip_sum, hedge, R, V, k, q):
+    """Studentized mean of shadow - frozen, one row per assignment:
+    skip_sum [D, n] is the bps of the names skipped each night (k of them),
+    hedge [D, n] the hedged nights. Arithmetic as in grade()."""
+    m, tot = V.sum(1), R.sum(1)
+    left = m - k
+    kept = np.where(left > 0, (tot - skip_sum) / np.maximum(left, 1), 0.0)
+    d = kept - q * hedge - tot / m
+    mu, sd = d.mean(-1), d.std(-1, ddof=1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        T = mu / (sd / np.sqrt(d.shape[-1]))
+    # a constant difference: +-inf by its sign (0 if none), never nan
+    return np.where(sd > 0, T, np.where(mu > 0, np.inf,
+                                        np.where(mu < 0, -np.inf, 0.0)))
+
+
+# skip sets per night kept as a table of their bps; a basket so wide that a
+# night has more (19+ names) draws by sorting instead
+SKIP_TABLE = 50_000
+
+
+def _skip_table(R, V, k):
+    """Per night, the bps of every skip set of the observed size: table
+    [n, C] (a night's own sets first, the rest unused) and the counts. The
+    table is None past SKIP_TABLE sets on a night."""
+    m = V.sum(1)
+    sizes = [math.comb(int(a), int(b)) for a, b in zip(m, k)]
+    if max(sizes) > SKIP_TABLE:
+        return None, sizes
+    table = np.zeros((len(m), max(sizes)))
+    for i, (mi, ki, si) in enumerate(zip(m, k, sizes)):
+        c = np.array(list(itertools.combinations(range(int(mi)), int(ki))),
+                     int).reshape(si, int(ki))
+        table[i, :si] = R[i, c].sum(1)
+    return table, sizes
+
+
+def _all_skips(table, sizes, B):
+    """Every assignment of the nights' skip sets, as skip sums [count, n]
+    (the observed one among them), or None if there are more than B."""
+    total = math.prod(sizes)
+    if table is None or total > B:
+        return None
+    stride = np.cumprod([1] + sizes[:-1])
+    return table[np.arange(len(sizes)),
+                 np.arange(total)[:, None] // stride % np.array(sizes)]
+
+
+def _draw_skips(rng, table, sizes, R, V, k, B):
+    """B draws of a uniform skip set of size k[d] on each night d among its
+    graded names, as skip sums [B, n]: one of the night's sets, uniformly;
+    without a table, the k smallest of iid uniforms."""
+    n, M = R.shape
+    if table is not None:
+        return table[np.arange(n), rng.integers(0, np.array(sizes), (B, n))]
+    out, step = np.empty((B, n)), max(1, 2_000_000 // (n * M))
+    kth = np.maximum(k - 1, 0)[None, :, None]
+    for a in range(0, B, step):
+        u = rng.random((min(step, B - a), n, M))
+        u[:, ~V] = np.inf               # padding is never a name to skip
+        thr = np.take_along_axis(np.sort(u, -1),
+                                 np.broadcast_to(kth, u.shape[:2] + (1,)), -1)
+        pick = (u <= thr) & (k > 0)[None, :, None]
+        out[a:a + len(u)] = (pick * R).sum(-1)
+    return out
+
+
+def _all_hedges(n, H, B):
+    """Every set of H hedged nights among n [count, n], or None if more
+    than B."""
+    if math.comb(n, H) > B:
+        return None
+    out = np.zeros((math.comb(n, H), n), bool)
+    for r, c in enumerate(itertools.combinations(range(n), H)):
+        out[r, list(c)] = True
+    return out
+
+
+def _draw_hedges(rng, n, H, B):
+    """B draws of a uniform set of H hedged nights among n [B, n]."""
+    u = rng.random((B, n))
+    return u <= np.sort(u, 1)[:, H - 1:H] if H else np.zeros((B, n), bool)
+
+
+def randomization(t, B=RAND_B, backend=None, model=None):
+    """The activity-matched null: does the record's CHOICE of names and
+    nights beat random choices with its own activity? A draw skips, on each
+    night, a uniform random set of the observed size from that night's
+    graded names, and hedges a uniform random set of H nights, H as
+    observed. T* = mean / (sd / sqrt(n)) of the draw's shadow - frozen.
+    p_joint draws both; p_skip holds the hedges as observed; p_hedge holds
+    the skips as observed. p = #{T* >= T} / count when every assignment can
+    be enumerated (count <= B), else (1 + #{T* >= T}) / (B + 1) over B draws
+    from the record's stream. 'n/a' where there is no activity to test
+    (and for fewer than two nights, where T is undefined)."""
+    out = dict(p_joint='n/a', p_skip='n/a', p_hedge='n/a')
+    if len(t) < 2 or not {'rr', 'kept', 'q', 'hedged'} <= set(t.columns):
+        return out
+    R, V, S, q, h = _nights(t)
+    n, k, H = len(t), S.sum(1), int(h.sum())
+    if not k.any() and not H:
+        return out
+    seen = (S * R).sum(1)[None]
+    T = _tstat(seen, h[None], R, V, k, q)[0]
+    table, sizes = _skip_table(R, V, k)
+    rng, drawn = _stream(*_who(t, backend, model)), {}
+
+    def draws(what):                # drawn once, in a fixed order of need
+        if what not in drawn:
+            drawn[what] = _draw_skips(rng, table, sizes, R, V, k, B) \
+                if what == 'skip' else _draw_hedges(rng, n, H, B)
+        return drawn[what]
+
+    def p(skips, hedges, exact):
+        Ts = _tstat(skips, hedges, R, V, k, q)
+        hit = _at_least(T, Ts)
+        return hit / len(Ts) if exact else (1 + hit) / (B + 1)
+
+    ss, hh = _all_skips(table, sizes, B), _all_hedges(n, H, B)
+    if ss is not None and hh is not None and len(ss) * len(hh) <= B:
+        out['p_joint'] = p(np.repeat(ss, len(hh), 0),
+                           np.tile(hh, (len(ss), 1)), True)
+    else:
+        out['p_joint'] = p(draws('skip'), draws('hedge'), False)
+    if k.any():
+        out['p_skip'] = p(ss, h[None], True) if ss is not None else \
+            p(draws('skip'), h[None], False)
+    if H:
+        out['p_hedge'] = p(seen, hh, True) if hh is not None else \
+            p(seen, draws('hedge'), False)
+    return out
+
+
+def _fmt(p):
+    if isinstance(p, str) or not np.isfinite(p):
+        return 'n/a'
+    return f'{p:.4f}' if p >= 1e-4 else f'{p:.1e}'
+
+
+def inference(t, backend=None, model=None):
+    """The lines under the gate: what the record did, where its difference
+    came from, and whether its choices beat random ones of the same
+    activity. Report only: the gate above is the verdict."""
+    backend, model = _who(t, backend, model)
+    n = len(t)
+    out = [f'  activity: {t.skipped.mean():.2f} skips/night, '
+           f'{int(t.hedged.sum())} of {n} nights hedged']
+    if {'rr', 'kept', 'q'} <= set(t.columns):
+        kept = [np.mean([r[x] for x in k]) if len(k) else 0.0
+                for r, k in zip(t.rr, t.kept)]
+        skip = float(np.mean(np.array(kept) - t.frozen.to_numpy(float)))
+        hedge = 0.0 - float(np.mean(t.q.to_numpy(float)
+                                    * t.hedged.to_numpy(bool)))
+        out.append(f'  diff split: skip part {skip:+.2f}, hedge part '
+                   f'{hedge:+.2f} bps/night')
+    else:
+        out.append('  diff split: n/a (no per-night detail)')
+    out.append('  sign-flip p (mean > 0): '
+               + _fmt(signflip_p(t['diff'], backend, model)))
+    r = randomization(t, backend=backend, model=model)
+    out.append('  activity-matched null: '
+               + ', '.join(f'{k} {_fmt(v)}' for k, v in r.items()))
+    beats = not isinstance(r['p_joint'], str) and r['p_joint'] <= RAND_ALPHA
+    out.append('  ' + ('selection beats activity-matched random' if beats
+                       else 'any edge is exposure, not selection'))
+    return out
+
+
+def verdict(t, backend=None, model=None):
+    """The gate's lines, unchanged, then the randomization inference under
+    them. backend and model key the record's random stream (default: the
+    record's own)."""
+    out = gate_verdict(t)
+    if t.empty:
+        return out
+    return out + '\n' + '\n'.join(inference(t, backend, model))
+
+
+def report(log, paper, daily, prints):
+    """One verdict per record. One record per decider: a change of model,
+    build, provider or handling suffix starts its own record (and its own
+    63-night gate), it never pools with the old one."""
+    out = []
+    for (b, m), g in log.groupby(['backend', 'model']):
+        tag = '' if gated(b, m) else '[not a gated record] '
+        out.append(f'{tag}[{b} {m}] '
+                   + verdict(grade(g, paper, daily, prints), b, m))
+    return out
 
 
 def main():
@@ -479,9 +809,10 @@ def main():
                                  (pd.Timestamp.today() + pd.Timedelta(days=1))
                                  .strftime('%Y-%m-%d'))
         # one record per decider: a change of model starts its own record
-        # (and its own 63-night gate), it never pools with the old one
-        for (b, m), g in log.groupby(['backend', 'model']):
-            print(f'[{b} {m}] ' + verdict(grade(g, paper, daily, prints)))
+        # (and its own 63-night gate), it never pools with the old one;
+        # a record outside GATED is printed as '[not a gated record]'
+        for line in report(log, paper, daily, prints):
+            print(line)
 
 
 if __name__ == '__main__':

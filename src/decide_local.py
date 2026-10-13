@@ -100,6 +100,8 @@ HOSTED = {
                                                  # independent boards
     'jev': 'typesafe/jev-1.13',                  # the reference: Jev itself
 }
+# a record names a dated build: never a moving alias (~...) or a :free route
+assert not any(v.startswith('~') or ':free' in v for v in HOSTED.values())
 TIMEOUT = 3 * 3600          # one request of 12 questions, worst case on a CPU
 TASK = 'qqq-guard-decider'
 RUNS_ET = ('09:17', '13:47')            # a try, and a catch-up

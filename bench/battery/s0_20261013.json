@@ -1,0 +1,106 @@
+{
+ "date": "20261013",
+ "names": [
+  "MU",
+  "BE",
+  "STX",
+  "SNDK",
+  "NBIS",
+  "IREN",
+  "LRCX",
+  "WDC",
+  "AMAT",
+  "INTC",
+  "CAT"
+ ],
+ "state": {
+  "schema": 2,
+  "date": "20261013",
+  "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+  "names": {
+   "MU": {
+    "last_night": -261,
+    "nights5_avg": -90,
+    "ret5d": -730,
+    "vol20d": 290,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -186,
+    "nights5_avg": -75,
+    "ret5d": -888,
+    "vol20d": 507,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -206,
+    "nights5_avg": -173,
+    "ret5d": -1635,
+    "vol20d": 442,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -280,
+    "nights5_avg": -108,
+    "ret5d": -1361,
+    "vol20d": 420,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": -177,
+    "nights5_avg": -68,
+    "ret5d": -1018,
+    "vol20d": 422,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 312,
+    "nights5_avg": 22,
+    "ret5d": -1512,
+    "vol20d": 369,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -126,
+    "nights5_avg": -120,
+    "ret5d": -1107,
+    "vol20d": 268,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -140,
+    "nights5_avg": -156,
+    "ret5d": -1322,
+    "vol20d": 400,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -119,
+    "nights5_avg": -68,
+    "ret5d": -861,
+    "vol20d": 246,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -210,
+    "nights5_avg": -68,
+    "ret5d": -1366,
+    "vol20d": 425,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -26,
+    "nights5_avg": -47,
+    "ret5d": -592,
+    "vol20d": 191,
+    "earnings_tonight": false
+   }
+  },
+  "QQQ": {
+   "last_night": -21,
+   "nights5_avg": -5,
+   "ret5d": -135,
+   "vol20d": 96
+  }
+ }
+}

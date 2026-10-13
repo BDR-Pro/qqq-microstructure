@@ -1,0 +1,417 @@
+{
+ "version": "v1",
+ "mode": "select",
+ "incumbent": "perplexity/pplx-decider-v1.1-27b",
+ "reference": "typesafe/jev-1.13",
+ "candidates": [
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b",
+   "price_in": 2e-08,
+   "X": 1.0
+  },
+  {
+   "id": "typesafe/jev-1.13",
+   "price_in": 4.2e-08,
+   "X": 0.798489
+  },
+  {
+   "id": "inception/mercury-decide",
+   "price_in": 2e-08,
+   "X": 0.76555
+  },
+  {
+   "id": "cloudflare/clef",
+   "price_in": 4.2e-08,
+   "X": 0.593478
+  },
+  {
+   "id": "jaredpalmer/kev-4b",
+   "price_in": 4.2e-08,
+   "X": 0.0
+  },
+  {
+   "id": "openai/gpt-6-luna-decisions",
+   "price_in": 1e-07,
+   "X": null
+  },
+  {
+   "id": "cloudflare/clef-omni",
+   "price_in": 1.5e-07,
+   "X": null
+  },
+  {
+   "id": "cloudflare/clef-flash",
+   "price_in": 2.1e-08,
+   "X": null
+  },
+  {
+   "id": "microsoft/microsoft-decision-1",
+   "price_in": 4.2e-08,
+   "X": null
+  },
+  {
+   "id": "upstage/solar-decide",
+   "price_in": 5e-08,
+   "X": null
+  },
+  {
+   "id": "upstage/solar-decide-flash",
+   "price_in": 5e-08,
+   "X": null
+  },
+  {
+   "id": "nace-ai/drex-v2.0",
+   "price_in": 6e-08,
+   "X": null
+  },
+  {
+   "id": "nace-ai/drex-v1.5",
+   "price_in": 4e-08,
+   "X": null
+  },
+  {
+   "id": "liquid/d1",
+   "price_in": 4e-08,
+   "X": null
+  },
+  {
+   "id": "scaledown/classify-1",
+   "price_in": 4e-08,
+   "X": null
+  },
+  {
+   "id": "togethercomputer/tev1-4b-experimental",
+   "price_in": 4.2e-08,
+   "X": null
+  },
+  {
+   "id": "respan/span-01",
+   "price_in": 2e-08,
+   "X": null
+  },
+  {
+   "id": "respan/span-01-lite",
+   "price_in": 0.0,
+   "X": null
+  }
+ ],
+ "x_boards": {
+  "scores": {
+   "perplexity/pplx-decider-v1.1-27b": {
+    "DI": 62.75,
+    "JB": 75.7
+   },
+   "typesafe/jev-1.13": {
+    "DI": 60.11,
+    "JB": 63.6
+   },
+   "inception/mercury-decide": {
+    "JB": 65.9
+   },
+   "cloudflare/clef": {
+    "DI": 53.08,
+    "JB": 59.1
+   },
+   "jaredpalmer/kev-4b": {
+    "DI": 39.5
+   }
+  },
+  "normalise": {
+   "DI": [
+    39.5,
+    62.75
+   ],
+   "JB": [
+    33.9,
+    75.7
+   ]
+  }
+ },
+ "seeds": {
+  "items": 20261013,
+  "analysis": 20261014,
+  "dispatch": 20261015
+ },
+ "date": "20261013",
+ "blocks": 4,
+ "states_per_block": 6,
+ "generator": {
+  "pool": [
+   "LRCX",
+   "NBIS",
+   "AMAT",
+   "MU",
+   "CAT",
+   "ASML",
+   "AMD",
+   "TSM",
+   "SOFI",
+   "GEV",
+   "WDC",
+   "BE",
+   "CRWV",
+   "INTC",
+   "STX",
+   "SNDK",
+   "IREN"
+  ],
+  "n_labels": 11,
+  "condition_p": {
+   "Ordinary": 0.5,
+   "Earnings": 0.15,
+   "ExtremeDown": 0.1,
+   "ExtremeUp": 0.1,
+   "Moderate": 0.15
+  },
+  "min_ordinary": 6,
+  "min_skip_criteria": 2,
+  "vol_log_sd": 0.25,
+  "on_frac": 0.5,
+  "z_base": [
+   -1.0,
+   1.0
+  ],
+  "z_extreme": [
+   3.5,
+   5.0
+  ],
+  "z_moderate": [
+   1.5,
+   2.5
+  ],
+  "p_move_on_night": 0.5,
+  "night_vol_div": 19,
+  "ret5d_vol_div": 95,
+  "nights5_div": 5,
+  "qqq_calm_log_sd": 0.15,
+  "qqq_stressed_m": [
+   2.0,
+   3.0
+  ],
+  "qqq_stressed_last_night": [
+   2.5,
+   4.0
+  ],
+  "qqq_stressed_ret5d": [
+   2.5,
+   4.0
+  ],
+  "qqq_stressed_nights5": [
+   1.0,
+   2.0
+  ],
+  "stressed_name_vol": [
+   1.3,
+   1.8
+  ],
+  "stressed_per_block": 3,
+  "cx_type_by_position": [
+   1,
+   1,
+   2,
+   2,
+   3,
+   3
+  ],
+  "cx1_holds": 5,
+  "e5_doses": [
+   1.5,
+   3.0,
+   6.0
+  ],
+  "e7_ld_per_block": 4,
+  "e7_an_per_block": 2,
+  "e8_per_block": 3,
+  "v_p_opaque": 0.5,
+  "v_p_keyshuffle": 0.5,
+  "v_p_jitter": 0.5,
+  "v_jitter_bps": 3,
+  "v_jitter_vol": 0.01,
+  "v_date_shift_bdays": [
+   0,
+   4
+  ],
+  "rounding": "Python round(), half to even",
+  "rng_state": "default_rng(SeedSequence(seeds.items, spawn_key=(s,))), s = 1..24 for S01..S24, s = 0 for S0",
+  "rng_block": "default_rng(SeedSequence(seeds.items, spawn_key=(100 + b,))), b = 1..4",
+  "e1_order_seed": "battery-v1|{state_id}|O{i}",
+  "cb_id_suffix": "_b",
+  "e9_order_seed": "{date}|{state_sha}|{j}|order-v1|http",
+  "state_sha": "sha256(json.dumps(state, sort_keys=True))[:12], as logged",
+  "numpy": "2.5"
+ },
+ "texts": {
+  "questions_version": "q1",
+  "book_paraphrases": [
+   "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "an overnight long position in each of these names: bought at the closing auction, sold at the next opening auction; all moves are in basis points",
+   "these names are held long overnight -- bought in the close auction and sold in the next open auction; moves are given in basis points"
+  ],
+  "negation": {
+   "hold": "Should the long position in `{n}` be left out tonight -- not bought at today's closing auction and not sold at tomorrow's opening auction?",
+   "hold_criteria": {
+    "true": "skip: earnings tonight or an extreme recent move",
+    "false": "hold: an ordinary night for this name"
+   },
+   "hedge": "Should tonight's whole basket be left unhedged -- with no equal-dollar short position in QQQ held from today's close to tomorrow's open?",
+   "hedge_criteria": {
+    "true": "do not hedge: an ordinary night",
+    "false": "hedge: elevated risk of a market-wide overnight gap"
+   }
+  }
+ },
+ "gates": {
+  "G1": {
+   "valid_rate_min": 0.98,
+   "completion_min": 0.95,
+   "modal_share_min": 0.9,
+   "p95_latency_s_max": 60.0,
+   "median_cost_usd_max": 0.01
+  },
+  "G2a": {
+   "ex_nuis_max": 0.05,
+   "rel_max": 0.5,
+   "D_min": 0.01
+  },
+  "G2b": {
+   "ex_ctx_max": 0.05,
+   "lb_alpha": 0.05
+  },
+  "G3a": {
+   "E_bar_max": -0.05,
+   "frac_neg_min": 0.75,
+   "holm_p_lt": 0.05
+  },
+  "G3b": {
+   "G_bar_min": 0.05,
+   "delta_h_gt": 0.0,
+   "holm_p_lt": 0.05
+  },
+  "G4": {
+   "flip_h_max": 0.1
+  },
+  "G5": {
+   "Q_minus_Q_rule_min": 0.05
+  },
+  "G6": {
+   "Phi_min": 0.5,
+   "Phi_ab_floor_min": 0.2
+  },
+  "smoke_stop": {
+   "invalid_first_calls": 3,
+   "never_for": [
+    "incumbent",
+    "reference"
+   ]
+  },
+  "handling": {
+   "k3_if_sd_rep_gt": 0.005,
+   "k3_if_ex_O_gt": 0.01,
+   "phi_factor": 1.5
+  },
+  "holm": {
+   "fwer": 0.05,
+   "family": [
+    "G3a",
+    "G3b"
+   ],
+   "over": "models that pass G1",
+   "signflip_exact_max_states": 20
+  },
+  "E8_flag": {
+   "CE_gt": 0.15,
+   "rho_neg_max": 0.0,
+   "permutations": 10000
+  },
+  "caching": {
+   "rho_b2b_lt": 0.25,
+   "report_only": true
+  },
+  "analysis_set": {
+   "block_final_share_min": 0.95,
+   "blocks_min": 3
+  },
+  "selection": {
+   "switch_margin_min": 0.03,
+   "lower_bound_gt": 0.0,
+   "alpha": 0.05,
+   "alpha_divisor": "eligible - 1",
+   "bootstrap": "paired, states resampled within regime",
+   "tie_break": [
+    "AUC_comb desc",
+    "mean(lift_E, lift_M6, delta_h) desc",
+    "flip_h asc",
+    "X desc",
+    "median cost asc",
+    "id asc"
+   ]
+  },
+  "iteration": {
+   "rounds_max": 2,
+   "variants_max": 4,
+   "delta_Q_min": 0.02,
+   "lower_bound_gt": 0.0,
+   "alpha": 0.05,
+   "alpha_divisor": "variants",
+   "AUC_comb_drop_max": 0.02,
+   "Phi_drop_max": 0.05,
+   "k5_if_sd_rep_gt": 0.005,
+   "sep_if_ex_ctx_gt": 0.02,
+   "items_seeds": [
+    20261021,
+    20261022
+   ],
+   "holdout_seed": 20261029,
+   "round_cap_usd": 3,
+   "holdout_cap_usd": 2
+  }
+ },
+ "gates_note": "key suffixes: _min >=, _max <=, _gt >, _lt <",
+ "calls_per_model": {
+  "nominal": {
+   "E0": 2,
+   "E1": 192,
+   "E2": 24,
+   "E3": 36,
+   "E4": 24,
+   "E5": 24,
+   "E6": 24,
+   "E7": 24,
+   "E8": 13,
+   "E9": 14
+  },
+  "floor": {
+   "E0": 2,
+   "E1": 144,
+   "E2": 18,
+   "E3": 30,
+   "E4": 18,
+   "E5": 18,
+   "E6": 18,
+   "E7": 18,
+   "E8": 10,
+   "E9": 14
+  }
+ },
+ "calls_note": "floor = block 4's synthetic states dropped; S0 items (state_id S0) are always sent. B2B1-3 (meta.group B2B) go back to back on one dispatch slot.",
+ "bootstrap_B": 10000,
+ "signflip_draws": 200000,
+ "spend": {
+  "max_usd": 8,
+  "max_usd_ceiling": 12,
+  "credit_margin": 10,
+  "pessimistic_per_call": 0.0012,
+  "price_ref": 3.1e-08
+ },
+ "deadline_min": 90,
+ "timeout_s": 60,
+ "concurrency": 16,
+ "per_model": 3,
+ "files": {
+  "states": "states_v1.json",
+  "items": "items_v1.jsonl",
+  "s0": "s0_20261013.json",
+  "anchors": "anchors_20261013.json"
+ },
+ "baselines_note": "Offline baselines on the 24 core states (C^a = C^b for a deterministic baseline): Q_rule = 0.5986 (the earnings rule skips 28 of 71 skip-criteria names and 0 of 162 Ordinary names, never hedges); constant 0.5 = 0.50; skip-nothing / always-hedge = 0.50; criteria oracle = 1.00. battery_score.score recomputes them from the locked items on the analysis set, and that value is the one G5 uses."
+}
