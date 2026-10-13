@@ -108,6 +108,18 @@ def test_no_key_no_hosted_night(env, monkeypatch):
         run(env, Decisions())
 
 
+def test_proxy_auth_sends_no_key_at_all(env, monkeypatch):
+    """Where a network proxy adds the key (measured in a cloud environment,
+    RESULTS 27), --proxy-auth sends requests with no Authorization header."""
+    monkeypatch.delenv('OPENROUTER_API_KEY')
+    o = Decisions()
+    done = dl.run('kev-4b-q8_0', tonight=lambda t: ('20261013', NAMES, ST),
+                  path=str(env / 'p.csv'), now=NOW, opener=o,
+                  proxy_auth=True)
+    assert done == ['rule', 'http', 'jev']
+    assert all('Authorization' not in h for _, h, _ in o.calls)
+
+
 def test_the_record_gate_is_split_three_ways():
     # three records can pass (decider, reference, control): Bonferroni on the
     # one-sided 2.5% of t > 2 at 62 df

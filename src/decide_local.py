@@ -144,9 +144,10 @@ def redact(s):
     return re.sub(r'//[^/@\s]+@', '//***@', str(s))
 
 
-def say(*a):
+def say(*a, echo=True):
     line = redact(' '.join(str(x) for x in a))
-    print(line, flush=True)
+    if echo:
+        print(line, flush=True)
     try:
         home().mkdir(parents=True, exist_ok=True)
         with open(home() / 'decider.log', 'a', encoding='utf-8') as f:
@@ -486,7 +487,7 @@ def night_state(today, build, t, cache=True):
 
 
 def run(m, dry_run=False, threads=None, server=Server, tonight=None,
-        path=None, now=None, engine='hosted', opener=None):
+        path=None, now=None, engine='hosted', opener=None, proxy_auth=False):
     """Decide tonight, or with --dry-run just ask and print. Returns the
     backends that logged. A failure of one never stops the others.
 
@@ -496,7 +497,9 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
     engine 'local': the control and Kev on a local llama.cpp, no key.
 
     `now` pins the clock (tests); left out, every answer is stamped with the
-    real time it arrived."""
+    real time it arrived. `proxy_auth`: send no key at all, because this
+    machine's network proxy adds it (a cloud environment's network secret;
+    measured working 2026-10-13)."""
     import guard
     path = path or guard.GLOG
     t = now or dt.datetime.now(guard.ET)
@@ -518,10 +521,12 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
         todo = backends
     if engine == 'hosted':
         key = os.environ.get('OPENROUTER_API_KEY')
-        if not key:
+        if not key and not proxy_auth:
             raise SystemExit('set OPENROUTER_API_KEY in this machine\'s '
                              'environment (never in a file in the repo), or '
-                             'run --engine local')
+                             'add --proxy-auth where a network proxy adds it, '
+                             'or run --engine local')
+        key = key or None               # None: no Authorization header
     elif server is Server:
         check_model(m)
         check_llama()
@@ -658,14 +663,16 @@ def systemd_units(python, script, repo, runs_et=RUNS_ET, args=()):
     return service, timer
 
 
-def schedule(runs_et=RUNS_ET, remove=False, engine='hosted'):
+def schedule(runs_et=RUNS_ET, remove=False, engine='hosted',
+             proxy_auth=False):
     repo = dedicated()
     script = repo / 'src' / 'decide_local.py'
     if not script.exists() and not remove:
         raise SystemExit('run --setup first (the schedule runs the dedicated '
                          'clone)')
     python = sys.executable
-    args = () if engine == 'hosted' else ('--engine', engine)
+    args = (() if engine == 'hosted' else ('--engine', engine)) + \
+        (('--proxy-auth',) if proxy_auth else ())
     if os.name == 'nt':
         ps = (f"Unregister-ScheduledTask -TaskName '{TASK}' -Confirm:$false"
               if remove else windows_task(runs_et))
@@ -767,7 +774,7 @@ def setup(m, local=False):
         f'python src/decide_local.py --dry-run, then --schedule')
 
 
-def nightly(m, threads=None, engine='hosted'):
+def nightly(m, threads=None, engine='hosted', proxy_auth=False):
     """What the schedule runs, from the dedicated clone."""
     import guard
     if ROOT.resolve() != dedicated():
@@ -777,7 +784,7 @@ def nightly(m, threads=None, engine='hosted'):
                          f'copy; here, use --dry-run')
     today = dt.datetime.now(guard.ET).strftime('%Y%m%d')
     sync(ROOT, today)
-    run(m, threads=threads, engine=engine)
+    run(m, threads=threads, engine=engine, proxy_auth=proxy_auth)
     # whatever this run, or an earlier one today, logged goes out now
     who = 'hosted: ' + ', '.join(HOSTED.values()) if engine == 'hosted' \
         else f'local: {model_name(m)}'
@@ -798,20 +805,25 @@ def main():
     ap.add_argument('--engine', choices=('hosted', 'local'), default='hosted',
                     help='hosted: OpenRouter, key in OPENROUTER_API_KEY '
                          '(default); local: Kev on llama.cpp, no key')
+    ap.add_argument('--proxy-auth', action='store_true',
+                    help='hosted, with no OPENROUTER_API_KEY here: send no '
+                         'key, the network proxy adds it')
     a = ap.parse_args()
     try:
         if a.setup:
             setup(a.model, local=a.engine == 'local')
         elif a.schedule or a.unschedule:
-            schedule(remove=a.unschedule, engine=a.engine)
+            schedule(remove=a.unschedule, engine=a.engine,
+                     proxy_auth=a.proxy_auth)
         elif a.dry_run:
-            run(a.model, dry_run=True, threads=a.threads, engine=a.engine)
+            run(a.model, dry_run=True, threads=a.threads, engine=a.engine,
+                proxy_auth=a.proxy_auth)
         else:
-            nightly(a.model, a.threads, a.engine)
+            nightly(a.model, a.threads, a.engine, a.proxy_auth)
     except SystemExit as ex:
-        if ex.code not in (None, 0):
-            say(f'stopped: {ex}')           # the log says why a night was
-        raise                               # missed, even under a scheduler
+        if ex.code not in (None, 0):        # the log says why a night was
+            say(f'stopped: {ex}', echo=False)   # missed, even under a
+        raise                                   # scheduler; Python prints it
     except Exception as ex:
         say(f'FAILED: {type(ex).__name__}: {ex}')
         raise
