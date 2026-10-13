@@ -25,6 +25,12 @@
 #   - the incumbent stays unless a challenger clears a margin AND a
 #     Bonferroni bootstrap bound: the top model is the best of up to 17, so
 #     its lead is inflated by the selection itself
+#   - iteration (spec section 4) scores ARMS -- ways of asking the selected
+#     model -- with this same code: each arm at its declared handling (k5:
+#     two sets of five orders), a sep arm's one-question answers merged
+#     back into the request they came from; iterate_outcome adopts at most
+#     one variant by a margin AND a Bonferroni bound, and the holdout keeps
+#     the final version only if it beats the selection's own
 #
 #   python src/battery_score.py score bench/battery/runs/v1
 #   python src/battery_score.py select bench/battery/runs/v1
@@ -90,7 +96,9 @@ def load(plan_path):
     with open(os.path.join(d, fs['items']), encoding='utf-8') as f:
         items = [json.loads(ln) for ln in f if ln.strip()]
     return {'plan': plan, 'states': _json(os.path.join(d, fs['states'])),
-            'items': items, 's0': _json(os.path.join(d, fs['s0'])), 'dir': d}
+            'items': items, 'dir': d,
+            # an iteration plan has no S0
+            's0': _json(os.path.join(d, fs['s0'])) if fs.get('s0') else None}
 
 
 def read_calls(run_dir):
@@ -187,6 +195,29 @@ def models_of(plan):
     ids = [c['id'] for c in plan['candidates']]
     return ids + [m for m in (plan['incumbent'], plan['reference'])
                   if m not in ids]
+
+
+def for_model(it, m):
+    """Whether item `it` was sent to model m: every item was, except an
+    iteration arm's own (for_arm)."""
+    return it.get('for_arm') in (None, m)
+
+
+def arms_of(plan):
+    """{arm id: arm} of an iteration plan; {} for a selection plan."""
+    return {a['id']: a for a in plan.get('arms') or []} \
+        if plan.get('mode') == 'iterate' else {}
+
+
+def stimuli(items):
+    """One item per stimulus, under its base id: an iteration plan writes
+    each stimulus once per arm (and a sep arm once per question), with the
+    same draws and meta, so any one of them stands for it."""
+    out = {}
+    for it in items:
+        b = it.get('base_id', it['item_id'])
+        out.setdefault(b, dict(it, item_id=b))
+    return list(out.values())
 
 
 def refuse_aliases(ids):
@@ -482,6 +513,15 @@ def mean_p(ps):
             if all(k in p for p in ps)}
 
 
+def mean_draws(ps):
+    """mean_p as the runtime averages k draws (guard.mean_of_draws: summed
+    exactly, rounded to 12 places, so a hundredths mean of 0.5 is 0.5): an
+    iteration arm's k3 and k5 decisions are the ones decide_local would log.
+    A selection keeps mean_p, the arithmetic v1 was scored with."""
+    ps = [p for p in ps if p]
+    return guard.mean_of_draws(ps) if ps else None
+
+
 def qrow(decisions, st):
     """One state's Q counts (QROW) over its decision sets."""
     r = np.zeros(len(QROW))
@@ -532,16 +572,23 @@ class Ctx:
         self.perms = int(self.G['E8_flag']['permutations'])
         self.stressed = [states[s]['regime'] == 'stressed' for s in A]
         self.date = str(plan.get('date') or s0.get('date'))
+        # k draws averaged: as the runtime does it in iteration (whose
+        # adopted arm is declared), as v1 was scored in a selection
+        self.mean_k = mean_draws if plan.get('mode') == 'iterate' \
+            else mean_p
 
     def meta(self, e, s, arm):
         it = self.item.get(f'{e}|{s}|{arm}')
         return it['meta'] if it else {}
 
 
-def score_model(P, cx):
+def score_model(P, cx, h=None):
     """Every section-2 metric for one model. P: {item_id: {ticker or BOOK:
-    p}} from its valid calls of the modal (build, provider)."""
+    p}} from its valid calls of the modal (build, provider). h: an
+    iteration arm's declared handling (k1, k3 or k5) -- otherwise it is
+    fixed from E1's noise and order, as section 2 declares."""
     g = lambda e, s, a: P.get(f'{e}|{s}|{a}')
+    hk = ('k1', 'k3', 'k5') if h == 'k5' else ('k1', 'k3')
     G = cx.G
     out = {}
 
@@ -572,24 +619,32 @@ def score_model(P, cx):
     sd_rep = math.sqrt(sd_rep2) if _ok(sd_rep2) else float('nan')
     hg = G['handling']
     # fixed from E1 noise and order alone, before Q is looked at
-    h = 'k3' if (_ok(sd_rep) and sd_rep > hg['k3_if_sd_rep_gt']) or \
+    h_noise = 'k3' if (_ok(sd_rep) and sd_rep > hg['k3_if_sd_rep_gt']) or \
         (_ok(ex_O) and ex_O > hg['k3_if_ex_O_gt']) else 'k1'
     out['noise'] = {'sd_rep': sd_rep, 'phi': phi, 'D': D, 'ex_O': ex_O,
                     'n_rep_pairs': len(sq_rep), 'n_states': len(pc)}
+    if h is None:
+        h = h_noise
+    else:                   # an arm's declared handling; the rule's, beside
+        out['h_noise'] = h_noise
     out['h'] = h
 
     # E1: decision sets, flips, Q, AUC, Goodhart diagnostics
-    reps, sets = {'k1': {}, 'k3': {}}, {'k1': {}, 'k3': {}}
+    reps, sets = {k: {} for k in hk}, {k: {} for k in hk}
     for s in cx.A:
         lab = cx.states[s]['labels']
-        o = [g('E1', s, f'O{i}') for i in range(1, 7)]
+        o = [g('E1', s, f'O{i}') for i in range(1, 11 if 'k5' in hk else 7)]
         reps['k1'][s] = [p for p in (g('E1', s, 'Ca'), g('E1', s, 'Cb'))
                          if p]
-        reps['k3'][s] = [p for p in (mean_p(o[:3]), mean_p(o[3:])) if p]
-        for k in ('k1', 'k3'):
+        reps['k3'][s] = [p for p in (cx.mean_k(o[:3]), cx.mean_k(o[3:6]))
+                         if p]
+        if 'k5' in hk:
+            reps['k5'][s] = [p for p in (cx.mean_k(o[:5]),
+                                         cx.mean_k(o[5:10])) if p]
+        for k in hk:
             sets[k][s] = [guard.rule(p, lab) for p in reps[k][s]]
     e1, rows = {}, {}
-    for k in ('k1', 'k3'):
+    for k in hk:
         fl = []
         for s in cx.A:
             if len(sets[k][s]) == 2:
@@ -847,7 +902,7 @@ def score_model(P, cx):
 
     out['E9'] = score_s0(P, cx, h, phi, s0c)
     out['q_counts'] = {k: [list(map(float, r)) for r in rows[k]]
-                       for k in ('k1', 'k3')}
+                       for k in hk}
     return out
 
 
@@ -855,6 +910,8 @@ def score_s0(P, cx, h, phi, ctrl):
     """E9: the real state S0 -- its decisions under k1, k3 and h against
     the rule's, the back-to-back caching ratio, and its nuisance and order
     deviations. Diagnostic only: S0 carries no labels."""
+    if cx.s0 is None:                   # an iteration plan has no S0
+        return {}
     cache = cx.G.get('caching', {}).get('rho_b2b_lt', CACHE_RHO_FLAG)
     names = cx.s0['names']
     arm = {it['arm']: P.get(i) for i, it in cx.item.items()
@@ -942,15 +999,19 @@ def baselines(cx):
 
 def analysis_set(models, ops, items, states, dropped_blocks, finals, share):
     """The blocks in which every model passing G1's operational checks has
-    at least `share` of its synthetic items final (spec section 7)."""
+    at least `share` of its synthetic items final (spec section 7). An
+    iteration arm counts its own items only."""
     blocks = sorted({st['block'] for st in states.values()}
                     - set(dropped_blocks))
     per = {}
     for b in blocks:
         ids = [i for i, it in items.items()
                if it['state_id'] != 'S0' and it['block'] == b]
-        per[b] = {m: sum(i in finals[m] for i in ids) / len(ids)
-                  for m in models if ids}
+        per[b] = {}
+        for m in models:
+            mine = [i for i in ids if for_model(items[i], m)]
+            if mine:
+                per[b][m] = sum(i in finals[m] for i in mine) / len(mine)
     ok = [m for m in models if ops[m]['pass_ops']]
     A = [b for b in blocks if all(_ge(per[b].get(m, 0.0), share)
                                   for m in ok)]
@@ -984,7 +1045,9 @@ def score(run_dir, plan_path=None):
         ok, why = finished(meta, plan)
         if not ok:
             raise ValueError(why)
-    refuse_aliases(models_of(plan))
+    arms = arms_of(plan)
+    refuse_aliases(models_of(plan) + [c['pin'] for c in plan['candidates']
+                                      if c.get('pin')])
     shas, lock = check_lock(plan_path, plan, meta)
     items = {it['item_id']: it for it in L['items']}
     G = plan['gates']
@@ -1001,7 +1064,8 @@ def score(run_dir, plan_path=None):
     A, per_block = analysis_set(models, ops, items, states, dropped_b, finals,
                                 G['analysis_set']['block_final_share_min'])
     A_states = sorted(s for s in states if states[s]['block'] in A)
-    cx = Ctx(plan, states, L['items'], s0, A_states)
+    cx = Ctx(plan, states, stimuli(L['items']) if arms else L['items'], s0,
+             A_states)
     # within the analysis set: S0's items count where they were dispatched,
     # so a block that never ran takes none of them in with it
     planned_A = [i for i, it in items.items() if it['experiment'] != 'E0'
@@ -1009,16 +1073,25 @@ def score(run_dir, plan_path=None):
     res, holm_in = {}, {}
     for m in models:
         o = ops[m]
-        o['completion'] = (sum(i in finals[m] for i in planned_A)
-                           / len(planned_A)) if planned_A else float('nan')
+        mine = [i for i in planned_A if for_model(items[i], m)]
+        o['completion'] = (sum(i in finals[m] for i in mine)
+                           / len(mine)) if mine else float('nan')
         o['G1'] = bool(o['pass_ops']
                        and _ge(o['completion'], G['G1']['completion_min']))
-        # only the modal (build, provider)'s valid answers are analysed
-        P = {i: pdict(c, items[i]) for i, c in finals[m].items()
-             if c.get('valid') and items[i]['experiment'] != 'E0'
-             and (str(c.get('answered_as')), str(c.get('provider')))
-             == (o['build'], o['provider'])}
-        r = score_model(P, cx)
+        # only the modal (build, provider)'s valid answers are analysed,
+        # each under the stimulus it answers (a sep arm's one-question
+        # answers merge back into one request's)
+        P = {}
+        for i, c in finals[m].items():
+            if c.get('valid') and items[i]['experiment'] != 'E0' and \
+                    (str(c.get('answered_as')), str(c.get('provider'))) \
+                    == (o['build'], o['provider']):
+                P.setdefault(items[i].get('base_id', i), {}).update(
+                    pdict(c, items[i]))
+        r = score_model(P, cx, arms[m]['handling'] if m in arms else None)
+        if m in arms:
+            r['arm'] = {k: arms[m][k] for k in ('tag', 'role', 'menu',
+                                                 'version', 'handling')}
         r['ops'] = o
         # a build dated after S0's night could have seen its outcome
         b = _build_date(o['build'])
@@ -1044,6 +1117,8 @@ def score(run_dir, plan_path=None):
             'lift_E': tb[0], 'lift_M6': tb[1], 'delta_h': tb[2],
             'tiebreak_mean': _mean(tb),
             'median_cost_usd': r['ops']['median_cost_usd']}
+        if 'Q_k5' in e1:
+            r['headline']['Q_k5'] = e1['Q_k5']
     suff = len(A) >= G['analysis_set']['blocks_min']
     summary = {
         'version': plan.get('version'), 'mode': plan.get('mode', 'select'),
@@ -1244,46 +1319,117 @@ def choose(summary, plan):
 
 
 def iterate_outcome(summary, plan):
-    """Section 4's adoption rule for an iteration round (or the holdout):
-    the arms are the plan's control and variants, scored like models."""
+    """Section 4's rule on an iteration round's (or the holdout's) summary;
+    pure, like choose. The arms are the plan's: a control and up to four
+    variants, each one menu tag on top of it.
+
+    A round adopts at most one variant: the highest Q_h among those that
+    pass every gate (G1-G6), gain dQ = Q_v - Q_ctrl >= delta_Q_min with the
+    paired, regime-stratified bootstrap's one-sided lower bound > 0 at
+    alpha / #variants, lose at most AUC_comb_drop_max of AUC_comb and at
+    most Phi_drop_max of Phi. Ties go to the earlier menu tag. The stopping
+    rule: stop at the first round that adopts nothing, or after round 2;
+    then the holdout, if the final version is not the selection's own.
+
+    The holdout keeps the final version only if it passes every gate and
+    the one-sided 95% lower bound of Q_final - Q_q1 is > 0; otherwise the
+    decider reverts to the selection's own version."""
     it = plan['gates']['iteration']
-    models = summary['models']
-    ctrl, variants = plan['control'], list(plan['variants'])
-    hold = bool(plan.get('holdout'))
-    alpha = it['alpha'] if hold else it['alpha'] / max(1, len(variants))
-    strata = summary['analysis_set']['strata']
+    aset = summary['analysis_set']
+    if not aset['sufficient']:
+        raise InsufficientAnalysisSet(
+            f'{len(aset["blocks"])} complete block(s) {aset["blocks"]} < '
+            f'{aset["blocks_min"]}: no outcome from this run')
+    models, arms = summary['models'], plan['arms']
+    ctrl = next(a for a in arms if a['role'] == 'control')
+    trial = [a for a in arms if a['role'] != 'control']
+    hold = plan.get('round') == 'holdout'
+    alpha = it['alpha'] if hold else it['alpha'] / max(1, len(trial))
+    strata = aset['strata']
     B, seed = int(plan['bootstrap_B']), plan['seeds']['analysis']
-    w = strat_weights(strata, B, seed)
-    hc = models[ctrl]['headline']
+    w = strat_weights(strata, B, seed)          # one draw, every arm
+    hc = models[ctrl['id']]['headline']         # the control is never dropped
     rows = lambda m: models[m]['q_counts'][models[m]['h']]
     checks, ok = {}, []
-    for v in variants:
-        hv = models[v]['headline']
-        dq = hv['Q_h'] - hc['Q_h']
-        lb = paired_bootstrap_lb(rows(v), rows(ctrl), strata, B, seed, alpha,
-                                 w=w)
-        c = {'gates': not models[v]['failed'], 'delta_Q': dq,
-             'lower_bound': lb, 'alpha': alpha,
-             'lb_ok': bool(_ok(lb) and lb > it['lower_bound_gt'])}
+    for a in trial:
+        m = a['id']
+        c = {'tag': a['tag'], 'menu': a['menu']}
+        checks[m] = c
+        if m not in models:                     # scaled down at run time
+            c.update(dropped=True, ok=False)
+            continue
+        hv = models[m]['headline']
+        dq = hv['Q_h'] - hc['Q_h'] if _ok(hv['Q_h']) and _ok(hc['Q_h']) \
+            else float('nan')
+        lb = paired_bootstrap_lb(rows(m), rows(ctrl['id']), strata, B, seed,
+                                 alpha, w=w)
+        c.update(Q_h=hv['Q_h'], Q_ctrl=hc['Q_h'], delta_Q=dq,
+                 failed=models[m]['failed'], gates=not models[m]['failed'],
+                 lower_bound=lb, alpha=alpha,
+                 lb_ok=bool(_ok(lb) and lb > it['lower_bound_gt']))
         if hold:
             c['ok'] = bool(c['gates'] and c['lb_ok'])
         else:
             c['dq_ok'] = _ge(dq, it['delta_Q_min'])
-            c['auc_ok'] = _ge(hv['AUC_comb'] - hc['AUC_comb'],
-                              -it['AUC_comb_drop_max'])
-            c['phi_ok'] = _ge(models[v]['E7']['Phi'] - models[ctrl]['E7']
-                              ['Phi'], -it['Phi_drop_max'])
+            c['delta_AUC_comb'] = hv['AUC_comb'] - hc['AUC_comb'] \
+                if _ok(hv['AUC_comb']) and _ok(hc['AUC_comb']) \
+                else float('nan')
+            c['auc_ok'] = _ge(c['delta_AUC_comb'], -it['AUC_comb_drop_max'])
+            pv, pc = models[m]['E7']['Phi'], models[ctrl['id']]['E7']['Phi']
+            c['delta_Phi'] = pv - pc if _ok(pv) and _ok(pc) else float('nan')
+            c['phi_ok'] = _ge(c['delta_Phi'], -it['Phi_drop_max'])
             c['ok'] = bool(c['gates'] and c['lb_ok'] and c['dq_ok']
                            and c['auc_ok'] and c['phi_ok'])
-        checks[v] = c
         if c['ok']:
-            ok.append(v)
-    best = sorted(ok, key=lambda v: (-models[v]['headline']['Q_h'],
-                                     variants.index(v)))
-    return {'version': plan.get('version'), 'mode': 'iterate',
-            'round': plan.get('round'), 'holdout': hold, 'control': ctrl,
-            'variants': variants, 'checks': checks,
-            'adopted': best[0] if best else None}
+            ok.append(a)
+    best = sorted(ok, key=lambda a: (-models[a['id']]['headline']['Q_h'],
+                                     trial.index(a)))
+    won = best[0] if best else None
+    origin = plan.get('origin') or {}
+    dec = origin.get('decider') or {}
+    own = (dec.get('version'), dec.get('handling'))
+    now = won or ctrl           # adopted (kept); or the control stands
+    if hold:
+        nxt = 'stop'
+        rule = ('holdout: the final version is kept only if it passes every '
+                'gate and LB(Q_final - Q_q1) > 0 at one-sided 95%; else the '
+                'selection\'s own version stands')
+    else:
+        nxt = 'round 2' if won and plan['round'] == 1 else \
+            'stop' if (now['version'], now['handling']) == own else 'holdout'
+        rule = ('stop at the first round that adopts nothing, or after '
+                'round 2; then the holdout, if the final version is not the '
+                'selection\'s own')
+    final = {k: now[k] for k in ('version', 'handling', 'tag', 'suffix')}
+    final['declared'] = now.get('declared')
+    # the declaration this leaves, in decide_local.DECLARED['http']'s own
+    # fields, once there is nothing more to run: deployed as it stands
+    how = None
+    if nxt == 'stop' and dec and final['declared']:
+        how = dict(final['declared'],
+                   provider=((dec.get('provider_pin') or {}).get('order')
+                             or [None])[0],
+                   dated=dec.get('dated'), measured_build=dec.get('build'))
+    out = {'version': plan.get('version'), 'mode': 'iterate',
+           'round': plan.get('round'), 'holdout': hold, 'pin': plan['pin'],
+           'analysis_set': {k: aset[k] for k in ('blocks', 'states',
+                                                 'strata')},
+           'control': {k: ctrl[k] for k in ('id', 'tag', 'version',
+                                             'handling')},
+           'variants': [a['menu'] for a in trial if a['menu']],
+           'checks': checks,
+           'adopted': (won['menu'] or 'final') if won else None,
+           'adopted_arm': {k: won[k] for k in ('id', 'tag', 'version',
+                                                'handling')} if won else None,
+           'kept': bool(won) if hold else None,
+           'final': final, 'next': nxt, 'stopping_rule': rule,
+           'origin': origin, 'prior': plan.get('prior'),
+           # the declaration this leaves, once there is nothing more to run
+           'decider': dict(dec, version=final['version'],
+                           handling=final['handling'],
+                           suffix=final['suffix'], declared=how)
+           if nxt == 'stop' and dec else None}
+    return out
 
 
 def select(run_dir):
@@ -1306,16 +1452,18 @@ def select(run_dir):
     summary = _json(sp)
     if _sha_file(plan_path) != summary['plan_sha256']:
         raise ValueError('summary.json was scored against another plan')
-    if plan.get('mode') == 'iterate':
-        out = iterate_outcome(summary, plan)
-        name = f'iter_r{plan["round"]}_outcome.json' if 'round' in plan \
-            else 'iter_holdout_outcome.json'
-    else:
-        try:
+    try:
+        if plan.get('mode') == 'iterate':
+            out = iterate_outcome(summary, plan)
+        else:
             out = choose(summary, plan)
-        except InsufficientAnalysisSet as ex:
-            print(f'select: {ex.msg}', file=sys.stderr)
-            raise
+    except InsufficientAnalysisSet as ex:
+        print(f'select: {ex.msg}', file=sys.stderr)
+        raise
+    if plan.get('mode') == 'iterate':
+        name = 'iter_holdout_outcome.json' if plan.get('round') == 'holdout' \
+            else f'iter_r{plan["round"]}_outcome.json'
+    else:
         name = f'selection_{plan.get("version", "v1")}.json'
     out['summary_sha256'] = _sha_file(sp)
     out['plan_sha256'] = summary['plan_sha256']

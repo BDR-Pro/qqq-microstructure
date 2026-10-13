@@ -17,6 +17,12 @@
 # for S0's canonical item, body + pin is byte-identical to the request every
 # logged night was asked with.
 #
+# Iteration (spec section 4, below make_iter): after the selection, the
+# selected decider is re-asked in the menu's other ways -- request variants
+# of the one pinned model, never other model ids -- on fresh states from a
+# round's own seed, by the same recipe and the same experiments (no S0).
+# decider_battery.py make-iter is the command.
+#
 #   python src/battery_items.py make bench/battery
 #   python src/battery_items.py verify bench/battery/plan_v1.json
 
@@ -235,9 +241,9 @@ def x_score(cid):
     return round(float(np.mean(v)), 6)
 
 
-def _rng(key):
-    return np.random.default_rng(np.random.SeedSequence(SEEDS['items'],
-                                                        spawn_key=(key,)))
+def _rng(key, seed=None):
+    return np.random.default_rng(np.random.SeedSequence(
+        SEEDS['items'] if seed is None else seed, spawn_key=(key,)))
 
 
 def _body(state, names, **kw):
@@ -297,13 +303,14 @@ def shock_ret5d(row, new):
 
 # -------------------------------------------------------------- generator --
 
-def block_plan(b):
+def block_plan(b, seed=None):
     """Block b's assignments, from the block's own RNG: the 3/3 regime
     permutation (E6), E5's doses (each once Stressed, once Calm), E7's two
     anonymised states (one per regime, so the AN arm sees both hedge
-    classes) and E8's three negated states."""
+    classes) and E8's three negated states. seed: the items seed (v1's by
+    default; an iteration round's own)."""
     g = GENERATOR
-    rng = _rng(100 + b)
+    rng = _rng(100 + b, seed)
     k = g['stressed_per_block']
     regime = [str(x) for x in rng.permutation(['stressed'] * k
                                               + ['calm'] * (PER_BLOCK - k))]
@@ -322,7 +329,7 @@ def block_plan(b):
             'cx_type': list(g['cx_type_by_position'])}
 
 
-def gen_state(s, regime, anchors):
+def gen_state(s, regime, anchors, seed=None):
     """State s (1..24): labels, conditions, name rows and both QQQ rows, from
     the state's own RNG. Every name draws the same numbers whatever its
     condition, and the stress vol factor is drawn whatever the regime, so a
@@ -330,7 +337,7 @@ def gen_state(s, regime, anchors):
     trace keeps each moved name's pre-move row (tests check the update);
     rng goes on to draw the state's items."""
     g = GENERATOR
-    rng = _rng(s)
+    rng = _rng(s, seed)
     labels = [str(t) for t in rng.choice(POOL, g['n_labels'], replace=False)]
     p = [g['condition_p'][c] for c in CONDITIONS]
     while True:
@@ -401,10 +408,12 @@ def _shuffle_keys(d, rng):
     return {ks[int(i)]: d[ks[int(i)]] for i in rng.permutation(len(ks))}
 
 
-def v_draw(rng, state, labels):
+def v_draw(rng, state, labels, body=None):
     """One nuisance draw (E2, and S0's V): always a shuffled question order,
     a date shift of 0-4 business days and a book paraphrase; each of opaque
-    ids, shuffled keys and numeric jitter on with probability 1/2."""
+    ids, shuffled keys and numeric jitter on with probability 1/2. body: how
+    a request is written (an iteration arm's wording and view); the draws
+    never depend on it."""
     g = GENERATOR
     u = rng.random(3)
     f = {'opaque': bool(u[0] < g['v_p_opaque']),
@@ -438,16 +447,18 @@ def v_draw(rng, state, labels):
             if len(set(sent)) == len(sent) and not set(sent) & set(qids):
                 break
         ids = dict(zip(qids, sent))
-    body = _body(st, labels, order=order, ids=ids)
+    body = (body or _body)(st, labels, order=order, ids=ids)
     qmap = {(ids or {}).get(k, k): k for k in order}
     return body, qmap, {'factors': f}
 
 
-def negate(body):
-    """E8: every question of a canonical body asked the other way round."""
+def negate(body, hedge_extra=''):
+    """E8: every question of a canonical body asked the other way round.
+    hedge_extra: what a wording adds to the hedge question (q2's sentence
+    about the QQQ row), kept in its negation too."""
     for k, q in body['questions'].items():
         if k == 'hedge_book':
-            q['instructions'] = NEGATION['hedge']
+            q['instructions'] = NEGATION['hedge'] + hedge_extra
             q['criteria'] = dict(NEGATION['hedge_criteria'])
         else:
             q['instructions'] = NEGATION['hold'].format(n=k[len('hold_'):])
@@ -455,39 +466,44 @@ def negate(body):
     return body
 
 
-def _cx(state, labels, ask):
+def _cx(state, labels, ask, body=None):
     """A body that asks only the canonical ids in `ask`, about the full
     state: request_body always appends hedge_book, so drop it if unasked."""
     names = [k[len('hold_'):] for k in ask if k != 'hedge_book']
-    b = _body(state, names)
+    b = (body or _body)(state, names)
     if 'hedge_book' not in ask:
         del b['questions']['hedge_book']
     return b
 
 
-def state_items(sid, rec, rng, b):
+def state_items(sid, rec, rng, b, body=None, neg=None, orders=6,
+                order_seed='battery-v1|{sid}|O{i}'):
     """E1-E8 items of one synthetic state, drawn from its RNG in a fixed
     order: E2's V, E3's subset, E4's and E5's treated names, E5's sign,
-    E7's derangement or anonymisation."""
+    E7's derangement or anonymisation. An iteration arm passes how it writes
+    a request (body, neg) and its number of E1 orders (2k: k5 asks ten);
+    the draws never depend on them, so every arm gets the same stimuli."""
+    mk = body or _body
+    neg = neg or negate
     labels, rows, core = rec['labels'], rec['rows'], rec['state']
     reg = rec['regime']
     qids = qids_of(labels)
     ordinary = [t for t in labels if rec['conditions'][t] == 'Ordinary']
     out = {e: [] for e in EXPERIMENTS}
-    out['E1'].append(_item('E1', sid, 'Ca', b, _body(core, labels)))
+    out['E1'].append(_item('E1', sid, 'Ca', b, mk(core, labels)))
     ids = {q: q + GENERATOR['cb_id_suffix'] for q in qids}
-    out['E1'].append(_item('E1', sid, 'Cb', b, _body(core, labels, ids=ids),
+    out['E1'].append(_item('E1', sid, 'Cb', b, mk(core, labels, ids=ids),
                            {x: q for q, x in ids.items()},
                            {'ids': 'canonical + '
                             + GENERATOR['cb_id_suffix']}))
-    for i in range(1, 7):
-        seed = f'battery-v1|{sid}|O{i}'
+    for i in range(1, orders + 1):
+        seed = order_seed.format(sid=sid, i=i)
         order = guard.question_order(seed, qids)
         out['E1'].append(_item('E1', sid, f'O{i}', b,
-                               _body(core, labels, order=order),
+                               mk(core, labels, order=order),
                                meta={'order_seed': seed}))
-    body, qmap, meta = v_draw(rng, core, labels)
-    out['E2'].append(_item('E2', sid, 'V', b, body, qmap, meta))
+    v, qmap, meta = v_draw(rng, core, labels, mk)
+    out['E2'].append(_item('E2', sid, 'V', b, v, qmap, meta))
     cx = rec['cx_type']
     if cx == 1:
         pick = sorted(int(i) for i in rng.choice(
@@ -497,24 +513,24 @@ def state_items(sid, rec, rng, b):
         ask = [qids[int(rng.integers(len(labels)))]]
     else:
         ask = ['hedge_book']
-    out['E3'].append(_item('E3', sid, 'CX', b, _cx(core, labels, ask),
+    out['E3'].append(_item('E3', sid, 'CX', b, _cx(core, labels, ask, mk),
                            meta={'cx_type': cx, 'cx_subset': ask}))
     j = ordinary[int(rng.integers(len(ordinary)))]
     st = copy.deepcopy(core)
     st['names'][j]['earnings_tonight'] = True
-    out['E4'].append(_item('E4', sid, 'EF', b, _body(st, labels),
+    out['E4'].append(_item('E4', sid, 'EF', b, mk(st, labels),
                            meta={'treated': j}))
     j = ordinary[int(rng.integers(len(ordinary)))]
     sign = 1 if rng.random() < 0.5 else -1
     k = rec['dose']
     st = copy.deepcopy(core)
     st['names'][j], d = shock_night(rows[j], sign * rnd(k * rows[j]['vol20d']))
-    out['E5'].append(_item('E5', sid, 'XM', b, _body(st, labels),
+    out['E5'].append(_item('E5', sid, 'XM', b, mk(st, labels),
                            meta={'treated': j, 'dose': k, 'sign': sign,
                                  'D': d}))
     other = 'calm' if reg == 'stressed' else 'stressed'
     st = canonical(rows, labels, rec['qqq'][other])
-    out['E6'].append(_item('E6', sid, 'QS', b, _body(st, labels),
+    out['E6'].append(_item('E6', sid, 'QS', b, mk(st, labels),
                            meta={'core_regime': reg, 'swapped_in': other,
                                  'stressed_m': rec['stressed_m'],
                                  'stressed_sign': rec['stressed_sign']}))
@@ -527,7 +543,7 @@ def state_items(sid, rec, rng, b):
         perm = {labels[i]: labels[p[i]] for i in range(n)}
         st = canonical({t: rows[perm[t]] for t in labels}, labels,
                        rec['qqq'][reg])
-        out['E7'].append(_item('E7', sid, 'LD', b, _body(st, labels),
+        out['E7'].append(_item('E7', sid, 'LD', b, mk(st, labels),
                                meta={'perm': perm}))
     else:
         p = [int(i) for i in rng.permutation(n)]
@@ -537,11 +553,11 @@ def state_items(sid, rec, rng, b):
                        rec['qqq'][reg])
         qmap = {f'hold_{anon[t]}': f'hold_{t}' for t in labels}
         qmap['hedge_book'] = 'hedge_book'
-        out['E7'].append(_item('E7', sid, 'AN', b, _body(st, names), qmap,
+        out['E7'].append(_item('E7', sid, 'AN', b, mk(st, names), qmap,
                                meta={'anon': anon}))
     if rec['e8']:
         out['E8'].append(_item('E8', sid, 'NG', b,
-                               negate(_body(core, labels)),
+                               neg(mk(core, labels)),
                                meta={'negated': True}))
     return out
 
@@ -596,6 +612,25 @@ def s0_items(s0):
     return out
 
 
+def synthetic(s, b, bp, pos, vols, seed=None):
+    """State s (block b, position pos in it): (its states-file record, the
+    generator's record with the block's assignments, the RNG that goes on
+    to draw its items)."""
+    rec, _, rng = gen_state(s, bp['regime'][pos], vols, seed)
+    core = canonical(rec['rows'], rec['labels'], rec['qqq'][rec['regime']])
+    entry = {
+        'block': b, 'regime': rec['regime'], 'labels': rec['labels'],
+        'conditions': rec['conditions'], 'rows': rec['rows'],
+        'qqq': rec['qqq'], 'stressed_m': rec['stressed_m'],
+        'stressed_sign': rec['stressed_sign'],
+        'cx_type': bp['cx_type'][pos], 'e7_kind': bp['e7_kind'][pos],
+        'e8': bp['e8'][pos], 'state': core}
+    rec.update(state=core, cx_type=bp['cx_type'][pos],
+               e7_kind=bp['e7_kind'][pos], e8=bp['e8'][pos],
+               dose=bp['dose'][pos])
+    return entry, rec, rng
+
+
 def build(s0, anchors):
     """(states, items) from the two committed inputs; pure and seeded."""
     assert sorted(POOL) == sorted(k for k in anchors['vol20d'] if k != 'QQQ')
@@ -608,19 +643,7 @@ def build(s0, anchors):
         for pos in range(PER_BLOCK):
             s = (b - 1) * PER_BLOCK + pos + 1
             sid = f'S{s:02d}'
-            rec, _, rng = gen_state(s, bp['regime'][pos], vols)
-            core = canonical(rec['rows'], rec['labels'],
-                             rec['qqq'][rec['regime']])
-            states[sid] = {
-                'block': b, 'regime': rec['regime'], 'labels': rec['labels'],
-                'conditions': rec['conditions'], 'rows': rec['rows'],
-                'qqq': rec['qqq'], 'stressed_m': rec['stressed_m'],
-                'stressed_sign': rec['stressed_sign'],
-                'cx_type': bp['cx_type'][pos], 'e7_kind': bp['e7_kind'][pos],
-                'e8': bp['e8'][pos], 'state': core}
-            rec.update(state=core, cx_type=bp['cx_type'][pos],
-                       e7_kind=bp['e7_kind'][pos], e8=bp['e8'][pos],
-                       dose=bp['dose'][pos])
+            states[sid], rec, rng = synthetic(s, b, bp, pos, vols)
             syn.append(state_items(sid, rec, rng, b))
     s0i = s0_items(s0)
     for e in EXPERIMENTS:
@@ -733,6 +756,7 @@ def make_items(plan_dir):
 
 
 def load(plan_path):
+    """The plan and its files; s0 is None for an iteration plan (no S0)."""
     d = os.path.dirname(os.path.abspath(plan_path))
     plan = json.load(open(plan_path))
     fs = plan['files']
@@ -741,7 +765,8 @@ def load(plan_path):
     return {'plan': plan,
             'states': json.load(open(os.path.join(d, fs['states']))),
             'items': items,
-            's0': json.load(open(os.path.join(d, fs['s0']))),
+            's0': json.load(open(os.path.join(d, fs['s0'])))
+            if fs.get('s0') else None,
             'anchors': json.load(open(os.path.join(d, fs['anchors']))),
             'dir': d}
 
@@ -749,7 +774,13 @@ def load(plan_path):
 def verify(plan_path):
     """Problems with a committed plan (empty = ok): the lock, every body's
     sha, no 'model' in any body, ids and qmaps, the per-experiment counts,
-    and S0's canonical body against the record's bytes."""
+    and S0's canonical body against the record's bytes. An iteration plan
+    is checked by verify_iter."""
+    try:
+        if json.load(open(plan_path)).get('mode') == 'iterate':
+            return verify_iter(plan_path)
+    except (OSError, ValueError) as ex:
+        return [f'cannot load {plan_path}: {type(ex).__name__}: {ex}']
     probs = []
     try:
         d = load(plan_path)
@@ -805,6 +836,550 @@ def verify(plan_path):
     if w is None or json.dumps(w['body']) != \
             json.dumps(_body(s0['state'], s0['names'])):
         probs.append('E0|S0|W is not the record\'s canonical S0 body')
+    return probs
+
+
+# ------------------------------------------- iteration (spec section 4) --
+#
+# After the selection, the selected decider may be re-asked in other ways
+# from a fixed menu -- a pre-written text or a view computed in code, none
+# holding a threshold or a number -- against how it is asked now, on fresh
+# states. An ARM is one way of asking the ONE pinned model: a version (the
+# wording q1|q2, the views s3 and b2, and sep: one request per question)
+# and a handling (k1|k3|k5, the draws averaged). Arms are never other model
+# ids: the bytes carry the pin; the arm id '<pin>#<handling>.<version>'
+# only names the arm's record in calls.jsonl, and each arm's items carry
+# 'for_arm' so the run sends them to that arm alone. Every arm gets the
+# same stimuli -- one generator draw per state, written each arm's way --
+# so arms are compared state by state. An arm is sent exactly as the
+# runtime would send it once declared: the selection's provider pin (R5)
+# rides in every body, and its suffix is guard.handling_suffix's, the one
+# decide_local logs.
+
+MENU = ('q2', 's3', 'b2', 'k5', 'sep')
+# sep is on the spec's menu, but decide_local sends every question in one
+# request: an adopted sep could never be declared, so make-iter refuses it
+# until the runtime can send it (its items and scoring are kept for then)
+RUNTIME_MENU = ('q2', 's3', 'b2', 'k5')
+VIEW_TAGS = ('b2', 's3')                # sorted, as decide_local declares
+ITER_BLOCKS, ITER_FLOOR_BLOCKS = 3, 2
+
+
+def parse_version(v):
+    """{'wording', 'b2', 's3', 'sep'} of a version string: the wording
+    first ('q1', 'q2'), then the views in VIEW_TAGS order, then 'sep' --
+    'q1', 'q2s3', 'q1b2s3', 'q1b2sep'. Anything else is a ValueError."""
+    v = str(v)
+    if v[:2] not in guard.QUESTIONS:
+        raise ValueError(f'not a version: {v!r}')
+    out, rest = {'wording': v[:2]}, v[2:]
+    for t in VIEW_TAGS + ('sep',):
+        out[t] = rest.startswith(t)
+        rest = rest[len(t):] if out[t] else rest
+    if rest:
+        raise ValueError(f'not a version: {v!r}')
+    return out
+
+
+def version_str(p):
+    return p['wording'] + ''.join(t for t in VIEW_TAGS + ('sep',) if p[t])
+
+
+def arm_tag(version, handling):
+    return f'{handling}.{version}'
+
+
+def applied(version, handling):
+    """The menu tags a (version, handling) already carries."""
+    p = parse_version(version)
+    return [t for t in MENU if (t == 'q2' and p['wording'] == 'q2')
+            or (t == 'k5' and handling == 'k5') or p.get(t) is True]
+
+
+def apply_tag(version, handling, tag):
+    """(version, handling) with one menu tag on top."""
+    if tag not in MENU:
+        raise ValueError(f'{tag!r} is not on the menu {", ".join(MENU)}')
+    if tag in applied(version, handling):
+        raise ValueError(f'{tag} is already in {arm_tag(version, handling)}')
+    p = parse_version(version)
+    if tag == 'q2':
+        p['wording'] = 'q2'
+    elif tag == 'k5':
+        handling = 'k5'
+    else:
+        p[tag] = True
+    return version_str(p), handling
+
+
+def declared_of(handling, version):
+    """An arm as decide_local.DECLARED['http'] states it: k (int), version
+    (the wording) and views (sorted guard.VIEWS tags). sep has no runtime
+    form: None."""
+    p = parse_version(version)
+    if p['sep']:
+        return None
+    return {'k': int(handling[1:]), 'version': p['wording'],
+            'views': ''.join(t for t in VIEW_TAGS if p[t])}
+
+
+def suffix_of(handling, version):
+    """The suffix the record logs after the model for a declared (handling,
+    version) (spec R3/R4): guard.handling_suffix, the runtime's own -- none
+    for one draw of q1, the record's request; '#perm3.q1' as the selection
+    declares k3; '#k1.q2s3' for one draw of another version. A sep arm,
+    which has no runtime form, is named the same way ('#k1.q1sep')."""
+    p = parse_version(version)
+    return guard.handling_suffix(
+        int(handling[1:]), p['wording'],
+        ''.join(t for t in VIEW_TAGS if p[t]) + ('sep' if p['sep'] else ''))
+
+
+def arm_writer(version, provider=None):
+    """(body, neg) for a version: guard.request_body with its wording, view
+    (computed from the state at request time, as the runtime would) and
+    provider pin (the selection's, R5: decide_local sends it on every call
+    once declared), and E8's negation, which keeps what the wording adds to
+    the hedge question."""
+    p = parse_version(version)
+    w, view = p['wording'], guard.view_of(version)
+    q1, qw = guard.QUESTIONS['q1']['hedge'][0], \
+        guard.QUESTIONS[w]['hedge'][0]
+    assert qw.startswith(q1), 'a wording only ever adds to the hedge text'
+
+    def body(state, names, **kw):
+        return _body(state, names, version=w, view=view, provider=provider,
+                     **kw)
+    return body, (lambda b: negate(b, qw[len(q1):]))
+
+
+def split(it):
+    """sep: one item as one request per question, each with the item's
+    whole state (its names in the item's order) and that question alone.
+    The scorer merges the answers back by base_id."""
+    out = []
+    for q, x in it['body']['questions'].items():
+        body = dict(it['body'], questions={q: x})   # its provider pin too
+        c = it['qmap'][q]
+        out.append(dict(it, item_id=f'{it["item_id"]}/{c}', body=body,
+                        body_sha256=body_sha(body), qmap={q: c},
+                        meta=dict(it['meta'], question=c)))
+    return out
+
+
+def menu_left(base, origin):
+    """The menu tags round 2 tests on top of round 1's version (spec 4: the
+    remaining menu items, in menu order, at most variants_max): those not
+    already in it that the runtime can send and the selection allowed."""
+    it = GATES['iteration']
+    have = applied(*base)
+    return [t for t in MENU if t not in have and t in RUNTIME_MENU
+            and (t not in ('k5', 'sep') or origin.get(f'{t}_allowed'))
+            ][:it['variants_max']]
+
+
+def iter_arms(pin, rnd, base, variants, origin):
+    """The arms of a round (the control = base, then one arm per menu tag
+    on top of it, in menu order) or of the holdout (the control = the
+    selection's own q1 at its handling, against the final version = base).
+    Refuses (ValueError) a tag off the menu or already in the base, more
+    than variants_max, k5 unless the selection's sd_rep allowed it, sep
+    unless its ex_ctx did (and, until the runtime can send it, at all), a
+    round 2 that is not the remaining menu (menu_left: chosen after round
+    1's results, a subset would be a choice the stopping rule does not
+    make, and would loosen its alpha), and a holdout of the selection's own
+    version."""
+    it = GATES['iteration']
+
+    def arm(role, version, handling, menu=None):
+        tag = arm_tag(version, handling)
+        return {'id': f'{pin}#{tag}', 'tag': tag, 'role': role,
+                'menu': menu, 'version': version, 'handling': handling,
+                'suffix': suffix_of(handling, version),
+                'declared': declared_of(handling, version)}
+    if rnd == 'holdout':
+        dec = origin['decider']
+        ctrl = arm('control', dec['version'], dec['handling'])
+        if variants:
+            raise ValueError('the holdout takes no variants: it is the final '
+                             'version against the selection\'s own')
+        if arm_tag(*base) == ctrl['tag']:
+            raise ValueError('the final version is the selection\'s own: '
+                             'there is nothing to hold out')
+        return [ctrl, arm('final', *base)]
+    tags = list(dict.fromkeys(variants))
+    if not tags:
+        raise ValueError('a round needs at least one variant')
+    for t in tags:
+        if t not in MENU:
+            raise ValueError(f'{t!r} is not on the menu {", ".join(MENU)}')
+    if len(tags) != len(variants):
+        raise ValueError('a variant is named twice')
+    if len(tags) > it['variants_max']:
+        raise ValueError(f'at most {it["variants_max"]} variants a round')
+    for t, why in (('k5', f'sd_rep {origin.get("sd_rep")} <= '
+                          f'{it["k5_if_sd_rep_gt"]}'),
+                   ('sep', f'ex_ctx {origin.get("ex_ctx")} <= '
+                           f'{it["sep_if_ex_ctx_gt"]}')):
+        if t in tags and not origin.get(f'{t}_allowed'):
+            raise ValueError(f'{t} is not allowed: the selection measured '
+                             f'{why}')
+    for t in tags:
+        if t not in RUNTIME_MENU:
+            raise ValueError(f'{t} cannot be declared yet: decide_local sends '
+                             f'every question in one request, so an adopted '
+                             f'{t} could never run')
+    if rnd == 2:
+        left = menu_left(base, origin)
+        if sorted(tags, key=MENU.index) != left:
+            raise ValueError(f'round 2 tests the remaining menu on top of '
+                             f'{arm_tag(*base)}: --variants '
+                             f'{",".join(left) or "(none left)"}')
+    out = [arm('control', *base)]
+    for t in sorted(tags, key=MENU.index):
+        out.append(arm('variant', *apply_tag(*base, t), menu=t))
+    return out
+
+
+def iter_build(anchors, seed, blocks, arms, version, provider=None):
+    """(states, items) of an iteration plan: `blocks` blocks of 6 fresh
+    states from the round's seed by v1's recipe (no S0), and each state's
+    E1-E8 items once per arm, written the arm's way (with the selection's
+    provider pin, if any); then one warm-up W, the control's first request
+    whole -- a full request even for a sep control, since the cost per call
+    it measures is a full request's, and each call is weighed against it by
+    its bytes -- which every arm sends once (the pilot: the cost per call,
+    the smoke stop) and no metric reads."""
+    vols = anchors['vol20d']
+    states, items = {}, []
+    per = {a['id']: {e: [] for e in EXPERIMENTS} for a in arms}
+    for b in range(1, blocks + 1):
+        bp = block_plan(b, seed)
+        for pos in range(PER_BLOCK):
+            s = (b - 1) * PER_BLOCK + pos + 1
+            sid = f'S{s:02d}'
+            for a in arms:
+                # each arm draws the state afresh from its own key, so every
+                # arm's items come from the very same draws
+                states[sid], rec, rng = synthetic(s, b, bp, pos, vols, seed)
+                body, neg = arm_writer(a['version'], provider)
+                k = int(a['handling'][1:])
+                out = state_items(sid, rec, rng, b, body, neg,
+                                  orders=max(6, 2 * k),
+                                  order_seed=f'battery-{version}|{{sid}}|'
+                                             f'O{{i}}')
+                for e in EXPERIMENTS:
+                    per[a['id']][e] += out[e]
+    for a in arms:
+        sep = parse_version(a['version'])['sep']
+        for e in EXPERIMENTS:
+            for it in per[a['id']][e]:
+                for x in (split(it) if sep else [it]):
+                    items.append(dict(x, item_id=f'{x["item_id"]}#{a["tag"]}',
+                                      base_id=it['item_id'],
+                                      for_arm=a['id']))
+    first = next(it for e in EXPERIMENTS for it in per[arms[0]['id']][e])
+    w = _item('E0', first['state_id'], 'W', 0, first['body'], first['qmap'],
+              {'role': 'warm-up, cost pilot: sent once to every arm',
+               'body_of': f'{first["item_id"]}#{arms[0]["tag"]}'})
+    return states, [w] + items
+
+
+def _sent(body, pin):
+    # the bytes the run sends (battery_run.send_bytes, the contract)
+    send = {'state': body['state'], 'model': pin,
+            'questions': body['questions']}
+    if 'provider' in body:
+        send['provider'] = body['provider']
+    return json.dumps(send).encode()
+
+
+def iter_cost(items, pin, per_call):
+    """What an iteration plan's calls cost at per_call for a request the
+    size of W -- each call priced by its bytes, since the price is per input
+    token and a sep request is a fraction of a full one: W once per arm,
+    then each arm's own items."""
+    ref = len(_sent(items[0]['body'], pin))
+    arms = {it['for_arm'] for it in items if it.get('for_arm')}
+    return per_call * (len(arms) + sum(len(_sent(it['body'], pin))
+                                       for it in items
+                                       if it.get('for_arm')) / ref)
+
+
+def origin_of(sel, summary, src_plan, where):
+    """What every round starts from, read once from the selection: the
+    decider it declared (iteration only ever re-asks that pin), and the
+    measurements that open the conditional menu items -- sd_rep for k5,
+    ex_ctx for sep, against the selection plan's declared bars -- with the
+    cost per call the rounds are projected at (the catalogue's pessimistic
+    figure, or the measured median if higher)."""
+    dec = sel['decider']
+    m = (summary.get('models') or {}).get(dec['pin']) or {}
+    sd_rep = (m.get('noise') or {}).get('sd_rep')
+    ex_ctx = (m.get('E3') or {}).get('ex_ctx')
+    measured = (m.get('ops') or {}).get('median_cost_usd')
+    price = next((c.get('price_in') for c in src_plan.get('candidates', [])
+                  if c['id'] == dec['pin']), None)
+    bars = (src_plan.get('gates') or {}).get('iteration') or \
+        GATES['iteration']
+    sp = src_plan.get('spend') or SPEND
+    cat = sp['pessimistic_per_call'] * (price / sp['price_ref']
+                                        if price is not None else 1.0)
+    num = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)
+    return {'selection': where, 'branch': sel.get('branch'),
+            'decider': dec, 'sd_rep': sd_rep, 'ex_ctx': ex_ctx,
+            'k5_allowed': bool(num(sd_rep)
+                               and sd_rep > bars['k5_if_sd_rep_gt']),
+            'sep_allowed': bool(num(ex_ctx)
+                                and ex_ctx > bars['sep_if_ex_ctx_gt']),
+            'price_in': price,
+            'cost_per_call_usd': max([cat] + ([measured] if num(measured)
+                                              else []))}
+
+
+def iter_plan(src, version, arms, states, items, blocks, projection):
+    """An iteration plan in the contract's format, mode 'iterate'. The
+    control is both 'incumbent' and 'reference', so the run never drops it
+    or smoke-stops it; a scale-down at run time drops the last block only
+    while that leaves the analysis floor of 2 blocks (spec 4), then
+    variants from the end of the menu (drop_order). provider_pin: the
+    selection's, in every body (verify_iter holds them to it)."""
+    it = GATES['iteration']
+    gates = json.loads(json.dumps(GATES))
+    gates['analysis_set']['blocks_min'] = ITER_FLOOR_BLOCKS
+    ctrl = arms[0]
+    hold = src['round'] == 'holdout'
+    # the run's scale-down drops the last block only above the floor
+    # (battery_run.last_block); at the floor it drops variants alone
+    drop = blocks if blocks > ITER_FLOOR_BLOCKS else None
+    count = {}
+    for x in items:
+        for a in arms:
+            if x.get('for_arm') in (None, a['id']):
+                c = count.setdefault(a['id'], {'nominal': {}, 'floor': {}})
+                for k in ('nominal', 'floor'):
+                    if k == 'floor' and x['block'] == drop:
+                        continue
+                    c[k][x['experiment']] = c[k].get(x['experiment'], 0) + 1
+    seed = it['holdout_seed'] if hold else it['items_seeds'][src['round'] - 1]
+    words = sorted({parse_version(a['version'])['wording'] for a in arms})
+    note = (f'Iteration {version} on {src["pin"]}: {len(states)} fresh '
+            f'states, {len(arms)} arms. battery_score.score computes Q_rule '
+            f'and the other offline baselines from these items; G5 uses '
+            f'that value.')
+    return {
+        'version': version,
+        'mode': 'iterate',
+        'round': src['round'],
+        'pin': src['pin'],
+        'base': src['base'][0], 'handling': src['base'][1],
+        'variants': [a['menu'] for a in arms if a['role'] == 'variant'],
+        'arms': arms,
+        'incumbent': ctrl['id'], 'reference': ctrl['id'],
+        'candidates': [{'id': a['id'], 'pin': src['pin'],
+                        'price_in': src['origin']['price_in'],
+                        'X': None if a['role'] == 'variant' else 1.0}
+                       for a in arms],
+        'drop_order': [a['id'] for a in reversed(arms)
+                       if a['role'] == 'variant'],
+        'origin': src['origin'], 'prior': src.get('prior'),
+        'provider_pin': src['origin']['decider'].get('provider_pin'),
+        'seeds': dict(SEEDS, items=seed),
+        'date': DATE,
+        'blocks': blocks, 'states_per_block': PER_BLOCK,
+        'generator': dict(
+            GENERATOR,
+            rng_state=f'default_rng(SeedSequence(seeds.items, spawn_key='
+                      f'(s,))), s = 1..{len(states)} for S01..'
+                      f'S{len(states):02d}; no S0',
+            rng_block=f'default_rng(SeedSequence(seeds.items, spawn_key='
+                      f'(100 + b,))), b = 1..{blocks}',
+            e1_order_seed=f'battery-{version}|{{state_id}}|O{{i}}',
+            e1_orders='O1-O6; O1-O10 for a k5 arm',
+            sep='one request per question: the item\'s state, one question',
+            pilot='E0|S01|W: the control\'s first request, once per arm'),
+        'texts': {'questions': {w: guard.QUESTIONS[w] for w in words},
+                  'views': {'s3': 'guard.view_s3: last_night_z = round('
+                                  'last_night / vol20d, 1), ret5d_z = round('
+                                  'ret5d / (vol20d sqrt 5), 1), for the '
+                                  'names and QQQ',
+                            'b2': guard.view_of('b2')({})['book']},
+                  'book_paraphrases': BOOK_PARAPHRASES,
+                  'negation': NEGATION},
+        'gates': gates,
+        'gates_note': 'key suffixes: _min >=, _max <=, _gt >, _lt <',
+        'calls_per_model': dict(count[ctrl['id']], per_arm=count),
+        'calls_note': (f'floor = block {drop}\'s states dropped' if drop
+                       else f'floor = nominal: {blocks} blocks is the '
+                            f'floor, so a scale-down drops variants only')
+        + '. W (E0|S01|W) goes to every arm; every other item carries '
+          'for_arm and goes to that arm alone.',
+        'bootstrap_B': 10000, 'signflip_draws': 200000,
+        'spend': dict(SPEND, max_usd=projection['cap_usd'],
+                      max_usd_ceiling=projection['cap_usd']),
+        'projection': projection,
+        'deadline_min': 90, 'timeout_s': 60,
+        # every arm is the same model: its 3 calls in flight are shared
+        'concurrency': 3, 'per_model': 3,
+        'files': {'states': f'states_{version}.json',
+                  'items': f'items_{version}.jsonl',
+                  'anchors': ANCHORS_FILE},
+        'baselines_note': note,
+    }
+
+
+def make_iter(out_dir, src):
+    """Write an iteration round's (or the holdout's) plan, states, items, a
+    copy of the anchors and the lock into out_dir: deterministic bytes.
+    src: {'round': 1|2|'holdout', 'pin', 'base': [version, handling],
+    'variants': [menu tags], 'origin' (origin_of), 'prior', 'anchors':
+    path}. Projected at the origin's cost per call; above 0.8 x the cap
+    (the run's own scale-down bar) the last block goes first (down to the
+    floor of 2), then variants from the end of the menu. Refusals raise
+    ValueError."""
+    it = GATES['iteration']
+    rnd, pin = src['round'], src['pin']
+    hold = rnd == 'holdout'
+    if rnd not in (1, 2, 'holdout'):
+        raise ValueError(f'round {rnd!r}: 1, 2 or holdout')
+    version = 'iter_holdout' if hold else f'iter_r{rnd}'
+    seed = it['holdout_seed'] if hold else it['items_seeds'][rnd - 1]
+    cap = it['holdout_cap_usd' if hold else 'round_cap_usd']
+    arms = iter_arms(pin, rnd, src['base'], src['variants'], src['origin'])
+    with open(src['anchors'], 'rb') as f:
+        anchors_bytes = f.read()
+    anchors = json.loads(anchors_bytes)
+    per_call = src['origin']['cost_per_call_usd']
+    proj = {'per_call_usd': per_call, 'cap_usd': cap,
+            'limit_usd': 0.8 * cap, 'requested': [a['menu'] for a in arms
+                                                  if a['menu']],
+            'dropped_blocks': [], 'dropped_variants': []}
+    blocks = ITER_BLOCKS
+    provider = src['origin']['decider'].get('provider_pin')
+    while True:
+        states, items = iter_build(anchors, seed, blocks, arms, version,
+                                   provider)
+        usd = iter_cost(items, pin, per_call)
+        if usd <= proj['limit_usd']:
+            break
+        if blocks > ITER_FLOOR_BLOCKS:
+            proj['dropped_blocks'].append(blocks)
+            blocks -= 1
+        elif not hold and len(arms) > 2:
+            proj['dropped_variants'].append(arms.pop()['menu'])
+        else:
+            raise ValueError(f'projected ${usd:.2f} > ${proj["limit_usd"]:.2f}'
+                             f' (0.8 x the ${cap} cap) even at the floor')
+    proj.update(usd=usd, blocks=blocks, calls=len(items) - 1 + len(arms))
+    plan = iter_plan(dict(src), version, arms, states, items, blocks, proj)
+    blobs = {'plan': _dump(plan), 'states': _dump(states),
+             'items': ''.join(json.dumps(x) + '\n' for x in items).encode(),
+             'anchors': anchors_bytes}
+    paths = {'plan': os.path.join(out_dir, f'plan_{version}.json'),
+             'states': os.path.join(out_dir, plan['files']['states']),
+             'items': os.path.join(out_dir, plan['files']['items']),
+             'anchors': os.path.join(out_dir, plan['files']['anchors'])}
+    for k, p in paths.items():
+        with open(p, 'wb') as f:
+            f.write(blobs[k])
+    lock = {k: sha256_bytes(v) for k, v in blobs.items()}
+    with open(lock_path(paths['plan']), 'wb') as f:
+        f.write(_dump(lock))
+    return {'plan': plan, 'states': states, 'items': items, 'lock': lock,
+            'paths': paths}
+
+
+def verify_iter(plan_path):
+    """Problems with an iteration plan (empty = ok): the lock; every body's
+    sha, no 'model' in a body; one W, sent to every arm; every other item
+    for one of the plan's arms, its id its base id and arm tag, its qmap
+    back to the state's canonical ids; the counts per arm; every body
+    carries the selection's provider pin, or none if it declared none; and
+    every arm's canonical requests are guard.request_body's for its version
+    and that pin (for a q1 arm with no view or pin, the record's own
+    bytes)."""
+    probs = []
+    try:
+        d = load(plan_path)
+        lock = json.load(open(lock_path(plan_path)))
+    except (OSError, ValueError, KeyError) as ex:
+        return [f'cannot load {plan_path}: {type(ex).__name__}: {ex}']
+    plan, items, states = d['plan'], d['items'], d['states']
+    files = dict(plan['files'], plan=os.path.basename(plan_path))
+    for k in ('plan', 'states', 'items', 'anchors'):
+        p = os.path.join(d['dir'], files[k])
+        got = sha256_bytes(open(p, 'rb').read()) if os.path.exists(p) \
+            else None
+        if lock.get(k) != got:
+            probs.append(f'lock: {k} sha256 mismatch ({files[k]})')
+    pin, arms = plan['pin'], {a['id']: a for a in plan['arms']}
+    pv = plan.get('provider_pin')
+    if pin.startswith('~') or ':free' in pin:
+        probs.append(f'{pin} is a moving alias or :free')
+    if pv != ((plan.get('origin') or {}).get('decider') or {}).get(
+            'provider_pin'):
+        probs.append('the provider pin is not the selection\'s')
+    if [c['id'] for c in plan['candidates']] != list(arms) or \
+            any(c.get('pin') != pin for c in plan['candidates']):
+        probs.append('the candidates are not the arms of the one pin')
+    for a in arms.values():
+        if a['id'] != f'{pin}#{a["tag"]}' or \
+                a['tag'] != arm_tag(a['version'], a['handling']):
+            probs.append(f'{a["id"]}: id, tag and version disagree')
+        if a.get('suffix') != suffix_of(a['handling'], a['version']) or \
+                a.get('declared') != declared_of(a['handling'], a['version']):
+            probs.append(f'{a["id"]}: suffix or declaration is not the '
+                         f'runtime\'s for {a["tag"]}')
+    seen, count = set(), {}
+    for it in items:
+        iid, body, a = it['item_id'], it['body'], it.get('for_arm')
+        if iid in seen:
+            probs.append(f'{iid}: duplicate item id')
+        seen.add(iid)
+        if 'model' in body or list(body)[:2] != ['state', 'questions']:
+            probs.append(f'{iid}: body keys {list(body)}')
+        if body_sha(body) != it['body_sha256']:
+            probs.append(f'{iid}: body_sha256 mismatch')
+        if body.get('provider') != pv:
+            probs.append(f'{iid}: provider {body.get("provider")!r} is not '
+                         f'the selection\'s pin {pv!r}')
+        base = f'{it["experiment"]}|{it["state_id"]}|{it["arm"]}'
+        if a is None:
+            if it['experiment'] != 'E0' or iid != base:
+                probs.append(f'{iid}: only the pilot W goes to every arm')
+        elif a not in arms:
+            probs.append(f'{iid}: for_arm {a} is not an arm')
+        else:
+            q = it['meta'].get('question')
+            want = base + (f'/{q}' if q else '') + f'#{arms[a]["tag"]}'
+            if it.get('base_id') != base or iid != want:
+                probs.append(f'{iid}: id is not base_id + arm tag')
+            c = count.setdefault(a, {})
+            c[it['experiment']] = c.get(it['experiment'], 0) + 1
+        canon = set(qids_of(states.get(it['state_id'], {}).get('labels',
+                                                                 [])))
+        if set(it['qmap']) != set(body['questions']) or \
+                not set(it['qmap'].values()) <= canon:
+            probs.append(f'{iid}: qmap does not map the sent ids back')
+    if sum(it['experiment'] == 'E0' for it in items) != 1:
+        probs.append('the plan needs exactly one pilot W')
+    per = plan.get('calls_per_model', {}).get('per_arm', {})
+    for a in arms:
+        want = {k: v for k, v in per.get(a, {}).get('nominal', {}).items()
+                if k != 'E0'}
+        if count.get(a, {}) != want:
+            probs.append(f'{a}: counts {count.get(a)} != plan {want}')
+    by = {it['item_id']: it for it in items}
+    for a in arms.values():
+        if parse_version(a['version'])['sep']:
+            continue
+        mk, _ = arm_writer(a['version'], pv)
+        for sid, st in states.items():
+            it = by.get(f'E1|{sid}|Ca#{a["tag"]}')
+            if it is None or json.dumps(it['body']) != \
+                    json.dumps(mk(st['state'], st['labels'])):
+                probs.append(f'{a["id"]}: E1|{sid}|Ca is not guard\'s '
+                             f'request for {a["version"]}')
     return probs
 
 

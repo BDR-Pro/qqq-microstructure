@@ -1029,15 +1029,131 @@ def test_an_insufficient_analysis_set_exits_6():
     assert e.value.code == bs.EXIT_INSUFFICIENT == 6
 
 
+# ------------------------------------------------ iteration (section 4) --
+
+PIN = 'p/m'
+OWN = {'pin': PIN, 'handling': 'k1', 'version': 'q1', 'suffix': '',
+       'provider_pin': None, 'build': 'p/m-20261010', 'dated': True,
+       'provider': 'P1'}
+
+
+# the selection's decider as DECLARED['http'] would hold it
+OWN_HOW = {'k': 1, 'version': 'q1', 'views': '', 'provider': None,
+           'dated': True, 'measured_build': 'p/m-20261010'}
+
+
+def arm(role, version, handling='k1', menu=None):
+    """An arm as battery_items.iter_arms writes one: its suffix the
+    runtime's (guard.handling_suffix), its handling in DECLARED's fields."""
+    tag = f'{handling}.{version}'
+    w, views = version[:2], version[2:]
+    k = int(handling[1:])
+    return {'id': f'{PIN}#{tag}', 'tag': tag, 'role': role, 'menu': menu,
+            'version': version, 'handling': handling,
+            'suffix': guard.handling_suffix(k, w, views),
+            'declared': {'k': k, 'version': w, 'views': views}}
+
+
+def iplan(rnd, *arms):
+    """An iteration plan as battery_items.make_iter writes one: arms of
+    the one pin, the control first; the selection's decider in origin."""
+    return plan_dict(mode='iterate', version=f'iter_r{rnd}', round=rnd,
+                     pin=PIN, arms=list(arms), origin={'decider': OWN})
+
+
 def test_iteration_adopts_the_best_variant_that_clears_every_bar():
     q = lambda k: qrows(ord_skip=k, ord_n=50)
-    ms = {'ctl': model(q(15)), 'v1': model(q(5)),         # +0.05
-          'v2': model(q(0), auc=.85),                     # AUC fell .05
-          'v3': model(q(13))}                             # +0.01 < 0.02
-    p = plan_dict(mode='iterate', control='ctl', variants=['v1', 'v2', 'v3'],
-                  round=1)
-    o = bs.iterate_outcome(summary(ms), p)
-    assert o['adopted'] == 'v1'
-    assert not o['checks']['v2']['auc_ok'] and o['checks']['v2']['lb_ok']
-    assert not o['checks']['v3']['dq_ok'] and o['checks']['v3']['lb_ok']
-    assert o['checks']['v1']['alpha'] == pytest.approx(.05 / 3)
+    c, v1, v2, v3 = (arm('control', 'q1'), arm('variant', 'q2', menu='q2'),
+                     arm('variant', 'q1s3', menu='s3'),
+                     arm('variant', 'q1b2', menu='b2'))
+    ms = {c['id']: model(q(15)), v1['id']: model(q(5)),       # +0.05
+          v2['id']: model(q(0), auc=.85),                     # AUC fell .05
+          v3['id']: model(q(13))}                             # +0.01 < 0.02
+    o = bs.iterate_outcome(summary(ms), iplan(1, c, v1, v2, v3))
+    assert o['adopted'] == 'q2' and o['adopted_arm']['id'] == v1['id']
+    ch = o['checks']
+    assert ch[v1['id']]['ok'] and ch[v1['id']]['delta_Q'] == \
+        pytest.approx(.05)
+    assert not ch[v2['id']]['auc_ok'] and ch[v2['id']]['lb_ok']
+    assert not ch[v3['id']]['dq_ok'] and ch[v3['id']]['lb_ok']
+    assert ch[v1['id']]['alpha'] == pytest.approx(.05 / 3)
+    assert o['variants'] == ['q2', 's3', 'b2']
+    # round 1 adopted: round 2 comes next, its control the adopted arm
+    assert o['next'] == 'round 2' and o['decider'] is None
+    assert o['final'] == {'version': 'q2', 'handling': 'k1', 'tag': 'k1.q2',
+                          'suffix': '#k1.q2',
+                          'declared': {'k': 1, 'version': 'q2', 'views': ''}}
+
+
+def test_the_highest_q_is_adopted_and_ties_go_to_the_earlier_menu_tag():
+    q = lambda k: qrows(ord_skip=k, ord_n=50)
+    c, a, b = (arm('control', 'q1'), arm('variant', 'q2', menu='q2'),
+               arm('variant', 'q1s3', menu='s3'))
+    ms = {c['id']: model(q(15)), a['id']: model(q(5)), b['id']: model(q(3))}
+    assert bs.iterate_outcome(summary(ms), iplan(1, c, a, b))['adopted'] \
+        == 's3'
+    ms[b['id']] = model(q(5))
+    assert bs.iterate_outcome(summary(ms), iplan(1, c, a, b))['adopted'] \
+        == 'q2'
+
+
+def test_a_failed_gate_a_phi_drop_or_a_dropped_arm_is_never_adopted():
+    q = lambda k: qrows(ord_skip=k, ord_n=50)
+    c, a, b, d = (arm('control', 'q1'), arm('variant', 'q2', menu='q2'),
+                  arm('variant', 'q1s3', menu='s3'),
+                  arm('variant', 'q1b2', menu='b2'))
+    ms = {c['id']: model(q(15)), a['id']: model(q(0), failed=['G4']),
+          b['id']: model(q(0))}
+    ms[b['id']]['E7'] = {'Phi': .94}                  # fell .06 > .05
+    o = bs.iterate_outcome(summary(ms), iplan(1, c, a, b, d))
+    assert o['adopted'] is None
+    assert not o['checks'][a['id']]['gates'] and o['checks'][a['id']]['dq_ok']
+    assert not o['checks'][b['id']]['phi_ok']
+    assert o['checks'][d['id']] == dict(tag=d['tag'], menu='b2',
+                                        dropped=True, ok=False)
+    # the alpha is split over every declared variant, dropped or not
+    assert o['checks'][a['id']]['alpha'] == pytest.approx(.05 / 3)
+    # round 1 adopted nothing: stop, the selection's declaration stands
+    assert o['next'] == 'stop'
+    assert o['decider'] == dict(OWN, declared=OWN_HOW)
+
+
+def test_round_2_goes_to_the_holdout_adopted_or_not():
+    q = lambda k: qrows(ord_skip=k, ord_n=50)
+    c, a = arm('control', 'q1s3'), arm('variant', 'q2s3', menu='q2')
+    for k, adopted, at in ((5, 'q2', 'k1.q2s3'), (15, None, 'k1.q1s3')):
+        o = bs.iterate_outcome(summary({c['id']: model(q(15)),
+                                        a['id']: model(q(k))}),
+                               iplan(2, c, a))
+        assert o['adopted'] == adopted and o['final']['tag'] == at
+        assert o['next'] == 'holdout' and o['decider'] is None
+
+
+def test_the_holdout_keeps_the_final_version_only_if_it_beats_q1():
+    q = lambda k: qrows(ord_skip=k, ord_n=50)
+    c, f = arm('control', 'q1'), arm('final', 'q1s3')
+    p = iplan('holdout', c, f)
+    o = bs.iterate_outcome(summary({c['id']: model(q(15)),
+                                    f['id']: model(q(5))}), p)
+    assert o['holdout'] and o['kept'] and o['adopted'] == 'final'
+    assert o['checks'][f['id']]['alpha'] == pytest.approx(.05)
+    assert o['next'] == 'stop'
+    assert o['decider'] == dict(OWN, version='q1s3', suffix='#k1.q1s3',
+                                declared=dict(OWN_HOW, views='s3'))
+    # failing a gate, or a lead whose bound is not above 0: back to q1
+    for fm in (model(q(5), failed=['G2b']),
+               model(qrows(crit=(1, 2), first=(2, 2), ord_n=50))):
+        o = bs.iterate_outcome(summary({
+            c['id']: model(qrows(crit=(1, 2), ord_n=50)), f['id']: fm}), p)
+        assert not o['kept'] and o['adopted'] is None
+        assert o['final']['tag'] == 'k1.q1' and \
+            o['decider'] == dict(OWN, declared=OWN_HOW)
+
+
+def test_an_iteration_with_too_few_blocks_exits_6():
+    c, a = arm('control', 'q1'), arm('variant', 'q2', menu='q2')
+    with pytest.raises(SystemExit) as e:
+        bs.iterate_outcome(summary({c['id']: model(qrows()),
+                                    a['id']: model(qrows())},
+                                   sufficient=False), iplan(1, c, a))
+    assert e.value.code == bs.EXIT_INSUFFICIENT

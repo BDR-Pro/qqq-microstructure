@@ -26,11 +26,15 @@
 #   add --engine local to any of these for Kev on this machine
 #
 # Hosted: every answer must come back from the pinned model (any dated build
-# of it; the build and provider name the record). Local: the model file and
-# the llama.cpp release are checked against pinned sha256 sums every night;
-# the server must be the pinned decision model, refuse a missing or wrong
-# key, and read no config file or LLAMA_* variable; its name carries the
-# file, revision, llama.cpp build and platform.
+# of it; the build and provider name the record). How the decider is asked
+# beyond that -- one call or k seeded orders averaged, the wording, a view,
+# a provider pin -- is DECLARED beside HOSTED, names its own record suffix,
+# and must match guard's gated slot or the decider is not asked (the control
+# and the reference still decide, and decider.log says why). Local: the
+# model file and the llama.cpp release are checked against pinned sha256 sums
+# every night; the server must be the pinned decision model, refuse a missing
+# or wrong key, and read no config file or LLAMA_* variable; its name carries
+# the file, revision, llama.cpp build and platform.
 #
 # The schedule decides from a DEDICATED clone (<home>/repo), never from your
 # working copy: it pulls, decides, commits only reports/guard_log.csv and
@@ -51,6 +55,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+import guard                            # for the declaration's check below
 
 LLAMA_TAG = 'b11429'                    # llama.cpp 0.6.0: first with Kev
 LLAMA = {                               # platform -> (asset, sha256, label)
@@ -101,7 +106,102 @@ HOSTED = {
     'jev': 'typesafe/jev-1.13',                  # the reference: Jev itself
 }
 # a record names a dated build: never a moving alias (~...) or a :free route
-assert not any(v.startswith('~') or ':free' in v for v in HOSTED.values())
+assert not any('~' in v or ':free' in v for v in HOSTED.values())
+
+# How the record's decider is asked, beyond its pin (RESULTS 27; battery spec
+# 5, R3-R5, R7). Today's declaration is the record's: one canonical call in
+# the q1 wording, no view, no provider pin. The battery's selection ('k3' is
+# k 3) and an iteration the holdout confirmed (a version, views, k 5) change
+# these values only -- and guard.DECIDER's suffix with them. The check below
+# runs before every decider call, not at import: a half-made change then
+# costs the decider's night alone, logged, while the control and the
+# reference decide and the nightly pull can still bring the fix:
+#   k               1: one canonical call. k > 1: k sequential calls, call j
+#                   in the night's seeded order j (the battery's E9 seeds,
+#                   so the bytes sent are the bytes it tested), averaged
+#   version         a wording in guard.QUESTIONS
+#   views           guard.VIEWS tags, sorted ('b2s3'): what is sent is
+#                   computed from the shared schema-2 state, whose sha the
+#                   log keeps, so every backend still sees one state
+#   provider        None, or the one provider every call is pinned to, with
+#                   no fallback (it is not in the suffix: the logged
+#                   '@provider' already splits the record)
+#   dated           the decider is served under dated builds (guard.DECIDER's
+#                   third field when False)
+#   measured_build  the build the battery measured, or None: another build
+#                   answering is a one-line drift note, never a refusal
+# Only 'http' takes a handling. The reference ('jev') stays one raw canonical
+# call with no suffix; its entry, if any, may name only its measured_build.
+# The battery's selection (bench/battery/runs/v1/selection_v1.json, sha256
+# fa28c603...; branch 'none': no candidate passed every gate) keeps the
+# incumbent at k1.q1 with no provider pin, and names the build it measured.
+DECLARED = {'http': {'k': 1, 'version': 'q1', 'views': '', 'provider': None,
+                     'dated': True,
+                     'measured_build':
+                         'perplexity/pplx-decider-v1.1-27b-20261006'}}
+HANDLING = ('k', 'version', 'views', 'provider', 'dated')
+
+
+def suffix(how):
+    """The record's handling suffix, guard.handling_suffix's -- the scheme
+    the battery names its arms by: '' for one canonical call in q1 with no
+    view (every night logged so far), else '#{h}.{version}{views}' where h is
+    perm{k} for k seeded orders averaged, or k1 for one canonical call:
+    '#perm3.q1', '#perm3.q2s3', '#perm5.q1', '#k1.q2', '#k1.q1b2'."""
+    return guard.handling_suffix(how.get('k', 1), how.get('version', 'q1'),
+                                 how.get('views', ''))
+
+
+def declaration_problems(hosted=None, declared=None, decider=None):
+    """What is wrong with the declaration (empty: nothing): the handling is
+    well formed, only 'http' has one, and guard's gated decider slot is
+    exactly (HOSTED pin, its suffix, dated)."""
+    hosted = HOSTED if hosted is None else hosted
+    declared = DECLARED if declared is None else declared
+    decider = guard.DECIDER if decider is None else decider
+    out = []
+    if 'http' not in hosted or 'http' not in declared:
+        return ['no http decider declared']
+    out += [f'{b} is declared but not hosted' for b in declared
+            if b not in hosted]
+    for b, how in declared.items():
+        allowed = (*HANDLING, 'measured_build') if b == 'http' \
+            else ('measured_build',)
+        out += [f'{b}: {x!r} cannot be declared' for x in how
+                if x not in allowed]
+        mb = how.get('measured_build')
+        if mb is not None and not (isinstance(mb, str) and re.fullmatch(
+                re.escape(hosted.get(b, '')) + r'(-\d{8})?', mb)):
+            out.append(f'{b}: measured_build {mb!r} is not a build of its pin')
+    how = declared['http']
+    out += [f'http: {x!r} is not declared' for x in HANDLING if x not in how]
+    if out:
+        return out
+    k, w = how['k'], how['views']
+    if type(k) is not int or k < 1:
+        out.append(f'http: k {k!r} is not a count of calls')
+    if how['version'] not in guard.QUESTIONS:
+        out.append(f'http: no wording {how["version"]!r} in guard.QUESTIONS')
+    tags = re.findall('|'.join(map(re.escape, guard.VIEWS)), w) \
+        if isinstance(w, str) else None
+    if tags is None or ''.join(tags) != w or tags != sorted(set(tags)):
+        out.append(f'http: views {w!r} are not guard.VIEWS tags, each once, '
+                   f'sorted')
+    p = how['provider']
+    if p is not None and not (isinstance(p, str) and p.strip()):
+        out.append(f'http: provider {p!r} is not a provider name')
+    if type(how['dated']) is not bool:
+        out.append('http: dated is not True or False')
+    want = (hosted['http'], suffix(how)) + (() if how['dated'] else (False,))
+    have = tuple(decider)
+    if have[2:] == (True,):
+        have = have[:2]             # (pin, suffix, True) is (pin, suffix)
+    if have != want:
+        out.append(f'guard.DECIDER is {tuple(decider)!r}, the runner sends '
+                   f'{want!r} -- change them together')
+    return out
+
+
 TIMEOUT = 3 * 3600          # one request of 12 questions, worst case on a CPU
 TASK = 'qqq-guard-decider'
 RUNS_ET = ('09:17', '13:47')            # a try, and a catch-up
@@ -142,8 +242,22 @@ def model_name(m, p=None):
     return f'{m}@{rev[:8]}+llama.cpp-{LLAMA_TAG}-{LLAMA[p or plat()][2]}'
 
 
+# key-shaped strings, as the battery scrubs them (battery_run.SECRETS): an
+# error body guard.ask_http quotes may echo the Authorization header
+SECRETS = (re.compile(r'\bsk-[A-Za-z0-9_-]{8,}'), re.compile(r'Bearer\s+\S*'),
+           re.compile(r'\bsk-or-[A-Za-z0-9_-]*'))
+
+
 def redact(s):
-    return re.sub(r'//[^/@\s]+@', '//***@', str(s))
+    """A line as it may be printed or written to decider.log: no credential
+    in a URL, no key-shaped string, and never this machine's key itself."""
+    s = re.sub(r'//[^/@\s]+@', '//***@', str(s))
+    key = os.environ.get('OPENROUTER_API_KEY')
+    if key and len(key) >= 8:
+        s = s.replace(key, '***')
+    for r in SECRETS:
+        s = r.sub('***', s)
+    return s
 
 
 def say(*a, echo=True):
@@ -549,9 +663,18 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
     if 'rule' in todo:
         once('rule', guard.ask_rule)
     if engine == 'hosted':
+        # checked here, not at import: a half-made declaration (DECLARED
+        # without guard.DECIDER, or the other way round) costs the decider's
+        # night alone, with the reason in decider.log, while the control and
+        # the reference decide and the nightly pull can still bring the fix
+        try:
+            probs = declaration_problems()
+        except Exception as ex:
+            probs = [f'{type(ex).__name__}: {ex}']
         for b, pin in HOSTED.items():
             if b in todo:
-                once(b, hosted_ask(pin, key, opener))
+                once(b, not_asked(probs) if b == 'http' and probs else
+                     hosted_ask(pin, key, opener, backend=b, today=today))
     elif 'http' in todo:
         try:
             with server(m, threads=threads) as s:
@@ -577,21 +700,126 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
     return done
 
 
-def hosted_ask(pin, key, opener=None):
-    """A decider on OpenRouter's Decisions API, held to its pin: the answer
+def state_sha(state):
+    """The night's state_sha exactly as guard.decide logs it. The k > 1
+    orders are keyed on it, so they follow the one shared state, and a
+    catch-up run on the cached state draws the same orders."""
+    return hashlib.sha256(json.dumps(state, sort_keys=True)
+                          .encode()).hexdigest()[:12]
+
+
+def not_asked(probs):
+    """The decider's ask under a half-made declaration: it asks nothing and
+    says why, so nothing is logged under a suffix the grader does not gate."""
+    def ask(st, nm):
+        raise SystemExit('not asked, the declaration is half-made: '
+                         + '; '.join(probs))
+    return ask
+
+
+def hosted_ask(pin, key, opener=None, backend=None, today=None, how=None):
+    """A decider on OpenRouter's Decisions API, held to its pin: every answer
     must come back from that model (any dated build of it -- the build and
-    the provider are what the record logs), or nothing is logged."""
-    import guard
+    the provider are what the record logs), or nothing is logged.
+
+    backend's DECLARED handling applies (`how` overrides it, for tests).
+    None, or today's declaration: one canonical call, the record's bytes,
+    logged as 'build@provider'. k > 1: call j = 0..k-1 asks in the order
+    question_order(f'{today}|{state_sha}|{j}|order-v1|http'), one call after
+    another; all must come from one build@provider, else nothing is logged.
+    The night logs their mean p per question (guard.mean_of_draws: a
+    question is logged only if every call answered it, and a mean of
+    hundredths that is 0.5 is 0.5), their summed latency, the stamp
+    guard.decide puts on the last arrival, and 'build@provider' + the
+    suffix. A 13:47
+    catch-up asks about the cached state, so it sends the 09:17 bytes again.
+    What the calls cost (usage.cost) and who answered go to decider.log --
+    never to the record."""
+    how = DECLARED.get(backend, {}) if how is None else how
+    k, tag = how.get('k', 1), suffix(how)
+    if k > 1 and not today:
+        raise ValueError('k > 1 draws its orders from the night\'s date')
+    kw = {'opener': opener} if opener else {}
+    if how.get('version', 'q1') != 'q1':
+        kw['version'] = how['version']
+    if how.get('views'):
+        kw['view'] = guard.view_of(how['views'])
+    if how.get('provider'):
+        kw['provider'] = {'order': [how['provider']], 'allow_fallbacks': False}
 
     def ask(st, nm):
-        kw = {'opener': opener} if opener else {}
-        p, who, ms = guard.ask_http(st, nm, DECISIONS, key, pin, **kw)
-        # the pinned id, optionally its dated build, optionally @provider
-        if not re.fullmatch(re.escape(pin) + r'(-\d{8})?(@[^@]+)?', who):
-            raise SystemExit(f'OpenRouter answered as {who!r}, not the '
-                             f'pinned {pin!r} -- not logged')
-        return p, who, ms
+        sha = state_sha(st)
+        qids = [f'hold_{n}' for n in nm] + ['hedge_book']
+        draws, seen, accepted = [], [], False
+        try:
+            for j in range(k):
+                order = None if k == 1 else guard.question_order(
+                    f'{today}|{sha}|{j}|order-v1|http', qids)
+                info = {}
+                p, who, ms = guard.ask_http(st, nm, DECISIONS, key, pin,
+                                            info=info, order=order, **kw)
+                seen.append((who, info))
+                # the pinned id, optionally its dated build, optionally
+                # @provider -- and with a suffix to follow, no '#' of its own
+                if not re.fullmatch(re.escape(pin) + r'(-\d{8})?(@[^@]+)?',
+                                    who) or (tag and '#' in who):
+                    raise SystemExit(f'OpenRouter answered as {who!r}, not '
+                                     f'the pinned {pin!r} -- not logged')
+                if draws and who != draws[0][1]:
+                    raise SystemExit(
+                        f'call {j + 1} of {k} answered as {who!r}, call 1 as '
+                        f'{draws[0][1]!r} -- a night is one build@provider; '
+                        f'not logged')
+                draws.append((p, who, ms))
+            accepted = True
+        finally:
+            spent(backend or pin, seen, how, accepted)
+        if k == 1:
+            p, who, ms = draws[0]
+            return p, who + tag, ms
+        p = guard.mean_of_draws([d[0] for d in draws])
+        return p, draws[0][1] + tag, sum(d[2] for d in draws)
     return ask
+
+
+def spent(backend, seen, how, accepted=True):
+    """decider.log, never the record: who answered and what it cost
+    (OpenRouter's usage.cost, summed over the calls), whatever came of them;
+    and, once the answers were accepted (accepted), a one-line note when the
+    build is not the one the battery measured, or the provider not the
+    pinned one. Notes only: they never stop a night. A night refused (two
+    builds, an impostor) gets no drift note -- its refusal says who
+    answered."""
+    if not seen:
+        return
+    try:
+        costs = [i['usage'].get('cost') if isinstance(i.get('usage'), dict)
+                 else None for _, i in seen]
+        got = [c for c in costs if isinstance(c, (int, float))
+               and not isinstance(c, bool)]
+        cost = 'n/a' if not got else f'{sum(got):.6g}' + (
+            '' if len(got) == len(costs) else
+            f' ({len(got)} of {len(costs)} calls reported one)')
+        say(f'{backend}: {len(seen)} call(s) answered by '
+            f'{", ".join(sorted({str(w) for w, _ in seen}))}; usage.cost '
+            f'{cost}', echo=False)
+        builds = sorted({str(i.get('model') or str(w).split('@')[0])
+                         for w, i in seen})
+        if not accepted:
+            return
+        mb = how.get('measured_build')
+        if mb and builds != [mb]:
+            say(f'{backend}: build drift -- answered by {", ".join(builds)}, '
+                f'the battery measured {mb}; not a refusal (a new build is '
+                f'its own record); re-run E1-E7 on it within 5 trading days')
+        pv = how.get('provider')
+        provs = sorted({str(i.get('provider')) for _, i in seen})
+        if pv and provs != [pv]:
+            say(f'{backend}: provider drift -- served by {", ".join(provs)}, '
+                f'pinned to {pv}; not a refusal')
+    except Exception as ex:                     # a note never costs a night
+        say(f'{backend}: decider.log note failed ({type(ex).__name__})',
+            echo=False)
 
 
 # --------------------------------------------------------------- schedule --

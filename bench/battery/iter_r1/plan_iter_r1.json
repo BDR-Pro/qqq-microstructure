@@ -1,0 +1,568 @@
+{
+ "version": "iter_r1",
+ "mode": "iterate",
+ "round": 1,
+ "pin": "perplexity/pplx-decider-v1.1-27b",
+ "base": "q1",
+ "handling": "k1",
+ "variants": [
+  "q2",
+  "s3",
+  "b2"
+ ],
+ "arms": [
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1",
+   "tag": "k1.q1",
+   "role": "control",
+   "menu": null,
+   "version": "q1",
+   "handling": "k1",
+   "suffix": "",
+   "declared": {
+    "k": 1,
+    "version": "q1",
+    "views": ""
+   }
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q2",
+   "tag": "k1.q2",
+   "role": "variant",
+   "menu": "q2",
+   "version": "q2",
+   "handling": "k1",
+   "suffix": "#k1.q2",
+   "declared": {
+    "k": 1,
+    "version": "q2",
+    "views": ""
+   }
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1s3",
+   "tag": "k1.q1s3",
+   "role": "variant",
+   "menu": "s3",
+   "version": "q1s3",
+   "handling": "k1",
+   "suffix": "#k1.q1s3",
+   "declared": {
+    "k": 1,
+    "version": "q1",
+    "views": "s3"
+   }
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1b2",
+   "tag": "k1.q1b2",
+   "role": "variant",
+   "menu": "b2",
+   "version": "q1b2",
+   "handling": "k1",
+   "suffix": "#k1.q1b2",
+   "declared": {
+    "k": 1,
+    "version": "q1",
+    "views": "b2"
+   }
+  }
+ ],
+ "incumbent": "perplexity/pplx-decider-v1.1-27b#k1.q1",
+ "reference": "perplexity/pplx-decider-v1.1-27b#k1.q1",
+ "candidates": [
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1",
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "price_in": 2e-08,
+   "X": 1.0
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q2",
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "price_in": 2e-08,
+   "X": null
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1s3",
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "price_in": 2e-08,
+   "X": null
+  },
+  {
+   "id": "perplexity/pplx-decider-v1.1-27b#k1.q1b2",
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "price_in": 2e-08,
+   "X": null
+  }
+ ],
+ "drop_order": [
+  "perplexity/pplx-decider-v1.1-27b#k1.q1b2",
+  "perplexity/pplx-decider-v1.1-27b#k1.q1s3",
+  "perplexity/pplx-decider-v1.1-27b#k1.q2"
+ ],
+ "origin": {
+  "selection": {
+   "path": "bench/battery/runs/v1/selection_v1.json",
+   "sha256": "fa28c603145f91fe1b694d7ad7acfd4f595c2dd63f9f6e69c5ef1597d85ee891",
+   "summary_sha256": "17e263be8084089b5760ad8b1f7d2c48f589061a85ab818fdd615c41c10aa14a",
+   "plan_sha256": "56311a1bb923fcf258abeb1fe7f2bfb704d09a82198b12a617c4bfb74eeb1b20"
+  },
+  "branch": "none",
+  "decider": {
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "handling": "k1",
+   "version": "q1",
+   "suffix": "",
+   "provider_pin": null,
+   "build": "perplexity/pplx-decider-v1.1-27b-20261006",
+   "dated": true,
+   "provider": "Perplexity"
+  },
+  "sd_rep": 0.0,
+  "ex_ctx": 0.0,
+  "k5_allowed": false,
+  "sep_allowed": false,
+  "price_in": 2e-08,
+  "cost_per_call_usd": 0.0007741935483870966
+ },
+ "prior": null,
+ "provider_pin": null,
+ "seeds": {
+  "items": 20261021,
+  "analysis": 20261014,
+  "dispatch": 20261015
+ },
+ "date": "20261013",
+ "blocks": 3,
+ "states_per_block": 6,
+ "generator": {
+  "pool": [
+   "LRCX",
+   "NBIS",
+   "AMAT",
+   "MU",
+   "CAT",
+   "ASML",
+   "AMD",
+   "TSM",
+   "SOFI",
+   "GEV",
+   "WDC",
+   "BE",
+   "CRWV",
+   "INTC",
+   "STX",
+   "SNDK",
+   "IREN"
+  ],
+  "n_labels": 11,
+  "condition_p": {
+   "Ordinary": 0.5,
+   "Earnings": 0.15,
+   "ExtremeDown": 0.1,
+   "ExtremeUp": 0.1,
+   "Moderate": 0.15
+  },
+  "min_ordinary": 6,
+  "min_skip_criteria": 2,
+  "vol_log_sd": 0.25,
+  "on_frac": 0.5,
+  "z_base": [
+   -1.0,
+   1.0
+  ],
+  "z_extreme": [
+   3.5,
+   5.0
+  ],
+  "z_moderate": [
+   1.5,
+   2.5
+  ],
+  "p_move_on_night": 0.5,
+  "night_vol_div": 19,
+  "ret5d_vol_div": 95,
+  "nights5_div": 5,
+  "qqq_calm_log_sd": 0.15,
+  "qqq_stressed_m": [
+   2.0,
+   3.0
+  ],
+  "qqq_stressed_last_night": [
+   2.5,
+   4.0
+  ],
+  "qqq_stressed_ret5d": [
+   2.5,
+   4.0
+  ],
+  "qqq_stressed_nights5": [
+   1.0,
+   2.0
+  ],
+  "stressed_name_vol": [
+   1.3,
+   1.8
+  ],
+  "stressed_per_block": 3,
+  "cx_type_by_position": [
+   1,
+   1,
+   2,
+   2,
+   3,
+   3
+  ],
+  "cx1_holds": 5,
+  "e5_doses": [
+   1.5,
+   3.0,
+   6.0
+  ],
+  "e7_ld_per_block": 4,
+  "e7_an_per_block": 2,
+  "e8_per_block": 3,
+  "v_p_opaque": 0.5,
+  "v_p_keyshuffle": 0.5,
+  "v_p_jitter": 0.5,
+  "v_jitter_bps": 3,
+  "v_jitter_vol": 0.01,
+  "v_date_shift_bdays": [
+   0,
+   4
+  ],
+  "rounding": "Python round(), half to even",
+  "rng_state": "default_rng(SeedSequence(seeds.items, spawn_key=(s,))), s = 1..18 for S01..S18; no S0",
+  "rng_block": "default_rng(SeedSequence(seeds.items, spawn_key=(100 + b,))), b = 1..3",
+  "e1_order_seed": "battery-iter_r1|{state_id}|O{i}",
+  "cb_id_suffix": "_b",
+  "e9_order_seed": "{date}|{state_sha}|{j}|order-v1|http",
+  "state_sha": "sha256(json.dumps(state, sort_keys=True))[:12], as logged",
+  "numpy": "2.5",
+  "e1_orders": "O1-O6; O1-O10 for a k5 arm",
+  "sep": "one request per question: the item's state, one question",
+  "pilot": "E0|S01|W: the control's first request, once per arm"
+ },
+ "texts": {
+  "questions": {
+   "q1": {
+    "hold": [
+     "Should the long position in `{n}` be held overnight tonight -- bought at today's closing auction and sold at tomorrow's opening auction?",
+     {
+      "true": "hold: an ordinary night for this name",
+      "false": "skip: earnings tonight or an extreme recent move"
+     }
+    ],
+    "hedge": [
+     "Should tonight's whole basket be hedged with an equal-dollar short position in QQQ, held from today's close to tomorrow's open?",
+     {
+      "true": "hedge: elevated risk of a market-wide overnight gap",
+      "false": "do not hedge: an ordinary night"
+     }
+    ]
+   },
+   "q2": {
+    "hold": [
+     "Should the long position in `{n}` be held overnight tonight -- bought at today's closing auction and sold at tomorrow's opening auction?",
+     {
+      "true": "hold: an ordinary night for this name",
+      "false": "skip: earnings tonight or an extreme recent move"
+     }
+    ],
+    "hedge": [
+     "Should tonight's whole basket be hedged with an equal-dollar short position in QQQ, held from today's close to tomorrow's open? The QQQ row of the state describes the market tonight.",
+     {
+      "true": "hedge: elevated risk of a market-wide overnight gap",
+      "false": "do not hedge: an ordinary night"
+     }
+    ]
+   }
+  },
+  "views": {
+   "s3": "guard.view_s3: last_night_z = round(last_night / vol20d, 1), ret5d_z = round(ret5d / (vol20d sqrt 5), 1), for the names and QQQ",
+   "b2": "long these names overnight, equal weight: buy at the close auction, sell at the next open auction. Per name, in basis points: last_night = the last close-to-open move; nights5_avg = the mean of the last 5 such moves; ret5d = the last 5 days' close-to-close return; vol20d = the standard deviation of the last 20 daily close-to-close returns; earnings_tonight = reports between today's close and tomorrow's open. QQQ: the same for the market."
+  },
+  "book_paraphrases": [
+   "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "an overnight long position in each of these names: bought at the closing auction, sold at the next opening auction; all moves are in basis points",
+   "these names are held long overnight -- bought in the close auction and sold in the next open auction; moves are given in basis points"
+  ],
+  "negation": {
+   "hold": "Should the long position in `{n}` be left out tonight -- not bought at today's closing auction and not sold at tomorrow's opening auction?",
+   "hold_criteria": {
+    "true": "skip: earnings tonight or an extreme recent move",
+    "false": "hold: an ordinary night for this name"
+   },
+   "hedge": "Should tonight's whole basket be left unhedged -- with no equal-dollar short position in QQQ held from today's close to tomorrow's open?",
+   "hedge_criteria": {
+    "true": "do not hedge: an ordinary night",
+    "false": "hedge: elevated risk of a market-wide overnight gap"
+   }
+  }
+ },
+ "gates": {
+  "G1": {
+   "valid_rate_min": 0.98,
+   "completion_min": 0.95,
+   "modal_share_min": 0.9,
+   "p95_latency_s_max": 60.0,
+   "median_cost_usd_max": 0.01
+  },
+  "G2a": {
+   "ex_nuis_max": 0.05,
+   "rel_max": 0.5,
+   "D_min": 0.01
+  },
+  "G2b": {
+   "ex_ctx_max": 0.05,
+   "lb_alpha": 0.05
+  },
+  "G3a": {
+   "E_bar_max": -0.05,
+   "frac_neg_min": 0.75,
+   "holm_p_lt": 0.05
+  },
+  "G3b": {
+   "G_bar_min": 0.05,
+   "delta_h_gt": 0.0,
+   "holm_p_lt": 0.05
+  },
+  "G4": {
+   "flip_h_max": 0.1
+  },
+  "G5": {
+   "Q_minus_Q_rule_min": 0.05
+  },
+  "G6": {
+   "Phi_min": 0.5,
+   "Phi_ab_floor_min": 0.2
+  },
+  "smoke_stop": {
+   "invalid_first_calls": 3,
+   "never_for": [
+    "incumbent",
+    "reference"
+   ]
+  },
+  "handling": {
+   "k3_if_sd_rep_gt": 0.005,
+   "k3_if_ex_O_gt": 0.01,
+   "phi_factor": 1.5
+  },
+  "holm": {
+   "fwer": 0.05,
+   "family": [
+    "G3a",
+    "G3b"
+   ],
+   "over": "models that pass G1",
+   "signflip_exact_max_states": 20
+  },
+  "E8_flag": {
+   "CE_gt": 0.15,
+   "rho_neg_max": 0.0,
+   "permutations": 10000
+  },
+  "caching": {
+   "rho_b2b_lt": 0.25,
+   "report_only": true
+  },
+  "analysis_set": {
+   "block_final_share_min": 0.95,
+   "blocks_min": 2
+  },
+  "selection": {
+   "switch_margin_min": 0.03,
+   "lower_bound_gt": 0.0,
+   "alpha": 0.05,
+   "alpha_divisor": "eligible - 1",
+   "bootstrap": "paired, states resampled within regime",
+   "tie_break": [
+    "AUC_comb desc",
+    "mean(lift_E, lift_M6, delta_h) desc",
+    "flip_h asc",
+    "X desc",
+    "median cost asc",
+    "id asc"
+   ]
+  },
+  "iteration": {
+   "rounds_max": 2,
+   "variants_max": 4,
+   "delta_Q_min": 0.02,
+   "lower_bound_gt": 0.0,
+   "alpha": 0.05,
+   "alpha_divisor": "variants",
+   "AUC_comb_drop_max": 0.02,
+   "Phi_drop_max": 0.05,
+   "k5_if_sd_rep_gt": 0.005,
+   "sep_if_ex_ctx_gt": 0.02,
+   "items_seeds": [
+    20261021,
+    20261022
+   ],
+   "holdout_seed": 20261029,
+   "round_cap_usd": 3,
+   "holdout_cap_usd": 2
+  }
+ },
+ "gates_note": "key suffixes: _min >=, _max <=, _gt >, _lt <",
+ "calls_per_model": {
+  "nominal": {
+   "E0": 1,
+   "E1": 144,
+   "E2": 18,
+   "E3": 18,
+   "E4": 18,
+   "E5": 18,
+   "E6": 18,
+   "E7": 18,
+   "E8": 9
+  },
+  "floor": {
+   "E0": 1,
+   "E1": 96,
+   "E2": 12,
+   "E3": 12,
+   "E4": 12,
+   "E5": 12,
+   "E6": 12,
+   "E7": 12,
+   "E8": 6
+  },
+  "per_arm": {
+   "perplexity/pplx-decider-v1.1-27b#k1.q1": {
+    "nominal": {
+     "E0": 1,
+     "E1": 144,
+     "E2": 18,
+     "E3": 18,
+     "E4": 18,
+     "E5": 18,
+     "E6": 18,
+     "E7": 18,
+     "E8": 9
+    },
+    "floor": {
+     "E0": 1,
+     "E1": 96,
+     "E2": 12,
+     "E3": 12,
+     "E4": 12,
+     "E5": 12,
+     "E6": 12,
+     "E7": 12,
+     "E8": 6
+    }
+   },
+   "perplexity/pplx-decider-v1.1-27b#k1.q2": {
+    "nominal": {
+     "E0": 1,
+     "E1": 144,
+     "E2": 18,
+     "E3": 18,
+     "E4": 18,
+     "E5": 18,
+     "E6": 18,
+     "E7": 18,
+     "E8": 9
+    },
+    "floor": {
+     "E0": 1,
+     "E1": 96,
+     "E2": 12,
+     "E3": 12,
+     "E4": 12,
+     "E5": 12,
+     "E6": 12,
+     "E7": 12,
+     "E8": 6
+    }
+   },
+   "perplexity/pplx-decider-v1.1-27b#k1.q1s3": {
+    "nominal": {
+     "E0": 1,
+     "E1": 144,
+     "E2": 18,
+     "E3": 18,
+     "E4": 18,
+     "E5": 18,
+     "E6": 18,
+     "E7": 18,
+     "E8": 9
+    },
+    "floor": {
+     "E0": 1,
+     "E1": 96,
+     "E2": 12,
+     "E3": 12,
+     "E4": 12,
+     "E5": 12,
+     "E6": 12,
+     "E7": 12,
+     "E8": 6
+    }
+   },
+   "perplexity/pplx-decider-v1.1-27b#k1.q1b2": {
+    "nominal": {
+     "E0": 1,
+     "E1": 144,
+     "E2": 18,
+     "E3": 18,
+     "E4": 18,
+     "E5": 18,
+     "E6": 18,
+     "E7": 18,
+     "E8": 9
+    },
+    "floor": {
+     "E0": 1,
+     "E1": 96,
+     "E2": 12,
+     "E3": 12,
+     "E4": 12,
+     "E5": 12,
+     "E6": 12,
+     "E7": 12,
+     "E8": 6
+    }
+   }
+  }
+ },
+ "calls_note": "floor = block 3's states dropped. W (E0|S01|W) goes to every arm; every other item carries for_arm and goes to that arm alone.",
+ "bootstrap_B": 10000,
+ "signflip_draws": 200000,
+ "spend": {
+  "max_usd": 3,
+  "max_usd_ceiling": 3,
+  "credit_margin": 10,
+  "pessimistic_per_call": 0.0012,
+  "price_ref": 3.1e-08
+ },
+ "projection": {
+  "per_call_usd": 0.0007741935483870966,
+  "cap_usd": 3,
+  "limit_usd": 2.4000000000000004,
+  "requested": [
+   "q2",
+   "s3",
+   "b2"
+  ],
+  "dropped_blocks": [],
+  "dropped_variants": [],
+  "usd": 0.812461405418857,
+  "blocks": 3,
+  "calls": 1048
+ },
+ "deadline_min": 90,
+ "timeout_s": 60,
+ "concurrency": 3,
+ "per_model": 3,
+ "files": {
+  "states": "states_iter_r1.json",
+  "items": "items_iter_r1.jsonl",
+  "anchors": "anchors_20261013.json"
+ },
+ "baselines_note": "Iteration iter_r1 on perplexity/pplx-decider-v1.1-27b: 18 fresh states, 4 arms. battery_score.score computes Q_rule and the other offline baselines from these items; G5 uses that value."
+}
