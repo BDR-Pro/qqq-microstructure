@@ -19,10 +19,11 @@
 #
 #   The SHADOW decision model (guard.py, RESULTS 27) is hosted locally only
 #   -- never in GitHub Actions (the owner's rule: no cloud runner, no hosted
-#   API). It never trades. Run it on ONE machine (the PC or the VM, not both:
-#   two deciders race for the same night). To try a decider by hand without
-#   touching the record: python3 src/guard.py --dry-run (DECIDER_URL,
-#   DECIDER_MODEL).
+#   API): Kev on llama.cpp, 127.0.0.1, run by src/decide_local.py from its
+#   own clone. It never trades. Set it up on ONE machine (the PC or the VM,
+#   not both -- the platform is part of the decider's name):
+#       python3 src/decide_local.py --setup && python3 src/decide_local.py --schedule
+#   Try it any time without touching the record: decide_local.py --dry-run.
 #
 #   Conflicts: both sides append to reports/*.csv and both push, so a same-day
 #   content conflict in an append-only log is routine. Resolve it with

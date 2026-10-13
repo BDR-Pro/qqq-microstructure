@@ -17,10 +17,11 @@
 #                                                       score, legend
 # -- so every answer is deterministic and comes with a probability, like Jev's.
 #
-# Point src/guard.py at it:
+# Try it with src/guard.py (a dry run: the record's decider is Kev, run by
+# src/decide_local.py -- RESULTS 27):
 #   python src/jev_local.py --model Qwen/Qwen3.5-0.8B --port 8787
 #   set DECIDER_URL=http://127.0.0.1:8787/v1/systemone
-#   python src/guard.py --decide
+#   python src/guard.py --dry-run
 #
 # Honesty notes:
 #   - A 0.8B model is a small decider. Its answers are graded in shadow mode
