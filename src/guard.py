@@ -95,30 +95,66 @@ SKIP_MARGIN = 0.10
 
 # ---------------------------------------------------------------- the API --
 
-def request_body(state, names, model):
+# The questions' wording, by version. 'q1' is the wording every logged night
+# so far was asked with; a new version is a new record (its suffix is
+# logged with the model), never an edit of q1.
+QUESTIONS = {'q1': {
+    'hold': ('Should the long position in `{n}` be held overnight tonight '
+             '-- bought at today\'s closing auction and sold at '
+             'tomorrow\'s opening auction?',
+             {'true': 'hold: an ordinary night for this name',
+              'false': 'skip: earnings tonight or an extreme recent move'}),
+    'hedge': ('Should tonight\'s whole basket be hedged with an equal-dollar '
+              'short position in QQQ, held from today\'s close to '
+              'tomorrow\'s open?',
+              {'true': 'hedge: elevated risk of a market-wide overnight gap',
+               'false': 'do not hedge: an ordinary night'})}}
+
+
+def question_order(seed, qids):
+    """A seeded, reproducible order of question ids: sha256 of seed|id. The
+    battery and the runtime share it, so the bytes tested are the bytes
+    sent (RESULTS 27)."""
+    return sorted(qids, key=lambda q: hashlib.sha256(
+        f'{seed}|{q}'.encode()).hexdigest())
+
+
+def request_body(state, names, model, order=None, version='q1', ids=None,
+                 provider=None, view=None):
     """The documented POST /v1/systemone body: a state, a model, and typed
-    questions keyed by ids we choose (ids are not sent to the model)."""
+    questions keyed by ids we choose (ids are not sent to the model).
+
+    Defaults reproduce the bytes every logged night was asked with (a test
+    pins their sha256). order: question ids (hold_{name}, hedge_book) in the
+    order to ask them; the state's names follow the same order. ids:
+    {question id: id sent}, e.g. opaque ids. provider: OpenRouter's
+    provider-routing object. view: a function of the state that returns
+    what is sent (the shared state, and its sha, are unchanged)."""
+    w = QUESTIONS[version]
     q = {}
     for n in names:
         q[f'hold_{n}'] = {
             'type': 'noul',
-            'instructions': (
-                f'Should the long position in `{n}` be held overnight tonight '
-                f'-- bought at today\'s closing auction and sold at '
-                f'tomorrow\'s opening auction?'),
-            'criteria': {
-                'true': 'hold: an ordinary night for this name',
-                'false': 'skip: earnings tonight or an extreme recent move'}}
+            'instructions': w['hold'][0].format(n=n),
+            'criteria': dict(w['hold'][1])}
     q['hedge_book'] = {
         'type': 'noul',
-        'instructions': (
-            'Should tonight\'s whole basket be hedged with an equal-dollar '
-            'short position in QQQ, held from today\'s close to tomorrow\'s '
-            'open?'),
-        'criteria': {
-            'true': 'hedge: elevated risk of a market-wide overnight gap',
-            'false': 'do not hedge: an ordinary night'}}
-    return {'state': state, 'model': model, 'questions': q}
+        'instructions': w['hedge'][0],
+        'criteria': dict(w['hedge'][1])}
+    if order is not None:
+        assert sorted(order) == sorted(q), 'order must be a permutation'
+        q = {k: q[k] for k in order}
+        held = [k[5:] for k in order if k.startswith('hold_')]
+        state = dict(state, names={n: state['names'][n] for n in held
+                                   if n in state['names']})
+    if view is not None:
+        state = view(state)
+    if ids is not None:
+        q = {ids.get(k, k): v for k, v in q.items()}
+    body = {'state': state, 'model': model, 'questions': q}
+    if provider is not None:
+        body['provider'] = provider
+    return body
 
 
 def parse_answers(resp, names):
