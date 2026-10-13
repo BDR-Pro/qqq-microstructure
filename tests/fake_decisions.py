@@ -11,11 +11,15 @@
 # the row from the state, a negated wording from its text. Also: a model
 # that answers its first call and then times out on every one (hang), a 408
 # on each request's first try (flaky408), a cache that never expires
-# (sticky), and an account whose credit runs out (credit_after).
+# (sticky), and an account whose credit runs out (credit_after). For
+# iteration (spec section 4): a decider that judges a move against the
+# name's own volatility only when the request states it, the s3 view's
+# *_z fields (zreader).
 #
 # make_test_plan writes a tiny plan + states + items + lock in the
 # contract's formats, built here rather than by battery_items so these
-# tests stand alone.
+# tests stand alone. make_selection writes a selection as the battery
+# leaves one, for make-iter.
 
 import os, io, re, sys, json, math, time, random, shutil, hashlib, threading
 import urllib.error
@@ -37,7 +41,7 @@ BEHAVIOURS = ('oracle', 'const', 'uniform', 'lethargic', 'rule', 'jevlike',
               'posbias', 'joint', 'tickerprior', 'caching', 'sticky',
               'impostor', 'split50', 'split95', 'ratelimit', 'storm',
               'unauth', 'nocost', 'slow', 'leaky', 'nopin', 'partial',
-              'hang', 'flaky408')
+              'hang', 'flaky408', 'zreader')
 TICKER = re.compile(r'`([^`]+)`')
 CACHE_CALLS = 10           # the caching model remembers a body this many calls
 
@@ -121,6 +125,26 @@ def oracle(state, ticker):
     v = max(r.get('vol20d', 0), 1)
     x = max(abs(r.get('last_night', 0)) / (EXTREME_NIGHT * 0.5 * v),
             abs(r.get('ret5d', 0)) / (EXTREME_RET5D * v * math.sqrt(5)))
+    return round(1 - _graded(x, x >= 1), 3)
+
+
+def zreader(state, ticker):
+    """The oracle's criteria, read from the s3 view when the request has it:
+    with *_z fields, a move is judged in units of the name's own vol (as
+    the oracle judges it); from raw basis points alone it sees last_night
+    against vol20d but not the 5-day return, so it holds every name whose
+    extreme move went on ret5d. The book: the oracle's."""
+    r = state.get('names', {}).get(ticker) if ticker else None
+    if r is None:
+        return oracle(state, ticker)
+    if r.get('earnings_tonight'):
+        return 0.05
+    if 'last_night_z' in r and 'ret5d_z' in r:
+        x = max(abs(r['last_night_z']) / (EXTREME_NIGHT * 0.5),
+                abs(r['ret5d_z']) / EXTREME_RET5D)
+    else:
+        x = abs(r.get('last_night', 0)) / (EXTREME_NIGHT * 0.5
+                                           * max(r.get('vol20d', 0), 1))
     return round(1 - _graded(x, x >= 1), 3)
 
 
@@ -291,6 +315,9 @@ class FakeDecisions:
             elif beh == 'tickerprior':    # knows the name, ignores the row
                 p = 0.3 if t is None else round(0.1 + 0.8 * _h01(t), 2)
                 p = 1 - p if neg else p
+            elif beh == 'zreader':
+                p = zreader(st, t)
+                p = round(1 - p, 3) if neg else p
             else:
                 p = oracle(st, t)
                 p = round(1 - p, 3) if neg else p
@@ -567,3 +594,58 @@ def make_test_plan(tmpdir, candidates, incumbent, reference,
     with open(os.path.join(d, 'lock_v1.json'), 'w') as f:
         f.write(json.dumps(lock, indent=1) + '\n')
     return os.path.join(d, files['plan'])
+
+
+def make_selection(tmpdir, pin, handling='k1', sd_rep=0.002, ex_ctx=0.01,
+                   cost=1e-4, price_in=2e-8, provider_pin=False):
+    """A finished selection run, and the selection battery_score.select
+    makes of it, for make-iter: a one-candidate plan (the committed anchors
+    beside it), runs/v1 with run_meta naming it, and a summary.json in which
+    the decider passes every gate at `handling`, with its sd_rep, ex_ctx and
+    cost -- and, with provider_pin, a modal provider that served 95% of its
+    calls and a PP probe answered, so select pins that provider (R5). The
+    selection is select's own, so make-iter can re-derive it. Returns its
+    path."""
+    import battery_items as bi, battery_score as bs
+    d = str(tmpdir)
+    run = os.path.join(d, 'runs', 'v1')
+    os.makedirs(run, exist_ok=True)
+    shutil.copyfile(ANCHORS_FILE, os.path.join(d, 'anchors_20261013.json'))
+    plan_path = os.path.join(d, 'plan_v1.json')
+    sha = lambda p: hashlib.sha256(open(p, 'rb').read()).hexdigest()
+
+    def put(path, obj):
+        with open(path, 'w') as f:
+            f.write(json.dumps(obj, indent=1) + '\n')
+    put(plan_path, {'version': 'v1', 'mode': 'select', 'incumbent': pin,
+                    'reference': pin, 'candidates': [
+                        {'id': pin, 'price_in': price_in, 'X': 1.0}],
+                    'seeds': bi.SEEDS, 'gates': bi.GATES,
+                    'bootstrap_B': 1000, 'spend': bi.SPEND,
+                    'files': {'anchors': 'anchors_20261013.json'}})
+    put(os.path.join(run, 'run_meta.json'), {'plan': plan_path,
+                                             'plan_sha': sha(plan_path),
+                                             'status': 'done'})
+    strata = ['stressed', 'calm'] * 12
+    # per state: every skip-criteria name skipped, no Ordinary one, the
+    # book hedged in the stressed states only (QROW)
+    rows = [[2, 2, 0, 6, float(s == 'stressed'), 1, 1, 1] for s in strata]
+    put(os.path.join(run, 'summary.json'), {
+        'version': 'v1', 'mode': 'select', 'plan_sha256': sha(plan_path),
+        'analysis_set': {'sufficient': True, 'blocks': [1, 2, 3, 4],
+                         'states': [f'S{i:02d}' for i in range(1, 25)],
+                         'strata': strata, 'blocks_min': 3},
+        'holm': {},
+        'models': {pin: {
+            'failed': [], 'gates': {g: True for g in bs.GATE_NAMES},
+            'h': handling, 'q_counts': {handling: rows},
+            'headline': {'Q_h': 1.0, 'Q_k1': 1.0, 'Q_noE': 1.0,
+                         'AUC_comb': 1.0, 'tiebreak_mean': 0.5,
+                         'flip_h': 0.0, 'median_cost_usd': cost},
+            'noise': {'sd_rep': sd_rep}, 'E3': {'ex_ctx': ex_ctx},
+            'ops': {'median_cost_usd': cost, 'build': f'{pin}-{BUILD}',
+                    'provider': 'FakeProv', 'modal_share': 1.0,
+                    'provider_share': 0.95 if provider_pin else 1.0,
+                    'pin_probe': 'ok' if provider_pin else None}}}})
+    bs.select(run)
+    return os.path.join(run, 'selection_v1.json')

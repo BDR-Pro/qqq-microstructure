@@ -422,3 +422,33 @@ def test_verify_and_make_items_refuse_bytes_that_are_not_the_lock(
     before = {f: (d / f).read_bytes() for f in os.listdir(d)}
     assert db.main(['make-items', '--plan', plan]) == 5
     assert {f: (d / f).read_bytes() for f in os.listdir(d)} == before
+
+
+# ------------------------------------------- iteration starts from here --
+
+def test_make_iter_starts_from_the_selection_this_run_made(battery,
+                                                           tmp_path):
+    """Section 4 begins from selection_v1.json exactly as select writes it:
+    the decider it declared, at its handling and q1, with k5 and sep open
+    only where its own summary measured a reason."""
+    sel = os.path.join(battery['run'], 'selection_v1.json')
+    dec = battery['selection']['decider']
+    m = battery['summary']['models'][dec['pin']]
+    # declared inside the selection's battery directory, as every round is
+    out = tmp_path / 'iter_r1'
+    assert db.main(['make-iter', '--selection', sel, '--round', '1',
+                    '--variants', 'q2,s3,b2', '--out', str(out)]) == 5
+    out = type(tmp_path)(battery['dir']) / 'iter_r1'
+    assert db.main(['make-iter', '--selection', sel, '--round', '1',
+                    '--variants', 'q2,s3,b2', '--out', str(out)]) == 0
+    p = json.load(open(out / 'plan_iter_r1.json'))
+    assert p['pin'] == dec['pin'] and (p['base'], p['handling']) == \
+        ('q1', dec['handling'])
+    assert p['origin']['decider'] == dec
+    assert p['origin']['sd_rep'] == m['noise']['sd_rep']
+    assert p['origin']['ex_ctx'] == m['E3']['ex_ctx']
+    assert p['origin']['k5_allowed'] == (m['noise']['sd_rep'] > 0.005)
+    assert p['origin']['selection']['sha256'] == _sha(sel)
+    assert bi.verify(str(out / 'plan_iter_r1.json')) == []
+    assert db.main(['verify', '--plan', str(out / 'plan_iter_r1.json')],
+                   check_tree=False) == 0

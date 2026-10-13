@@ -238,12 +238,20 @@ def parse_answers(resp, names):
 
 
 def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
-             opener=urllib.request.urlopen, timeout=None):
+             opener=urllib.request.urlopen, timeout=None, info=None,
+             order=None, version='q1', provider=None, view=None):
     """Any Jev-compatible endpoint: a local llama-server, TypeSafe, or
     OpenRouter's Decisions API. The decider's name is the model the response
     says answered -- versioned on OpenRouter -- and, when the response names
-    one, the provider that served it ('model@provider')."""
-    body = json.dumps(request_body(state, names, model)).encode()
+    one, the provider that served it ('model@provider').
+
+    order, version, provider, view: request_body's, for a declared handling
+    (decide_local.DECLARED); left out, the record's bytes. info: a dict to
+    fill with what the answer carried beside it (usage, model, provider) and
+    the sha256 of the bytes sent -- for decider.log, never the record."""
+    body = json.dumps(request_body(state, names, model, order=order,
+                                   version=version, provider=provider,
+                                   view=view)).encode()
     headers = {'Content-Type': 'application/json'}
     if key:
         headers['Authorization'] = f'Bearer {key}'
@@ -260,6 +268,10 @@ def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
             who = resp.get('model', model)
             if resp.get('provider'):
                 who = f'{who}@{resp["provider"]}'
+            if info is not None:
+                info.update(usage=resp.get('usage'), model=resp.get('model'),
+                            provider=resp.get('provider'),
+                            sent=hashlib.sha256(body).hexdigest())
             return parse_answers(resp, names), who, \
                 int((time.time() - t0) * 1000)
         except urllib.error.HTTPError as ex:
@@ -473,6 +485,17 @@ def rule(p, names):
     return d
 
 
+def mean_of_draws(ps):
+    """The p of k draws averaged (battery spec R3), per question, over the
+    questions every draw answered: summed exactly and rounded to 12 places,
+    so hundredths whose mean is 0.5 (0.47, 0.58, 0.45) give 0.5, not
+    0.49999999999999994 -- rule's p >= 0.5 then sees the true mean, as its
+    margin does. decide_local logs it; the battery scores iteration arms by
+    it, so the decisions tested are the decisions logged."""
+    return {x: round(math.fsum(p[x] for p in ps) / len(ps), 12)
+            for x in ps[0] if all(x in p for p in ps)}
+
+
 # -------------------------------------------------------------- the grade --
 
 # Randomization inference, printed under the gate line (RESULTS 27). Fixed
@@ -490,7 +513,10 @@ RAND_ALPHA = 0.05 / 3           # three gated records, the same split as GATE_T
 # the same way but printed as '[not a gated record]'. Declaring a new decider
 # or a suffix for it changes this one line: (pin, suffix), or (pin, suffix,
 # False) for a model the API serves under an undated build (the battery's
-# selection says which: its decider's 'dated').
+# selection says which: its decider's 'dated'). It must equal what the runner
+# sends: decide_local checks it against its HOSTED pin and DECLARED handling
+# before it asks the decider, so a half-made change logs no decider night
+# (the control and the reference still decide, and the log says why).
 DECIDER = ('perplexity/pplx-decider-v1.1-27b', '')
 
 
@@ -500,6 +526,20 @@ def decider_slot(pin, suffix='', dated=True):
     provider, carrying exactly the declared suffix."""
     build = r'-\d{8}' if dated else r'(-\d{8})?'
     return re.escape(pin) + build + r'@[^@#]+' + re.escape(suffix)
+
+
+def handling_suffix(k=1, version='q1', views=''):
+    """The suffix the record logs after the decider's build@provider for how
+    it is asked (battery spec R3, R4): '' for one canonical call in q1 with
+    no view, as every night logged so far; else '#{h}.{version}{views}', h
+    perm{k} for k seeded orders averaged or k1 for one call, views sorted
+    VIEWS tags. The one scheme: decide_local declares it, and the battery
+    names its iteration arms by it, so an adopted arm is declared under the
+    suffix it was tested as -- '#perm3.q1', '#k1.q2', '#perm3.q1b2s3'."""
+    if k == 1 and version == 'q1' and not views:
+        return ''
+    h = 'k1' if k == 1 else f'perm{k}'
+    return f'#{h}.{version}{views}'
 
 
 GATED = (('rule', 'rule-earnings-v1'),

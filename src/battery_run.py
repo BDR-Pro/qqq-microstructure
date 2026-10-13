@@ -26,6 +26,11 @@
 #     parked so the rest move on; any other 4xx, or an answer that is not
 #     every asked id as a noul p from the pinned model and a named provider,
 #     is recorded invalid -- never guessed at
+#   - an iteration plan (battery_items, spec section 4) tests ARMS: ways of
+#     asking one pinned model. Each arm is a candidate whose 'pin' is what
+#     the bytes carry and what the answer must come from; its id only names
+#     its record. An item with 'for_arm' goes to that arm alone; the pilot W
+#     goes to every arm.
 #
 # Exit codes: 0 done, 2 auth failure, 3 capped, out of credit or incomplete
 # (resumable), 4 deadline (resumable), 5 refused.
@@ -134,6 +139,21 @@ def models_of(plan):
                   if m not in ids]
 
 
+def pins_of(plan):
+    """{model: the id its requests name and its answers must come from}:
+    the model itself, except an iteration arm, whose pin is the one model
+    every arm asks."""
+    pin = {c['id']: c.get('pin') or c['id'] for c in plan['candidates']}
+    return {m: pin.get(m, m) for m in models_of(plan)}
+
+
+def for_model(it, m):
+    """Whether item `it` goes to model m: every item does, except an
+    iteration arm's own, which go to that arm alone."""
+    a = it.get('for_arm')
+    return a is None or a == m
+
+
 def _w_id(items):
     w = [it['item_id'] for it in items
          if it['experiment'] == 'E0' and it['arm'] == 'W']
@@ -171,12 +191,19 @@ def problems(plan_path, plan, items, plan_dir):
         if it['item_id'] in seen:
             out.append(f'{it["item_id"]}: duplicate item id')
         seen.add(it['item_id'])
-    for m in models_of(plan):
+    models = models_of(plan)
+    for m in models + sorted(set(pins_of(plan).values()) - set(models)):
         if m.startswith('~') or ':free' in m or '|' in m:
             out.append(f'{m}: not a pinned id')
+    for it in items:
+        if it.get('for_arm') is not None and it['for_arm'] not in models:
+            out.append(f'{it["item_id"]}: for_arm {it["for_arm"]} is not '
+                       f'a model of the plan')
     w = _w_id(items)
     if w is None:
         out.append('the plan needs exactly one E0 W item (the pilot)')
+    elif any(it['item_id'] == w and it.get('for_arm') for it in items):
+        out.append('the pilot W must go to every model')
     elif files.get('s0') and os.path.exists(os.path.join(plan_dir,
                                                          files['s0'])):
         # the pilot is the record's own request: the bytes every logged
@@ -204,7 +231,7 @@ def dispatch_order(plan, items, models=None):
     out = []
     for b in sorted({it['block'] for it in items}):
         pairs = [(m, it['item_id']) for m in models for it in items
-                 if it['block'] == b]
+                 if it['block'] == b and for_model(it, m)]
         rng = np.random.default_rng(np.random.SeedSequence(seed,
                                                            spawn_key=(b,)))
         pairs = [pairs[i] for i in rng.permutation(len(pairs))]
@@ -244,7 +271,60 @@ def planned(plan, items, scale_down=None):
     sd, w = scale_down or {}, _w_id(items)
     gone = set(sd.get('dropped_models', []))
     return {f'{m}|{it["item_id"]}' for m in models_of(plan) for it in items
-            if not _cut(it, sd) and (m not in gone or it['item_id'] == w)}
+            if not _cut(it, sd) and for_model(it, m)
+            and (m not in gone or it['item_id'] == w)}
+
+
+def call_weights(plan, items):
+    """An iteration plan's calls priced by their bytes: each item's bytes
+    over the pilot W's (the price is per input token, and a sep arm's
+    one-question requests are a fraction of a full one). None for a
+    selection plan, whose projection counts calls, as declared."""
+    if plan.get('mode') != 'iterate':
+        return None
+    w, pin = _w_id(items), plan['pin']
+    ref = len(send_bytes(next(it['body'] for it in items
+                              if it['item_id'] == w), pin))
+    return {it['item_id']: len(send_bytes(it['body'], pin)) / ref
+            for it in items}
+
+
+def projected(plan, items, cm, sd, wt=None):
+    """(usd, calls) of a run after a scale-down: sum_m c_m n_m, or with
+    weights (call_weights) sum over calls of c_m x weight."""
+    keys = planned(plan, items, sd)
+    if wt is None:
+        n = Counter(k.split('|', 1)[0] for k in keys)
+        return sum(cm[m] * n[m] for m in models_of(plan)), sum(n.values())
+    return sum(cm[k.split('|', 1)[0]] * wt[k.split('|', 1)[1]]
+               for k in sorted(keys)), len(keys)
+
+
+def last_block(plan):
+    """The blocks a scale-down drops: the last one, unless that would leave
+    fewer than the analysis floor (gates.analysis_set.blocks_min) -- an
+    iteration plan make-iter already cut to its 2-block floor would lose
+    its outcome -- and then none: models (variants) go instead. A selection
+    plan (4 blocks, floor 3) always drops block 4."""
+    floor = ((plan.get('gates') or {}).get('analysis_set') or {}).get(
+        'blocks_min', 0)
+    return [plan['blocks']] if plan['blocks'] > floor else []
+
+
+def droppable(plan, models, cm):
+    """The models a scale-down may drop, in the order it drops them: the
+    unscored ones (X null), never I or R, dearest first -- or, for an
+    iteration plan, its own drop_order (variants from the end of the
+    menu)."""
+    cand = {c['id']: c for c in plan['candidates']}
+    exempt = {plan['incumbent'], plan['reference']}
+    ms = [m for m in models if m not in exempt
+          and cand.get(m, {}).get('X') is None]
+    order = plan.get('drop_order')
+    if order:
+        return sorted(ms, key=lambda m: (order.index(m) if m in order
+                                         else len(order), m))
+    return sorted(ms, key=lambda m: (-cm[m], m))
 
 
 def send_bytes(body, pin):
@@ -527,6 +607,7 @@ class _Run:
         self.items_list = items
         self.items = {it['item_id']: it for it in items}
         self.models = models_of(plan)
+        self.pin = pins_of(plan)
         self.order = dispatch_order(plan, items, self.models)
         self.w = _w_id(items)
         self.max_usd, self.deadline_at = max_usd, deadline_at
@@ -535,8 +616,6 @@ class _Run:
         self.url, self.timeout = decisions_url, plan.get('timeout_s', 60)
         cand = {c['id']: c for c in plan['candidates']}
         self.price = {m: cand.get(m, {}).get('price_in') for m in self.models}
-        self.scored = {m: cand.get(m, {}).get('X') is not None
-                       for m in self.models}
         self.exempt = {plan['incumbent'], plan['reference']}
         sp = plan['spend']
         # before a model's pilot: its catalogue-scaled pessimistic cost
@@ -644,7 +723,7 @@ class _Run:
             else None
         cost = float(usage['cost']) if usage and _num(usage.get('cost')) \
             else None
-        ok, why = valid_call(m, out['status'], answers, who, prov)
+        ok, why = valid_call(self.pin[m], out['status'], answers, who, prov)
         err = out['error'] or (None if ok else why)
         st = out['status']
         if it['arm'] == 'PP' and st and 400 <= st < 500 and \
@@ -786,7 +865,7 @@ class _Run:
         if B2B.match(it['arm']):
             self.b2b_busy.add(m)
         self.sends += 1
-        fut = ex.submit(self._call, send_bytes(body, m))
+        fut = ex.submit(self._call, send_bytes(body, self.pin[m]))
         flight[fut] = (m, iid, c, list(body['questions']), counted,
                        self.sends)
         per[m] += 1
@@ -993,8 +1072,10 @@ class _Run:
         self.keys = planned(self.plan, self.items_list, self.sd)
 
     def _scale_down(self, meta):
-        """Projection sum_m c_m n_m; above 0.8 max_usd drop block 4, then
-        unscored models, dearest first, until it fits -- never I or R. A
+        """Projection sum_m c_m n_m; above 0.8 max_usd drop the last block
+        while above the analysis floor (last_block), then unscored models,
+        dearest first (an iteration plan: variants, from the end of the
+        menu), until it fits -- never I or R. A
         model whose W was not answered (an unbilled 4xx, or a transient
         failure not yet retried) is projected at the dearest c_m measured,
         or at its catalogue estimate if no W was answered at all."""
@@ -1003,18 +1084,15 @@ class _Run:
               (fill if fill is not None else self.c0[m])
               for m in self.models}
         lim = 0.8 * self.max_usd
+        wt = call_weights(self.plan, self.items_list)
 
         def proj(sd):
-            n = Counter(k.split('|', 1)[0]
-                        for k in planned(self.plan, self.items_list, sd))
-            return sum(cm[m] * n[m] for m in self.models), sum(n.values())
+            return projected(self.plan, self.items_list, cm, sd, wt)
         sd = {'dropped_blocks': [], 'dropped_models': []}
         p0, n0 = proj(sd)
         if p0 > lim:
-            sd['dropped_blocks'] = [self.plan['blocks']]
-            for m in sorted((m for m in self.models if not self.scored[m]
-                             and m not in self.exempt),
-                            key=lambda m: (-cm[m], m)):
+            sd['dropped_blocks'] = last_block(self.plan)
+            for m in droppable(self.plan, self.models, cm):
                 if proj(sd)[0] <= lim:
                     break
                 sd['dropped_models'].append(m)

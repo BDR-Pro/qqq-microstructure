@@ -205,6 +205,32 @@ def test_a_failing_decider_never_costs_the_controls_row(tmp_path, home,
     assert g.read_log(path).state_sha.nunique() == 1
 
 
+def test_the_local_engine_is_not_the_declared_record(tmp_path, home,
+                                                     monkeypatch):
+    """DECLARED (k calls, a wording, a view, a provider pin) is the hosted
+    decider's handling. Kev on --engine local is no declared record: one
+    canonical call, logged under its own name with no suffix."""
+    monkeypatch.setitem(dl.DECLARED, 'http', dict(
+        dl.DECLARED['http'], k=3, version='q2', views='s3'))
+    calls = []
+    real = g.ask_http
+
+    def spy(st, nm, *a, **kw):
+        calls.append(kw)
+        return real(st, nm, *a, **kw)
+    monkeypatch.setattr(g, 'ask_http', spy)
+    st = {'names': {n: {} for n in NAMES}}
+    path = str(tmp_path / 'g.csv')
+    assert dl.run('kev-4b-q8_0', engine='local', server=stub,
+                  tonight=lambda t: ('20261013', NAMES, st), path=path,
+                  now=NOW) == ['rule', 'http']
+    assert len(calls) == 1
+    assert not {'order', 'version', 'view', 'provider'} & set(calls[0])
+    log = g.read_log(path)
+    assert set(log[log.backend == 'http'].model) == \
+        {dl.model_name('kev-4b-q8_0')}
+
+
 def _px(names, idx):
     rng = np.random.default_rng(0)
     cols = pd.MultiIndex.from_product([names, ['Open', 'Close']])

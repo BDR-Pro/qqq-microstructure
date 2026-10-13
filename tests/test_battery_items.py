@@ -603,7 +603,9 @@ def test_book_paraphrase_zero_is_guards_book_sentence():
 BANNED = ('guard_log', 'xsec_paper_daily', 'official_prints', 'paper_bench',
           'yfinance', 'GLOG', 'DAILY', 'PAPER')
 GUARD_OK = {'request_body', 'question_order', 'rule', 'ask_rule', 'BOOK',
-            'QUESTIONS', 'STATE_SCHEMA'}
+            'QUESTIONS', 'STATE_SCHEMA',
+            'view_of',      # the iteration menu's request views (spec 4)
+            'handling_suffix'}  # the runtime's suffix, the arms' names
 
 
 def test_battery_items_is_outcome_free():
