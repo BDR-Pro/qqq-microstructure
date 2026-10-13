@@ -3018,21 +3018,100 @@ That gap is too small to matter beside the hosted models.
   and the model's provider. These are public-market summary numbers.
 - At the listed rates ($0.02 and $0.042 per million input tokens) a night
   costs well under a tenth of a cent.
-- Answers come back in about a second.
+- Answers come back in under a second once warm (measured below).
 - The key, `OPENROUTER_API_KEY`, lives only in the owner's machine's
   environment, never in the repository or in CI.
 
-**Verified here, and what is not.**
-- Verified:
-  - Both decision endpoints exist (401 without a key, against 404 for a
-    nonexistent path).
-  - The client, the build-pinning and refusal, the per-decider failure
-    isolation, and the retry on a 502 pass against a stand-in for the API.
-- Not verified: no live answer has been seen. The key was added after this
-  session started, and a session only picks up new settings when it begins.
-  The first real answers come from `decide_local.py --dry-run` on the
-  owner's machine, or from a new session. Their probabilities must be read
-  before the first logged night.
+**Verified against a stand-in:** both decision endpoints exist (401 without
+a key, against 404 for a nonexistent path). The client, the build-pinning
+and refusal, the per-decider failure isolation and the retry on a 502 all
+pass against a stand-in for the API.
+
+### The first live answers, and the benchmark with and without a key
+
+The key was added after this session started, and a session only picks up
+new settings when it begins, so a second session ran the live test
+(`bench/openrouter_livetest.md` on branch `claude/openrouter-livetest`; no key
+appears in it). It ran on 2026-10-13 at 11:25–11:30 UTC, from `main` at
+`e7fc1c9`, against that night's real state. That state was built from Yahoo
+in 9–11 s, with 11 names and 1,416 bytes. The state was sent twice, through
+the same `guard.ask_http` the runner uses.
+
+**How the key arrives there.** In that cloud environment the key is not in
+the process environment. The network proxy adds it to requests for
+openrouter.ai, and a request with no `Authorization` header gets HTTP 200.
+`decide_local.py` refused to start there because it found no key, which is
+the intended default. `--proxy-auth` now covers that case: it sends no key
+and relies on the proxy, and a test checks that no `Authorization` header is
+sent. On the owner's machine the key stays an environment variable, and the
+flag is not used.
+
+**Both pinned models answered as themselves:**
+
+| Backend | Answered as | Latency, run 1 / run 2 | Same answers twice? |
+|---|---|---|---|
+| `http`, the decider | `perplexity/pplx-decider-v1.1-27b-20261006@Perplexity` | 6.95 s (cold) / 0.53 s | yes, identical |
+| `jev`, the reference | `typesafe/jev-1.13-20260917@TypeSafe` | 0.30 s / 0.40 s | no, up to ±0.06 |
+
+Both builds match the runner's pin pattern, so neither would have been
+refused. The whole test cost about $0.0049 of credit; that includes two full
+nights for both models and two single-question probes. That is about a tenth
+of a cent per night.
+
+**What they said about 2026-10-13**, under the declared rule:
+
+| | Its median p | Skips | Hedge (BOOK) |
+|---|---|---|---|
+| Perplexity Decider, both runs | 0.514 | none | yes (0.558) |
+| Jev, run 1 | 0.56 | SNDK, IREN | no (0.35) |
+| Jev, run 2 | 0.59 | MU, STX, SNDK, IREN | no (0.37) |
+| Rule control | — | none (no earnings tonight) | no |
+
+Four things to read before the first logged night:
+- **The decider barely leans.** Every probability is between 0.46 and 0.61,
+  and none is 0.10 under its median. On this night it skips nothing and
+  hedges. If that stays true, its record measures the hedge and not the
+  skips.
+- **Jev is a sample, not a function.** Two identical requests minutes apart
+  gave different skip lists, two names against four. The runner asks each
+  backend once a night and logs what arrived, so Jev's record is one draw
+  per night. Its noise is part of what that record measures.
+- **The two disagree.** They give CAT 0.48 against 0.75, LRCX 0.53 against
+  0.68–0.74, and BOOK 0.56 against 0.35–0.37. Their records are separate
+  questions, and that is why the gate is split three ways.
+- **Ties with the skip bar are real, and the rule now handles them.** Jev
+  answers in hundredths. In run 1, SNDK sat exactly 0.10 under the median,
+  at 0.46 against 0.56. The code compared floats bare, so it skipped 0.46
+  under 0.56 but held 0.49 under 0.59, which is the same distance. It now
+  compares tie-safe, which is what "at least `SKIP_MARGIN` below" always said.
+  Run 1's skips are unchanged by the fix. The fix was made before any hosted
+  night was logged; the only rows in the log are the superseded Tev1 dry run
+  of 2026-10-12, where p is continuous and ties never happen.
+
+**Benchmark, with and without a key.** These are the same night's state and
+the same 12 questions. The local engine ran on this 4-core cloud container on
+the CPU, with llama.cpp b11429 and 16 slots sharing the prefix. "Warm" means
+the files were already read once; "cold" means the first read after a
+container restart.
+
+| Engine | Key | Answer time | Night, warm / cold | Peak memory | Same answers twice? |
+|---|---|---|---|---|---|
+| Perplexity Decider, hosted | yes | 0.5 s (7 s cold start) | ~10 s (Yahoo state) | — | yes |
+| Jev, hosted | yes | 0.3–0.4 s | ~10 s | — | no (±0.06) |
+| `--engine hosted`, no key | none | — | refuses in 2.3 s, exit 1, nothing logged | — | — |
+| Kev-4B Q8_0, `--engine local` | none needed | 86–87 s | 130 s / 512 s | 6.85 GB | yes, exactly |
+| Kev-9B Q8_0, local | none needed | 143 s | 206 s / 1,016 s | 11.79 GB | yes, exactly |
+
+The cold nights are the container's disk, not the model. This container
+reads a file for the first time at about 11–12 MB/s. Hashing a model takes
+14–19 s once it has been read, and loading it takes 15–19 s. On a normal SSD
+a local night is the warm figure. Either engine finishes long before the
+09:17 and 13:47 runs matter.
+
+Without a key, the hosted engine does not quietly fall back to the local
+model. It refuses and logs nothing, and the message names the three ways
+forward: set the key, use `--proxy-auth` where a proxy adds it, or use
+`--engine local`. A night is never decided by an undeclared model.
 
 ### Reading
 

@@ -177,6 +177,18 @@ def test_rule_reads_tev1s_opposite_leans_the_same_way():
     assert d[g.BOOK] == 'hedge'
 
 
+def test_a_name_exactly_the_margin_under_the_median_is_skipped():
+    """Jev answers in hundredths, so ties with the bar happen (its live
+    answers on 2026-10-13, RESULTS 27). 'At least 0.10 below' skips every
+    exact tie, whatever the float rounding of median - 0.10."""
+    for med, low in [(.56, .46), (.59, .49), (.54, .44), (.57, .47),
+                     (.58, .48), (.55, .45)]:
+        p = {'A': low, 'B': med, 'C': med + .1, g.BOOK: .3}
+        assert g.rule(p, ['A', 'B', 'C'])['A'] == 'skip', (med, low)
+        p['A'] = round(low + .01, 2)                  # 0.09 under: held
+        assert g.rule(p, ['A', 'B', 'C'])['A'] == 'hold', (med, low)
+
+
 def test_the_state_fits_a_small_deciders_prompt():
     """Ollama's Tev1 refuses a prompt over 2,050 tokens and never truncates
     (it refused schema 1 at 2,762). Schema 2 sends summaries: an 11-name

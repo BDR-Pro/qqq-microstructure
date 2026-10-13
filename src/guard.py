@@ -360,8 +360,11 @@ def rule(p, names):
     iff p >= 0.5."""
     held = [p[n] for n in names if n in p]
     med = float(np.median(held)) if held else 0.5
-    d = {n: 'skip' if p[n] < 0.5 and p[n] < med - SKIP_MARGIN else 'hold'
-         for n in names if n in p}
+    # 'at least SKIP_MARGIN below', tie-safe: Jev answers in hundredths, so a
+    # name can sit exactly 0.10 under the median, and a bare float compare
+    # skipped 0.46 under 0.56 but held 0.49 under 0.59 (RESULTS 27)
+    d = {n: 'skip' if p[n] < 0.5 and med - p[n] >= SKIP_MARGIN - 1e-9
+         else 'hold' for n in names if n in p}
     if BOOK in p:
         d[BOOK] = 'hedge' if p[BOOK] >= 0.5 else 'none'
     return d
