@@ -13,18 +13,25 @@
 #   - money: one pilot call per model measures the cost first, a projection
 #     scales the run down once (run_meta, immutable), and no call goes out
 #     that could cross the cap
-#   - no shopping among re-runs: the log is fsynced per line, re-running the
-#     same command resumes it, and a second run directory for the same plan
-#     is refused
-#   - the API is alpha: 401/403 stop everything; 429, 5xx and timeouts back
-#     off and get one more pass at the end; any other 4xx, or an answer that
-#     is not every asked id as a noul p from the pinned model and a named
-#     provider, is recorded invalid -- never guessed at
+#   - no shopping among re-runs: what runs is what was committed (the plan
+#     and its files tracked, nothing uncommitted under src/, tests/,
+#     bench/battery/ or the plan's directory), the run directory is one
+#     child of <plan dir>/runs/, the log is fsynced per line, re-running the
+#     same command resumes it -- only with the bytes it started with, and
+#     never once it has been scored -- and a second run directory for the
+#     same plan, on disk or in git history, is refused
+#   - the API is alpha: 401/403 stop everything; 402 (no credit) stops
+#     sending, resumably; 408, 429, 5xx and timeouts back off and get one
+#     more pass at the end; a model whose calls keep failing that way is
+#     parked so the rest move on; any other 4xx, or an answer that is not
+#     every asked id as a noul p from the pinned model and a named provider,
+#     is recorded invalid -- never guessed at
 #
-# Exit codes: 0 done, 2 auth failure, 3 capped (resumable), 4 deadline
-# (resumable), 5 refused.
+# Exit codes: 0 done, 2 auth failure, 3 capped, out of credit or incomplete
+# (resumable), 4 deadline (resumable), 5 refused.
 
-import os, re, sys, json, math, time, random, hashlib, threading, subprocess
+import os, re, sys, glob, json, math, time, random, hashlib, threading
+import subprocess
 import datetime as dt
 import http.client
 import urllib.request, urllib.error
@@ -41,8 +48,16 @@ DONE, AUTH, CAPPED, DEADLINE, REFUSED = 0, 2, 3, 4, 5
 TRIES = 6
 BACKOFF = (1, 2, 4, 8, 16, 32)          # seconds, jittered +-25%
 RETRY_AFTER_MAX = 60
-TRANSIENT = {429, 502, 503, 504, 529}   # and every other 5xx, and timeouts
-NO_USAGE_COST = 0.01                    # a call that reported no usage at all
+# 408 is OpenRouter's 'request timed out': a timeout like any other
+TRANSIENT = {408, 429, 502, 503, 504, 529}  # and every other 5xx, timeouts
+NO_CREDIT = 402                         # stops sending; the key stays open
+NO_USAGE_COST = 0.01                    # an answer (200) with no usage at all
+# A model whose BREAKER calls in a row each failed transiently after every
+# try is parked for the rest of the pass, so one provider that is down does
+# not hold every model at each block boundary (a timed-out call takes ~6.5
+# minutes). See _trip for when a parked model's keys are settled.
+BREAKER = 3
+SCORED = ('summary.json', 'selection_*.json', 'iter_*_outcome.json')
 FROM_W = '__FROM_W__'                   # PP's provider: the one W was served by
 # sk-... and Bearer ... (spec), plus any sk-or- prefix at all: scrub-check
 # flags 'sk-or-' and 'Bearer ', so nothing it could flag may survive scrub()
@@ -180,8 +195,9 @@ def dispatch_order(plan, items, models=None):
     """Every (model, item_id) pair in the order it is sent: blocks in order;
     within a block every pair shuffled with the dispatch seed, one stream per
     block (a block's order never depends on another's); a back-to-back
-    triple rides on the slot of its first member. Computed over the whole
-    plan, so a scale-down only filters it."""
+    triple rides on the slot of its first member (and goes out one member
+    at a time, see _pick). Computed over the whole plan, so a scale-down
+    only filters it."""
     models = models or models_of(plan)
     by_id = {it['item_id']: it for it in items}
     seed = plan['seeds']['dispatch']
@@ -366,20 +382,27 @@ def _git(*args):
     return r.stdout if r.returncode == 0 else None
 
 
-def _dirty(out_dir):
-    """Changed or untracked paths under src/, tests/ or bench/battery/
-    outside the run directory: what runs must be what was committed."""
-    s = _git('status', '--porcelain', '--untracked-files=all', '--', 'src',
-             'tests', 'bench/battery')
+def _rel(path):
+    return os.path.relpath(path, ROOT).replace(os.sep, '/').rstrip('/')
+
+
+def _dirty(skip, plan_dir=None):
+    """Changed or untracked paths under src/, tests/, bench/battery/ and the
+    plan's directory, except under `skip` (the run directory): what runs
+    must be what was committed."""
+    where = ['src', 'tests', 'bench/battery']
+    if plan_dir is not None and _inside(os.path.abspath(plan_dir), ROOT):
+        where.append(_rel(os.path.abspath(plan_dir)))
+    s = _git('status', '--porcelain', '--untracked-files=all', '--', *where)
     if s is None:
         return ['(git status failed)']
-    mine = os.path.relpath(out_dir, ROOT).replace(os.sep, '/').rstrip('/')
+    mine = _rel(os.path.abspath(skip))
     bad = []
     for ln in s.splitlines():
         p = ln[3:].split(' -> ')[-1].strip().strip('"')
         if not (p + '/').startswith(mine + '/'):
             bad.append(p)
-    return bad
+    return sorted(set(bad))
 
 
 def _inside(path, root):
@@ -387,6 +410,56 @@ def _inside(path, root):
         return os.path.commonpath([path, root]) == root
     except ValueError:                  # another drive
         return False
+
+
+def declared_files(plan_path, plan, plan_dir):
+    """{name: path} of the declaration: the plan, the files it names, and
+    the lock beside it."""
+    fs = plan['files']
+    out = {'plan': os.path.abspath(plan_path)}
+    out.update({k: os.path.join(plan_dir, fs[k])
+                for k in ('items', 'states', 's0', 'anchors') if fs.get(k)})
+    out['lock'] = os.path.join(plan_dir,
+                               fs.get('lock', f'lock_{plan["version"]}.json'))
+    return out
+
+
+def declared_shas(plan_path, plan, plan_dir):
+    return {k: _sha(p) if os.path.exists(p) else None
+            for k, p in declared_files(plan_path, plan, plan_dir).items()}
+
+
+def tree_problems(plan_path, plan, plan_dir, out_dir=None):
+    """Why this checkout may not run this plan (empty: it may). What runs
+    must be what was committed: the plan inside this repository; it, every
+    file it names and the lock tracked by git; nothing changed or untracked
+    under src/, tests/, bench/battery/ or the plan's directory, outside the
+    run directory (out_dir; for verify, anything under <plan dir>/runs/);
+    and out_dir a direct child of <plan dir>/runs/ -- a run written
+    anywhere else could hide a first run from a second, or the run
+    directory could swallow src/ out of the check."""
+    plan_path = os.path.abspath(plan_path)
+    if not _inside(plan_path, ROOT):
+        return [f'the plan is not in this repository ({plan_path})']
+    runs = os.path.join(plan_dir, 'runs')
+    if out_dir is not None and os.path.dirname(out_dir) != runs:
+        return [f'the run directory must be directly under {_rel(runs)}/, '
+                f'not {_rel(out_dir)}']
+    out = []
+    rels = [_rel(p) for p in declared_files(plan_path, plan,
+                                            plan_dir).values()]
+    ls = _git('ls-files', '--', *rels)
+    if ls is None:
+        out.append('(git ls-files failed)')
+    else:
+        missing = sorted(set(rels) - set(ls.splitlines()))
+        if missing:
+            out.append('not committed: ' + ', '.join(missing))
+    dirty = _dirty(out_dir if out_dir is not None else runs, plan_dir)
+    if dirty:
+        out.append('uncommitted changes: ' + ', '.join(dirty[:5])
+                   + (', ...' if len(dirty) > 5 else ''))
+    return out
 
 
 def _other_run(out_dir, plan_dir, sha):
@@ -402,6 +475,23 @@ def _other_run(out_dir, plan_dir, sha):
             if m and m.get('plan_sha') == sha:
                 return p
     return None
+
+
+def _run_in_history(plan_dir, sha):
+    """Files under <plan dir>/runs/ that held this plan's sha in any commit
+    of any ref: a run directory deleted or lost after it was committed."""
+    s = _git('log', '--all', '--format=', '--name-only', '-S', sha, '--',
+             _rel(os.path.join(plan_dir, 'runs')))
+    if s is None:
+        return ['(git log failed)']
+    return sorted({p for p in s.splitlines() if p.strip()})
+
+
+def _scored(out_dir):
+    """The scorer's outputs already in a run directory: a run that has been
+    scored (its results seen) is frozen."""
+    return sorted(os.path.basename(p) for pat in SCORED
+                  for p in glob.glob(os.path.join(out_dir, pat)))
 
 
 # ------------------------------------------------------------------ calls --
@@ -431,7 +521,8 @@ class _Run:
     worker threads only make HTTP requests."""
 
     def __init__(self, plan, items, out_dir, key, auth, max_usd, deadline_at,
-                 concurrency, per_model, opener, sleep, now, decisions_url):
+                 concurrency, per_model, opener, sleep, now, decisions_url,
+                 breaker=None):
         self.plan, self.out, self.key, self.auth = plan, out_dir, key, auth
         self.items_list = items
         self.items = {it['item_id']: it for it in items}
@@ -458,16 +549,26 @@ class _Run:
         for ln in self.lines:
             self.last[ln['key']] = ln
         self.spent = sum(self._billed(ln) for ln in self.lines)
+        # c_m is measured only from a W that was answered (200): a failed W
+        # costs nothing and says nothing about what an answer costs
         self.cm = {}
         for m in self.models:
             ln = self.last.get(f'{m}|{self.w}')
-            if ln and ln.get('attempts'):
+            if ln and ln.get('attempts') and ln.get('http_status') == 200:
                 self.cm[m] = self._cost(m, ln)
         self.reserved = 0.0
         self.sd = None
         self.keys = planned(plan, items)
         self.stopped, self.smoke = set(), {}
         self.abort = self.capped = self.late = False
+        self.no_credit = self.outage = False
+        # the circuit breaker: {model: {'trips', 'others_answered'}} carried
+        # across sessions in run_meta; per pass, the parked models and each
+        # model's current streak [first failing send, count]
+        self.breaker = breaker if breaker is not None else {}
+        self.parked, self.streak, self.trip_start = set(), {}, {}
+        self.sends, self.valid_sends = 0, []
+        self.b2b_busy = set()
         self.stop = threading.Event()
         self.rng = random.Random()
         self.log = None
@@ -547,9 +648,11 @@ class _Run:
         err = out['error'] or (None if ok else why)
         st = out['status']
         if it['arm'] == 'PP' and st and 400 <= st < 500 and \
-                not out['transient'] and not out['abort']:
+                not out['transient'] and not out['abort'] and \
+                not out['credit']:
             err = f'pin unsupported: {err}'       # not held against G1
-        settled = (ok or not out['transient'] or final) and not out['abort']
+        settled = (ok or not out['transient'] or final) and \
+            not out['abort'] and not out['credit']
         return self._rec(m, it, qids, t_sent_utc=out['t_sent'],
                          latency_ms=out['latency_ms'], http_status=st,
                          attempts=out['attempts'], answered_as=who,
@@ -566,8 +669,8 @@ class _Run:
         """One request under the retry policy, on a worker thread. Returns
         what happened; raises nothing but a crash."""
         out = {'attempts': 0, 'status': None, 'resp': None, 'error': None,
-               'transient': False, 'abort': False, 'latency_ms': None,
-               't_sent': None}
+               'transient': False, 'abort': False, 'credit': False,
+               'latency_ms': None, 't_sent': None}
         for i in range(TRIES):
             if self.stop.is_set():
                 break
@@ -594,6 +697,9 @@ class _Run:
                 if ex.code in (401, 403):
                     out.update(abort=True, transient=False)
                     return out
+                if ex.code == NO_CREDIT:        # top up and resume: the
+                    out.update(credit=True, transient=False)   # key stays
+                    return out                  # open, never invalid
                 if ex.code not in TRANSIENT and ex.code < 500:
                     out['transient'] = False
                     return out
@@ -635,7 +741,8 @@ class _Run:
 
     # ------------------------------------------------------- dispatching --
     def _halted(self):
-        return self.abort or self.capped or self.late
+        return self.abort or self.capped or self.late or self.no_credit or \
+            self.outage
 
     def _body(self, m, it):
         body = it['body']
@@ -654,6 +761,11 @@ class _Run:
             s = self.smoke.get(m)
             if s is not None and s['sent'] >= 2:
                 continue                # W failed: two more, then judge
+            if m in self.b2b_busy and B2B.match(self.items[dq[0][1]]['arm']):
+                # the back-to-back triple is sent on one slot: a member
+                # goes out only once the one before it has landed, so a
+                # cache that serves identical bytes can show itself
+                continue
             if best is None or dq[0][0] < q[best][0][0]:
                 best = m
         return best
@@ -671,17 +783,23 @@ class _Run:
         counted = m in self.smoke
         if counted:
             self.smoke[m]['sent'] += 1
+        if B2B.match(it['arm']):
+            self.b2b_busy.add(m)
+        self.sends += 1
         fut = ex.submit(self._call, send_bytes(body, m))
-        flight[fut] = (m, iid, c, list(body['questions']), counted)
+        flight[fut] = (m, iid, c, list(body['questions']), counted,
+                       self.sends)
         per[m] += 1
         self.reserved += c
 
     def _land(self, flight, per, final):
         done, _ = wait(list(flight), return_when=FIRST_COMPLETED)
         for fut in done:
-            m, iid, c, qids, counted = flight.pop(fut)
+            m, iid, c, qids, counted, seq = flight.pop(fut)
             per[m] -= 1
             self.reserved -= c
+            if B2B.match(self.items[iid]['arm']):
+                self.b2b_busy.discard(m)
             out = fut.result()           # an injected crash propagates
             if not out['attempts']:      # stopped before it was sent
                 if counted and m in self.smoke:
@@ -694,10 +812,25 @@ class _Run:
             if out['abort']:
                 self.abort = True
                 self.stop.set()
-            if iid == self.w:
+            if out['credit'] and not self.no_credit:
+                self.no_credit = True
+                self.stop.set()
+                say('HTTP 402 (insufficient credits): sending stopped -- '
+                    'top up, then resume with the same command')
+            if iid == self.w and line['http_status'] == 200:
                 self.cm[m] = self._cost(m, line)
+            if line['valid']:
+                self.valid_sends.append((seq, m))
             if counted and m in self.smoke:
                 self._smoke(m, line['valid'], flight)
+            if out['transient'] and out['attempts'] >= TRIES:
+                st = self.streak.setdefault(m, [seq, 0])
+                st[0], st[1] = min(st[0], seq), st[1] + 1
+                if st[1] >= BREAKER and m not in self.stopped and \
+                        m not in self.parked:
+                    self._trip(m, flight, final)
+            elif not out['transient']:
+                self.streak.pop(m, None)
 
     def _dispatch(self, pairs, final=False):
         """Send pairs in their order: all of a block's pairs go out before
@@ -718,7 +851,8 @@ class _Run:
                     for pos, (m, iid) in enumerate(grp):
                         q.setdefault(m, deque()).append((pos, iid))
                     while not self._halted():
-                        for m in [m for m in q if m in self.stopped]:
+                        for m in [m for m in q if m in self.stopped
+                                  or m in self.parked]:
                             del q[m]
                         if not any(q.values()):
                             break
@@ -762,22 +896,63 @@ class _Run:
             if not ok and not any(s['results']):
                 self._stop_model(m, flight or {})
 
-    def _stop_model(self, m, flight):
+    def _stop_model(self, m, flight, why='smoke stop',
+                    note='smoke stop (W and the next two calls invalid)'):
         """The smoke stop (spec E0): W and the next two calls all invalid.
         Every open key of the model is settled invalid, so no resume sends
-        it again; the model fails G1. Never applied to I or R."""
+        it again; the model fails G1. Never applied to I or R. (_trip
+        settles a model that stays down the same way.)"""
         self.stopped.add(m)
         busy = {f'{x[0]}|{x[1]}' for x in flight.values()}
         for iid, k in self._keys_of(m):
             ln = self.last.get(k)
             if k in busy or (ln and ln.get('final')):
                 continue
-            why = 'smoke stop' + (f' after {ln["error"]}'
-                                  if ln and ln.get('error') else '')
+            err = why + (f' after {ln["error"]}'
+                         if ln and ln.get('error') else '')
             it = self.items[iid]
             self._write(self._rec(m, it, list(it['body']['questions']),
-                                  error=why, final=True))
-        say(f'{m}: smoke stop (W and the next two calls invalid)')
+                                  error=err, final=True))
+        say(f'{m}: {note}')
+
+    def _trip(self, m, flight, final):
+        """BREAKER calls of m in a row failed transiently after every try.
+        m is parked for the rest of this pass -- its keys stay open for the
+        retry pass or a resume, and the block boundary stops waiting for
+        it. Whether other models answered meanwhile (calls sent after m's
+        streak began) tells a provider that is down from an API that is.
+        A trip in the retry pass, whose results are final anyway, settles
+        m's remaining keys 'unavailable' when m has been found down while
+        others answered (in this session or an earlier one); the whole API
+        being down never settles anything."""
+        start = self.streak.pop(m)[0]
+        self.parked.add(m)
+        self.trip_start[m] = min(start, self.trip_start.get(m, start))
+        self.breaker.setdefault(m, {'trips': 0, 'others_answered': False})
+        self.breaker[m]['trips'] += 1
+        if final and self.others_answered(m):
+            self._stop_model(
+                m, flight, why='unavailable',
+                note=f'unavailable: {BREAKER} calls in a row failed after '
+                     f'every retry, again in the retry pass -- its open keys '
+                     f'are settled invalid')
+        else:
+            say(f'{m}: {BREAKER} calls in a row failed after every retry -- '
+                f'parked for this pass')
+
+    def others_answered(self, m):
+        """Whether m was found down while the API answered: BREAKER valid
+        answers from other models to calls sent after the streak that
+        tripped m began (in this session, or recorded in an earlier one).
+        Counted when asked, so answers that land after the trip count."""
+        b = self.breaker.get(m)
+        if b is None:
+            return False
+        if not b['others_answered'] and m in self.trip_start:
+            n = sum(1 for seq, x in self.valid_sends
+                    if seq > self.trip_start[m] and x != m)
+            b['others_answered'] = n >= BREAKER
+        return b['others_answered']
 
     def _smoke_init(self):
         for m in self.models:
@@ -819,8 +994,14 @@ class _Run:
 
     def _scale_down(self, meta):
         """Projection sum_m c_m n_m; above 0.8 max_usd drop block 4, then
-        unscored models, dearest first, until it fits -- never I or R."""
-        cm = {m: self.cm.get(m, NO_USAGE_COST) for m in self.models}
+        unscored models, dearest first, until it fits -- never I or R. A
+        model whose W was not answered (an unbilled 4xx, or a transient
+        failure not yet retried) is projected at the dearest c_m measured,
+        or at its catalogue estimate if no W was answered at all."""
+        fill = max(self.cm.values()) if self.cm else None
+        cm = {m: self.cm[m] if m in self.cm else
+              (fill if fill is not None else self.c0[m])
+              for m in self.models}
         lim = 0.8 * self.max_usd
 
         def proj(sd):
@@ -839,6 +1020,8 @@ class _Run:
                 sd['dropped_models'].append(m)
         p1, n1 = proj(sd)
         meta['pilot_costs'] = cm
+        meta['pilot_unmeasured'] = sorted(m for m in self.models
+                                          if m not in self.cm)
         meta['projection'] = {'usd': p0, 'calls': n0, 'limit_usd': lim,
                               'after_scale_down_usd': p1,
                               'after_scale_down_calls': n1}
@@ -854,10 +1037,23 @@ class _Run:
                         if i != self.w and f'{m}|{i}' in keys
                         and m not in self.stopped
                         and not self._final(f'{m}|{i}')])
+        # every model still open was parked, and none was ever found down
+        # while others answered: the API itself is down. The retry pass
+        # (final) would settle keys on an outage; stop, resume later.
+        open_ = {k.split('|', 1)[0] for k in keys if not self._final(k)} \
+            - self.stopped
+        if self.parked and open_ and open_ <= self.parked and not any(
+                self.others_answered(m) for m in self.parked):
+            self.outage = True
+            say('every open model failed every retry, none while others '
+                'answered: an outage -- resume later')
 
     def retry_pass(self):
         """One more pass for what failed transiently; whatever it gets is
-        final. W first, so a PP can still be pinned."""
+        final. W first, so a PP can still be pinned. A model parked in the
+        main pass is tried again."""
+        self.parked.clear()
+        self.streak.clear()
         keys = self.keys
         redo = [(m, i) for m, i in self.order if f'{m}|{i}' in keys
                 and m not in self.stopped and not self._final(f'{m}|{i}')]
@@ -881,39 +1077,56 @@ class _Run:
 def run(plan_path, out_dir, auth='proxy', max_usd=None, deadline_min=None,
         concurrency=None, per_model=None, opener=urllib.request.urlopen,
         sleep=time.sleep, now=time.monotonic, key_url=KEY_URL,
-        decisions_url=DECISIONS, check_tree=None):
+        decisions_url=DECISIONS, check_tree=True):
     """Run (or resume) the battery for a plan into out_dir. Exit code per
-    spec section 7. check_tree: refuse a dirty src/, tests/ or bench/battery/
-    (default: when the plan lives in this repository)."""
+    spec section 7. check_tree=False skips the checks that what runs is
+    what was committed (tree_problems, the git history): for tests on a
+    plan outside the repository only -- the command line cannot pass it."""
     plan_path, out_dir = os.path.abspath(plan_path), os.path.abspath(out_dir)
     plan, items, plan_dir = read_plan(plan_path)
     bad = problems(plan_path, plan, items, plan_dir)
     if bad:
         return _refuse('; '.join(bad[:5]))
     sp, psha = plan['spend'], _sha(plan_path)
+    shas = declared_shas(plan_path, plan, plan_dir)
+    if check_tree:
+        bad = tree_problems(plan_path, plan, plan_dir, out_dir)
+        if bad:
+            return _refuse('; '.join(bad))
     meta = _read_json(os.path.join(out_dir, 'run_meta.json'))
     resume = meta is not None
     if resume and meta.get('plan_sha') != psha:
         return _refuse('this run directory belongs to another plan')
-    if not resume:
+    if resume:
+        # the bytes a run started with are the only ones it may go on with
+        # (the plan's own sha does not cover its items)
+        was = dict(meta.get('shas') or {}, items=meta.get('items_sha'))
+        changed = sorted(k for k, v in was.items() if v and shas.get(k) != v)
+        if changed:
+            return _refuse(f'{", ".join(changed)} changed since this run '
+                           f'started: it can only go on with its own bytes')
+        done = _scored(out_dir)
+        if done:
+            return _refuse(f'this run has been scored ({", ".join(done)}): '
+                           f'it is frozen')
+    else:
         if os.path.exists(os.path.join(out_dir, 'calls.jsonl')):
             return _refuse('a call log without run_meta.json')
         other = _other_run(out_dir, plan_dir, psha)
         if other:
             return _refuse(f'a run directory for this plan already exists '
                            f'({other}): resume it')
+        if check_tree:
+            seen = _run_in_history(plan_dir, psha)
+            if seen:
+                return _refuse(f'a run of this plan is in git history '
+                               f'({", ".join(seen[:3])}): resume it')
     max_usd = float(sp['max_usd'] if max_usd is None else max_usd)
     cap = sp['max_usd_ceiling'] if resume else sp['max_usd']
     if not 0 < max_usd <= cap:
         return _refuse(f'max_usd {max_usd} outside (0, {cap}]'
                        + ('' if resume else ' (a resume may go to the '
                           f'ceiling {sp["max_usd_ceiling"]})'))
-    if check_tree is None:
-        check_tree = _inside(plan_path, ROOT)
-    if check_tree:
-        dirty = _dirty(out_dir)
-        if dirty:
-            return _refuse('uncommitted changes: ' + ', '.join(dirty[:5]))
     if auth == 'env':
         key = os.environ.get('OPENROUTER_API_KEY')   # held here, nowhere else
         if not key:
@@ -929,7 +1142,7 @@ def run(plan_path, out_dir, auth='proxy', max_usd=None, deadline_min=None,
              now() + 60.0 * deadline_min,
              int(concurrency or plan['concurrency']),
              int(per_model or plan['per_model']), opener, sleep, now,
-             decisions_url)
+             decisions_url, breaker=(meta or {}).get('breaker'))
     del key
     err, kb = r.key_floats(key_url)
     if err == 'auth':
@@ -942,20 +1155,34 @@ def run(plan_path, out_dir, auth='proxy', max_usd=None, deadline_min=None,
         return _refuse(f'credit ${kb["limit_remaining"]} is below the floor '
                        f'${floor:.2f} (max_usd + {sp["credit_margin"]})')
     os.makedirs(out_dir, exist_ok=True)
+    commit = (_git('rev-parse', 'HEAD') or '').strip() or None
+    tree = 'clean' if check_tree else 'not checked'
     if not resume:
-        items_path = os.path.join(plan_dir, plan['files']['items'])
-        meta = {'plan': os.path.relpath(plan_path, ROOT)
-                if _inside(plan_path, ROOT) else plan_path,
-                'plan_sha': psha, 'items_sha': _sha(items_path),
-                'commit': (_git('rev-parse', 'HEAD') or '').strip() or None,
+        meta = {'plan': _rel(plan_path) if _inside(plan_path, ROOT)
+                else plan_path,
+                'plan_sha': psha, 'items_sha': shas['items'], 'shas': shas,
+                'commit': commit, 'tree': tree,
                 'python': sys.version.split()[0], 'numpy': np.__version__,
                 'started_utc': _utc(), 'ended_utc': None,
                 'key_before': kb, 'key_after': None, 'pilot_costs': None,
                 'projection': None, 'scale_down': None, 'status': 'running',
-                'spent_usd': r.spent, 'sessions': []}
+                'spent_usd': r.spent, 'breaker': {}, 'sessions': []}
     session = {'started_utc': _utc(), 'ended_utc': None, 'auth': auth,
-               'max_usd': max_usd, 'key_before': kb, 'key_after': None,
+               'max_usd': max_usd, 'commit': commit, 'tree': tree,
+               'key_before': kb, 'key_after': None,
                'spent_before_usd': r.spent, 'status': 'running'}
+    if resume and check_tree and commit and meta.get('commit') and \
+            commit != meta['commit']:
+        # a resume at another commit is allowed (the run directory itself
+        # is committed between sessions), but code changed under it is
+        # recorded, and printed
+        diff = _git('diff', '--name-only', meta['commit'], commit, '--',
+                    'src', 'tests')
+        session['code_changed'] = sorted(diff.split()) if diff is not None \
+            else ['(git diff failed)']
+        if session['code_changed']:
+            say('code changed since this run started: '
+                + ', '.join(session['code_changed'][:5]))
     meta['sessions'].append(session)
     meta['status'] = 'running'
     write_meta(out_dir, meta)
@@ -973,20 +1200,27 @@ def run(plan_path, out_dir, auth='proxy', max_usd=None, deadline_min=None,
         status, code = 'auth_failed', AUTH
     elif not left:
         status, code = 'done', DONE
+    elif r.no_credit:
+        status, code = 'no_credit', CAPPED
     elif r.capped:
         status, code = 'capped', CAPPED
     elif r.late:
         status, code = 'deadline', DEADLINE
+    elif r.outage:
+        status, code = 'outage', CAPPED
     else:
         status, code = 'incomplete', CAPPED
+    for m in r.trip_start:              # recorded for later sessions
+        r.others_answered(m)
     ka = None if r.abort else r.key_floats(key_url)[1]
     session.update(ended_utc=_utc(), key_after=ka, status=status,
+                   parked=sorted(r.parked),
                    spent_usd=r.spent - session['spent_before_usd'],
                    key_usage_delta=(ka['usage'] - kb['usage'])
                    if ka and ka['usage'] is not None
                    and kb['usage'] is not None else None)
     meta.update(ended_utc=session['ended_utc'], key_after=ka, status=status,
-                spent_usd=r.spent)
+                spent_usd=r.spent, breaker=r.breaker)
     write_meta(out_dir, meta)
     say(f'spent ${r.spent:.4f} of ${max_usd:.2f}; {len(left)} keys open -- '
         f'{status}')

@@ -23,7 +23,7 @@ GATES = {
            'modal_share_min': 0.90, 'p95_latency_s_max': 60.0,
            'median_cost_usd_max': 0.01},
     'G2a': {'ex_nuis_max': 0.05, 'rel_max': 0.5, 'D_min': 0.01},
-    'G2b': {'ex_ctx_max': 0.05},
+    'G2b': {'ex_ctx_max': 0.05, 'lb_alpha': 0.05},
     'G3a': {'E_bar_max': -0.05, 'frac_neg_min': 0.75, 'holm_p_lt': 0.05},
     'G3b': {'G_bar_min': 0.05, 'delta_h_gt': 0.0, 'holm_p_lt': 0.05},
     'G4': {'flip_h_max': 0.10},
@@ -187,6 +187,80 @@ def test_did_and_phi_and_small_helpers():
     assert bs.ex([.001], .005) == 0.0
     assert bs.mean_p([{'A': .2, 'B': .4}, None, {'A': .4}]) == \
         {'A': pytest.approx(.3)}
+
+
+def _ctx_draws(sd, shift, seed):
+    """24 states, 8 per CX type (6, 1 and 1 questions asked): C^a, C^b and
+    the CX answers as oracle + N(0, sd), CX shifted by `shift`; (point ex,
+    the lower bound) as score_model computes them."""
+    rng = np.random.default_rng(seed)
+    strata = {f'S{i:02d}': str(i % 3 + 1) for i in range(24)}
+    nq = {'1': 6, '2': 1, '3': 1}
+    dev, rep, sq_x, sq_r = {}, {}, [], []
+    for s, t in strata.items():
+        ca, cb = rng.normal(0, sd, 12), rng.normal(0, sd, 12)
+        x = rng.normal(0, sd, nq[t]) + shift
+        d = (x - (ca + cb)[:nq[t]] / 2) ** 2
+        r = (ca - cb) ** 2 / 2
+        dev[s], rep[s] = (float(d.sum()), nq[t]), (float(r.sum()), 12)
+        sq_x, sq_r = sq_x + list(d), sq_r + list(r)
+    return (bs.ex(sq_x, 1.5 * np.mean(sq_r)),
+            bs.ex_lb(dev, rep, strata, 1.5, 2000, seed, 0.05))
+
+
+def test_g2b_gates_on_a_lower_bound_so_noise_alone_does_not_fail():
+    # no context effect at all, sd 0.10: the point estimate crosses 0.05 in
+    # about a fifth of draws (64 answers against 0.05^2); the bound rarely
+    noise = [_ctx_draws(0.10, 0.0, k) for k in range(100)]
+    assert np.mean([pt > .05 for pt, _ in noise]) > .1
+    assert np.mean([lb > .05 for _, lb in noise]) <= .03
+    assert all(lb <= pt + 1e-12 for pt, lb in noise)
+    # a real context shift of 0.08 on a quiet model still fails, every time
+    shift = [_ctx_draws(0.02, 0.08, k) for k in range(30)]
+    assert all(lb > .05 for _, lb in shift)
+
+
+def test_a_context_effect_the_same_in_every_state_fails_at_its_size():
+    # the joint answerer: every CX answer of a type off by the same amount;
+    # resampling within the type cannot move the bound below the point
+    strata = {f'S{i:02d}': str(i % 3 + 1) for i in range(24)}
+    off = {'1': .05, '2': .0917, '3': .0917}
+    n = {'1': 6, '2': 1, '3': 1}
+    dev = {s: (n[t] * off[t] ** 2, n[t]) for s, t in strata.items()}
+    rep = {s: (0.0, 12) for s in strata}
+    lb = bs.ex_lb(dev, rep, strata, 1.5, 2000, 1, .05)
+    point = math.sqrt(sum(v for v, _ in dev.values())
+                      / sum(k for _, k in dev.values()))
+    assert lb == pytest.approx(point) and lb > .05
+    assert math.isnan(bs.ex_lb({}, rep, strata, 1.5, 100, 1, .05))
+
+
+def test_a_cache_that_never_expires_is_flagged():
+    # identical bytes answered identically all run long: np.var of equal
+    # floats is not always 0 (0.05 three times: ~7e-35), and rho is 0/0
+    assert np.var([.05] * 3, ddof=1) != 0
+    cx = hand_ctx()
+    arms = ['S0rep1', 'S0rep2', 'S0rep3', 'B2B1', 'B2B2', 'B2B3']
+    for a in arms:
+        cx.item[f'E9|S0|{a}'] = {'item_id': f'E9|S0|{a}', 'state_id': 'S0',
+                                 'arm': a, 'meta': {}}
+    P = {f'E9|S0|{a}': {'A': .05, BOOK: .05} for a in arms}
+    ctrl = {'A': .05, BOOK: .05}
+    # C^b under its own ids varied (phi > 0): a cache, not a constant model
+    e9 = bs.score_s0(P, cx, 'k1', 1.5 * .03 ** 2, ctrl)
+    assert e9['caching_flag'] and e9['var_b2b'] <= bs.TINY
+    assert e9['caching_reason'].startswith('identical bytes')
+    # C^b answered as C^a (phi 0): a deterministic model, however much a
+    # reordering moves it, is not a cache
+    assert not bs.score_s0(P, cx, 'k1', 0.0, ctrl)['caching_flag']
+
+
+def test_the_decider_records_whether_its_build_is_dated():
+    ms = {'inc/m': model(qrows()), 'ref/m': model(qrows(ord_skip=3))}
+    p = splan('inc/m', 'ref/m')
+    assert bs.choose(summary(ms), p)['decider']['dated'] is True
+    ms['inc/m']['ops']['build'] = 'inc/m'           # served undated
+    assert bs.choose(summary(ms), p)['decider']['dated'] is False
 
 
 def test_negation_coherence_and_its_permutation_p():
@@ -486,7 +560,18 @@ def build_plan(d, models, incumbent, reference, X):
     with open(os.path.join(d, 'items_v1.jsonl'), 'w') as f:
         for it in items:
             f.write(json.dumps(it) + '\n')
+    write_lock(d)
     return os.path.join(d, 'plan_v1.json'), items
+
+
+def write_lock(d):
+    lock = {k: hashlib.sha256(open(os.path.join(d, f), 'rb').read())
+            .hexdigest() for k, f in (('plan', 'plan_v1.json'),
+                                      ('states', 'states_v1.json'),
+                                      ('items', 'items_v1.jsonl'),
+                                      ('s0', 's0_20261013.json'))}
+    with open(os.path.join(d, 'lock_v1.json'), 'w') as f:
+        json.dump(lock, f)
 
 
 def stand_in(kind, model, item):
@@ -526,7 +611,8 @@ KINDS = {'fake/oracle': 'oracle', 'fake/noisy': 'noisy',
          'fake/const': 'const', 'fake/rule': 'rule'}
 
 
-def write_run(run, plan_path, items, skip=lambda m, it: False):
+def write_run(run, plan_path, items, skip=lambda m, it: False,
+              status='done', **meta):
     os.makedirs(run, exist_ok=True)
     with open(os.path.join(run, 'calls.jsonl'), 'w') as f:
         for m, kind in KINDS.items():
@@ -540,9 +626,9 @@ def write_run(run, plan_path, items, skip=lambda m, it: False):
                 f.write(json.dumps(c) + '\n')
         f.write('{"key": "torn')              # a crash mid-line is skipped
     with open(os.path.join(run, 'run_meta.json'), 'w') as f:
-        json.dump({'plan': plan_path, 'scale_down': {'dropped_blocks': [],
-                                                     'dropped_models': []}},
-                  f)
+        json.dump(dict({'plan': plan_path, 'status': status,
+                        'scale_down': {'dropped_blocks': [],
+                                       'dropped_models': []}}, **meta), f)
 
 
 @pytest.fixture(scope='module')
@@ -559,7 +645,7 @@ def scored(tmp_path_factory):
 def test_score_reads_every_experiment_and_the_baselines(scored):
     run, _, _, s = scored
     assert s['analysis_set']['blocks'] == [1, 2, 3]
-    assert s['analysis_set']['sufficient'] and s['lock'] == 'absent'
+    assert s['analysis_set']['sufficient'] and s['lock'] == 'ok'
     b = s['baselines']
     # the rule skips the Earnings name (1 of 2 skip-criteria per state),
     # never skips an Ordinary name, never hedges
@@ -673,13 +759,88 @@ def test_only_the_modal_build_and_provider_is_analysed(scored, tmp_path):
 def test_a_lock_mismatch_is_refused(scored, tmp_path):
     run, plan_path, _, _ = scored
     lock = os.path.join(os.path.dirname(plan_path), 'lock_v1.json')
-    with open(lock, 'w') as f:
-        json.dump({'items': '0' * 64}, f)
+    good = open(lock, 'rb').read()
     try:
+        with open(lock, 'w') as f:
+            json.dump({'items': '0' * 64}, f)
         with pytest.raises(ValueError, match='lock mismatch'):
             bs.score(run)
+        os.remove(lock)               # a run never goes without its lock
+        with pytest.raises(ValueError, match='no lock'):
+            bs.score(run)
     finally:
-        os.remove(lock)
+        with open(lock, 'wb') as f:
+            f.write(good)
+
+
+def test_a_run_is_scored_only_against_the_bytes_it_recorded(scored,
+                                                           tmp_path):
+    # items regenerated and re-locked after the run started: the lock and
+    # the files agree, but not with what run_meta recorded
+    _, plan_path, items, _ = scored
+    run = str(tmp_path / 'other')
+    write_run(run, plan_path, items, items_sha='0' * 64)
+    with pytest.raises(ValueError, match='items do not match the run'):
+        bs.score(run)
+    write_run(run, plan_path, items, shas={'lock': '0' * 64})
+    with pytest.raises(ValueError, match='lock do not match the run'):
+        bs.score(run)
+
+
+@pytest.mark.parametrize('status,last,ok', [
+    ('done', 8, True), ('capped', 12, True), ('capped', 8, False),
+    ('running', 8, False), ('deadline', 12, False), ('no_credit', 12, False),
+    ('outage', 8, False), ('incomplete', 8, False), (None, 8, False)])
+def test_only_a_finished_run_is_scored(scored, tmp_path, status, last, ok):
+    # a crash, a deadline or a cap below the ceiling is resumed first:
+    # nobody reads a partial result and then decides whether to extend
+    plan = {'spend': {'max_usd': 8, 'max_usd_ceiling': 12}}
+    meta = {'status': status, 'sessions': [{'max_usd': 8},
+                                           {'max_usd': last}]}
+    assert bs.finished(meta, plan)[0] is ok
+    _, plan_path, items, _ = scored
+    run = str(tmp_path / 'run')
+    write_run(run, plan_path, items, status=status)
+    if status == 'done':
+        assert bs.select(run)['run']['status'] == 'done'
+    elif status != 'capped':
+        with pytest.raises(ValueError, match='not finished'):
+            bs.score(run)
+        with pytest.raises(ValueError, match='not finished'):
+            bs.select(run)
+        assert not os.path.exists(os.path.join(run, 'summary.json'))
+
+
+def test_select_never_replaces_an_outcome_of_another_summary(scored,
+                                                            tmp_path):
+    _, plan_path, items, _ = scored
+    run = str(tmp_path / 'run')
+    write_run(run, plan_path, items)
+    first = bs.select(run)
+    assert bs.select(run) == first                   # the same: rewritten
+    with open(os.path.join(run, 'calls.jsonl'), 'a') as f:
+        it = next(i for i in items if i['item_id'] == 'E4|S01|EF')
+        c = call('fake/oracle', it['item_id'], prov='P2')
+        c['answers'] = stand_in('oracle', 'fake/oracle', it)
+        f.write('\n' + json.dumps(c) + '\n')
+    with pytest.raises(ValueError, match='never replaced'):
+        bs.select(run)
+    sel = json.load(open(os.path.join(run, 'selection_v1.json')))
+    assert sel['summary_sha256'] == first['summary_sha256']
+
+
+def test_completion_counts_s0_only_where_it_was_dispatched(scored, tmp_path):
+    # a run that stopped after block 2: S0's items dispatched in block 3
+    # never went out, and are not held against anyone's completion
+    _, plan_path, items, _ = scored
+    run = str(tmp_path / 'stopped')
+    write_run(run, plan_path, items, skip=lambda m, it: it['block'] == 3)
+    s = bs.score(run)
+    assert s['analysis_set']['blocks'] == [1, 2]
+    assert any(it['state_id'] == 'S0' and it['block'] == 3
+               and it['experiment'] != 'E0' for it in items)
+    for m, r in s['models'].items():
+        assert r['ops']['completion'] == 1.0, m
 
 
 # ------------------------------------------------------ select's branches --

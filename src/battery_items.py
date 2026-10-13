@@ -111,6 +111,10 @@ GENERATOR = {
     'rng_block': 'default_rng(SeedSequence(seeds.items, spawn_key=(100 + b,)))'
                  ', b = 1..4',
     'e1_order_seed': 'battery-v1|{state_id}|O{i}',
+    # C^b is C^a with every question id suffixed: the same question to the
+    # model (ids only key the answers), other bytes for any cache, so the
+    # retest is a fresh draw and phi is identified even behind a cache
+    'cb_id_suffix': '_b',
     'e9_order_seed': '{date}|{state_sha}|{j}|order-v1|http',
     'state_sha': 'sha256(json.dumps(state, sort_keys=True))[:12], as logged',
     'numpy': '.'.join(np.__version__.split('.')[:2]),
@@ -151,7 +155,10 @@ GATES = {
            'modal_share_min': 0.90, 'p95_latency_s_max': 60.0,
            'median_cost_usd_max': 0.01},
     'G2a': {'ex_nuis_max': 0.05, 'rel_max': 0.5, 'D_min': 0.01},
-    'G2b': {'ex_ctx_max': 0.05},
+    # gated on the one-sided (1 - lb_alpha) bootstrap lower bound of ex_ctx
+    # (states resampled within CX type, phi's error included), so a model
+    # with no context effect is not failed by its noise alone
+    'G2b': {'ex_ctx_max': 0.05, 'lb_alpha': 0.05},
     'G3a': {'E_bar_max': -0.05, 'frac_neg_min': 0.75, 'holm_p_lt': 0.05},
     'G3b': {'G_bar_min': 0.05, 'delta_h_gt': 0.0, 'holm_p_lt': 0.05},
     'G4': {'flip_h_max': 0.10},
@@ -467,8 +474,12 @@ def state_items(sid, rec, rng, b):
     qids = qids_of(labels)
     ordinary = [t for t in labels if rec['conditions'][t] == 'Ordinary']
     out = {e: [] for e in EXPERIMENTS}
-    for arm in ('Ca', 'Cb'):
-        out['E1'].append(_item('E1', sid, arm, b, _body(core, labels)))
+    out['E1'].append(_item('E1', sid, 'Ca', b, _body(core, labels)))
+    ids = {q: q + GENERATOR['cb_id_suffix'] for q in qids}
+    out['E1'].append(_item('E1', sid, 'Cb', b, _body(core, labels, ids=ids),
+                           {x: q for q, x in ids.items()},
+                           {'ids': 'canonical + '
+                            + GENERATOR['cb_id_suffix']}))
     for i in range(1, 7):
         seed = f'battery-v1|{sid}|O{i}'
         order = guard.question_order(seed, qids)

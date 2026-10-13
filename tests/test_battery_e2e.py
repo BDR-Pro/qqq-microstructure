@@ -10,12 +10,14 @@
 # ins' scores are held to section 8's table and the selection to section 3.
 #
 # Twice: at $0.0001 a call (all 4 blocks), and at $0.002 a call, where the
-# pilot's projection ($7.54 > 0.8 x $8) drops block 4's synthetic states
+# pilot's projection ($8.29 > 0.8 x $8) drops block 4's synthetic states
 # and the analysis set is the floor's 3 blocks. One call in flight
 # (concurrency 1): the noisy stand-ins draw from a per-model call counter,
 # so this pins every answer and the run is reproducible (concurrent
 # dispatch is tested in test_battery_run.py). No network: every request
 # goes to the fake, and the clock only moves when something sleeps on it.
+# The plan is a scratch copy outside the repository, so verify and run are
+# called with check_tree=False (test_battery_run.py tests the tree checks).
 
 import os, sys, json, math, shutil, hashlib
 import numpy as np
@@ -34,7 +36,7 @@ import fake_decisions as fd
 
 BENCH = os.path.join(ROOT, 'bench', 'battery')
 STAND_INS = ['oracle', 'const', 'uniform', 'lethargic', 'rule', 'jevlike',
-             'posbias', 'joint', 'tickerprior', 'caching']
+             'posbias', 'joint', 'tickerprior', 'caching', 'sticky']
 I, R = 'fake/lethargic', 'fake/jevlike'
 SKIP_CRITERIA = ('Earnings', 'ExtremeDown', 'ExtremeUp')
 # $ per call -> the scale-down the pilot must decide
@@ -85,13 +87,15 @@ def battery(request, tmp_path_factory):
     generated = {f: (d / f).read_bytes() for f in os.listdir(d)}
     real = json.load(open(plan_path))
     plan = redeclare(plan_path, real)
-    codes['verify'] = db.main(['verify', '--plan', plan_path])
+    codes['verify'] = db.main(['verify', '--plan', plan_path],
+                              check_tree=False)
     clock = fd.Clock()
     fake = fd.FakeDecisions(clock=clock, cost=cost)
     codes['run'] = db.main(['run', '--plan', plan_path, '--out', run,
                             '--auth', 'proxy', '--concurrency', '1',
                             '--per-model', '1'],
-                           opener=fake, sleep=clock.sleep, now=clock.now)
+                           opener=fake, sleep=clock.sleep, now=clock.now,
+                           check_tree=False)
     codes['score'] = db.main(['score', '--run', run])
     codes['select'] = db.main(['select', '--run', run])
     codes['scrub-check'] = db.main(['scrub-check', '--run', run])
@@ -122,7 +126,10 @@ def test_every_step_exits_0(battery):
 
 def test_the_items_are_the_committed_declaration(battery):
     gen, real = battery['generated'], battery['real']
-    if real['generator']['numpy'] != '.'.join(np.__version__.split('.')[:2]):
+    # the numpy the committed bytes record, not the one that just made the
+    # scratch copy (that one always matches the running numpy)
+    rec = json.load(open(os.path.join(BENCH, 'plan_v1.json')))
+    if rec['generator']['numpy'] != '.'.join(np.__version__.split('.')[:2]):
         pytest.skip('the committed bytes were made with another numpy')
     for f in ('plan_v1.json', 'states_v1.json', 'items_v1.jsonl',
               'lock_v1.json'):
@@ -290,9 +297,26 @@ def test_the_ticker_prior_fails_G6(battery):
 def test_the_caching_model_is_flagged_by_rho_b2b(battery):
     e9 = model(battery, 'caching')['E9']
     assert e9['caching_flag'] and e9['rho_b2b'] < bs.CACHE_RHO_FLAG
-    for b in STAND_INS:                 # and nobody else is
-        if b != 'caching':
-            assert not model(battery, b)['E9']['caching_flag'], b
+    # and the never-expiring caches: fake/sticky, and fake/uniform, whose
+    # draw is a hash of the bytes (identical bytes, identical answers; the
+    # same question under C^b's ids, another draw). Nobody else: a
+    # deterministic model (posbias answers by position) is not a cache.
+    flagged = {b for b in STAND_INS if model(battery, b)['E9']['caching_flag']}
+    assert flagged == {'caching', 'sticky', 'uniform'}
+
+
+def test_a_cache_that_never_expires_is_flagged_and_its_noise_measured(
+        battery):
+    # fake/sticky answers identical bytes identically all run long (the
+    # oracle + N(0, 0.05), once per body). C^b goes out under its own ids,
+    # so the retest is a fresh draw: phi is its noise, not 0, and its
+    # nuisance and context gates judge the model, not the cache
+    st, ca = model(battery, 'sticky'), model(battery, 'caching')
+    assert st['E9']['caching_flag'] and st['E9']['rho_b2b'] is None
+    assert st['E9']['caching_reason'].startswith('identical bytes')
+    assert st['noise']['sd_rep'] > .03 and st['h'] == 'k3'
+    assert not {'G2a', 'G2b'} & set(st['failed'])
+    assert abs(st['noise']['sd_rep'] - ca['noise']['sd_rep']) < .015
 
 
 # ------------------------------------------------------- the selection --
@@ -384,13 +408,15 @@ def test_verify_and_make_items_refuse_bytes_that_are_not_the_lock(
     d = tmp_path / 'tampered'
     shutil.copytree(battery['dir'], d, ignore=shutil.ignore_patterns('runs'))
     plan = str(d / 'plan_v1.json')
-    assert db.main(['verify', '--plan', plan]) == 0
+    assert db.main(['verify', '--plan', plan], check_tree=False) == 0
+    # outside the repository, verify says what run will say
+    assert db.main(['verify', '--plan', plan]) == 5
     items = (d / 'items_v1.jsonl').read_text().splitlines(keepends=True)
     it = json.loads(items[5])
     it['body']['state']['date'] = '20261014'      # one byte of one body
     items[5] = json.dumps(it) + '\n'
     (d / 'items_v1.jsonl').write_text(''.join(items))
-    assert db.main(['verify', '--plan', plan]) == 5
+    assert db.main(['verify', '--plan', plan], check_tree=False) == 5
     # make-items will not overwrite a declaration it cannot reproduce: the
     # test plan's lock names stand-ins the generator never writes
     before = {f: (d / f).read_bytes() for f in os.listdir(d)}

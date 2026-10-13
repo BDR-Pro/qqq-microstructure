@@ -364,6 +364,18 @@ def test_gated_labels():
     assert re.fullmatch(rx, DECIDER + '#perm3.q1')
     assert not re.fullmatch(rx, DECIDER + '#perm3.q2')
     assert not re.fullmatch(rx, DECIDER)
+    # a model the API serves undated (cloudflare/clef answers as its own
+    # slug) is declared dated=False, and its record is the gated one
+    for suffix in ('', '#perm3.q1'):
+        rx = g.decider_slot('cloudflare/clef', suffix, dated=False)
+        for m in ('cloudflare/clef@Cloudflare',
+                  'cloudflare/clef-20261009@Cloudflare'):
+            assert re.fullmatch(rx, m + suffix), (m, suffix)
+        for m in ('cloudflare/clef-flash@Cloudflare', 'cloudflare/clef',
+                  'cloudflare/clef@A@B', 'cloudflare/clef-2026100@C'):
+            assert not re.fullmatch(rx, m + suffix), (m, suffix)
+        assert not re.fullmatch(g.decider_slot('cloudflare/clef', suffix),
+                                'cloudflare/clef@Cloudflare' + suffix)
 
 
 def test_the_gated_decider_is_the_runtimes_pin():

@@ -431,14 +431,18 @@ RAND_ALPHA = 0.05 / 3           # three gated records, the same split as GATE_T
 # these three share GATE_T's split; any other record (an older decider, an
 # undated build, an undeclared handling suffix such as '#perm3.q1') is graded
 # the same way but printed as '[not a gated record]'. Declaring a new decider
-# or a suffix for it changes this one line: (pin, suffix).
+# or a suffix for it changes this one line: (pin, suffix), or (pin, suffix,
+# False) for a model the API serves under an undated build (the battery's
+# selection says which: its decider's 'dated').
 DECIDER = ('perplexity/pplx-decider-v1.1-27b', '')
 
 
-def decider_slot(pin, suffix=''):
-    """The decider's record: any dated build of the pin, from one named
+def decider_slot(pin, suffix='', dated=True):
+    """The decider's record: any dated build of the pin (or, for a model
+    served undated, the pin itself or a dated build of it), from one named
     provider, carrying exactly the declared suffix."""
-    return re.escape(pin) + r'-\d{8}@[^@#]+' + re.escape(suffix)
+    build = r'-\d{8}' if dated else r'(-\d{8})?'
+    return re.escape(pin) + build + r'@[^@#]+' + re.escape(suffix)
 
 
 GATED = (('rule', 'rule-earnings-v1'),

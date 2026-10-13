@@ -17,16 +17,39 @@
 # without anyone reading output that could hold a secret. Every line printed
 # passes battery_run.scrub.
 #
+# What the cloud session runs -- this list is the runbook (it supersedes the
+# draft in the design spec, whose test file and --max-usd 15 are gone):
+#
+#   git fetch origin && git checkout <the declaration's merge sha> \
+#       && git switch -c claude/decider-battery-v1
+#   pip install numpy pandas pytest
+#   python -m pytest tests/test_battery_items.py tests/test_battery_run.py \
+#       tests/test_battery_score.py tests/test_battery_e2e.py \
+#       tests/test_guard_randomization.py tests/test_openrouter.py \
+#       tests/test_guard.py -q -p no:cacheprovider
 #   python src/decider_battery.py verify --plan bench/battery/plan_v1.json
 #   python src/decider_battery.py run --plan bench/battery/plan_v1.json \
 #       --out bench/battery/runs/v1 --auth proxy --max-usd 8 --deadline-min 90
 #   python src/decider_battery.py score --run bench/battery/runs/v1
 #   python src/decider_battery.py select --run bench/battery/runs/v1
 #   python src/decider_battery.py scrub-check --run bench/battery/runs/v1
+#   git add bench/battery/runs/v1 && git commit \
+#       && git push -u origin claude/decider-battery-v1
 #
-# Exit codes: 0 done; 2 auth failure; 3 capped (resumable); 4 deadline
-# (resumable); 5 refused; 6 insufficient analysis set (resume the run);
-# 7 scrub hit.
+# The run takes 10-30 minutes, longer than a foreground command may live
+# (a cloud session's shell kills one after 10): start it in the background
+# and wait for its exit code -- or pass --deadline-min 9 and run it in the
+# foreground again while it exits 4. By exit code: 0, score; 4, the same
+# command again; 3, the same command with --max-usd 12, the ceiling (after
+# a 402, once the credit is topped up). A killed or crashed run resumes
+# with the same command too.
+# score and select refuse a run that is not done or capped at the ceiling,
+# and run refuses to resume a run that has been scored: whether to extend
+# a run is never decided after seeing its result.
+#
+# Exit codes: 0 done; 2 auth failure; 3 capped, out of credit, an outage or
+# incomplete (resumable); 4 deadline (resumable); 5 refused; 6 insufficient
+# analysis set (no selection from this run); 7 scrub hit.
 
 import os, sys, json, time, shutil, argparse, tempfile
 import urllib.request
@@ -158,11 +181,13 @@ def projection(plan, items):
             'scale_down': sd, 'after': proj(sd), 'smallest': smallest}
 
 
-def verify(plan_path, allow_dirty=False, check_tree=None):
+def verify(plan_path, allow_dirty=False, check_tree=True):
     """Everything the run will check before its first call, and more,
     offline: the lock and every body (battery_items.verify), the run's own
-    refusal checks (battery_run.problems), the floor counts, a clean tree
-    and the catalogue-price bound. Exit 0 when nothing is wrong, else 5."""
+    refusal checks (battery_run.problems), the floor counts, the tree
+    (battery_run.tree_problems: the plan committed in this repository,
+    nothing uncommitted) and the catalogue-price bound. Exit 0 when nothing
+    is wrong, else 5. check_tree=False: tests on a scratch plan only."""
     plan_path = os.path.abspath(plan_path)
     probs = [f'[items] {p}' for p in bi.verify(plan_path)]
     try:
@@ -185,14 +210,10 @@ def verify(plan_path, allow_dirty=False, check_tree=None):
                      f'every unscored model dropped) projects '
                      f'${pr["smallest"][0]:.2f} > max_usd '
                      f'{plan["spend"]["max_usd"]} at catalogue prices')
-    if check_tree is None:
-        check_tree = br._inside(plan_path, ROOT)
-    dirty = br._dirty(os.path.join(d, 'runs')) if check_tree else []
+    dirty = br.tree_problems(plan_path, plan, d) if check_tree else []
     note = None
     if dirty:
-        msg = (f'uncommitted changes under src/, tests/ or bench/battery/ '
-               f'({len(dirty)}: {", ".join(dirty[:4])}'
-               f'{", ..." if len(dirty) > 4 else ""}) -- run will refuse')
+        msg = '; '.join(dirty) + ' -- run will refuse'
         if allow_dirty:
             note = msg
         else:
@@ -226,7 +247,7 @@ def score(run_dir):
     say(f'analysis set: blocks {a["blocks"]}, {len(a["states"])} states'
         + ('' if a['sufficient'] else
            f' -- fewer than {a["blocks_min"]} blocks: select will exit 6, '
-           f'resume the run'))
+           f'no selection from this run'))
     say('baselines: ' + ', '.join(f'{k} {v:.4f}' if v is not None else
                                   f'{k} n/a'
                                   for k, v in s['baselines'].items()))
@@ -306,20 +327,23 @@ def parser():
 
 
 def main(argv=None, opener=urllib.request.urlopen, sleep=time.sleep,
-         now=time.monotonic):
+         now=time.monotonic, check_tree=True):
     """Exit code of one subcommand. opener, sleep and now reach the run
-    unchanged: tests pass a stand-in API and a fake clock."""
+    unchanged: tests pass a stand-in API and a fake clock. check_tree=False
+    (tests on a scratch plan only; no argument sets it) skips verify's and
+    run's checks that the plan and the code are the committed ones."""
     a = parser().parse_args(argv)
     if a.cmd == 'make-items':
         return make_items(a.plan, a.force)
     if a.cmd == 'verify':
-        return verify(a.plan, a.allow_dirty)
+        return verify(a.plan, a.allow_dirty, check_tree)
     if a.cmd == 'run':
         try:
             return br.run(a.plan, a.out, auth=a.auth, max_usd=a.max_usd,
                           deadline_min=a.deadline_min,
                           concurrency=a.concurrency, per_model=a.per_model,
-                          opener=opener, sleep=sleep, now=now)
+                          opener=opener, sleep=sleep, now=now,
+                          check_tree=check_tree)
         except (OSError, ValueError, KeyError) as ex:
             return _refuse(f'run: {type(ex).__name__}: {ex}')
     if a.cmd == 'score':

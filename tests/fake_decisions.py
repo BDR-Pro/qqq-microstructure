@@ -8,7 +8,10 @@
 # faults (impostor build, provider splits, 429, a 502 storm, 401, no cost,
 # slow, a key in an error body). It reads each question the way a model
 # must: the name from the backticks in its instructions (ids may be opaque),
-# the row from the state, a negated wording from its text.
+# the row from the state, a negated wording from its text. Also: a model
+# that answers its first call and then times out on every one (hang), a 408
+# on each request's first try (flaky408), a cache that never expires
+# (sticky), and an account whose credit runs out (credit_after).
 #
 # make_test_plan writes a tiny plan + states + items + lock in the
 # contract's formats, built here rather than by battery_items so these
@@ -31,9 +34,10 @@ SENTINEL = 'sk-or-v1-SENTINEL0123456789abcdef'
 LEAK = json.dumps({'error': {'message': f'invalid request for key {SENTINEL}',
                              'metadata': {'echo': f'Bearer {SENTINEL}'}}})
 BEHAVIOURS = ('oracle', 'const', 'uniform', 'lethargic', 'rule', 'jevlike',
-              'posbias', 'joint', 'tickerprior', 'caching', 'impostor',
-              'split50', 'split95', 'ratelimit', 'storm', 'unauth', 'nocost',
-              'slow', 'leaky', 'nopin', 'partial')
+              'posbias', 'joint', 'tickerprior', 'caching', 'sticky',
+              'impostor', 'split50', 'split95', 'ratelimit', 'storm',
+              'unauth', 'nocost', 'slow', 'leaky', 'nopin', 'partial',
+              'hang', 'flaky408')
 TICKER = re.compile(r'`([^`]+)`')
 CACHE_CALLS = 10           # the caching model remembers a body this many calls
 
@@ -137,7 +141,7 @@ class FakeDecisions:
     def __init__(self, behaviours=None, cost=1e-4, costs=None,
                  limit_remaining=35.39, key_usage=14.61, label=SENTINEL,
                  key_status=200, clock=None, slow_s=30.0, retry_after='7',
-                 crash_at=None, delay=0.0):
+                 crash_at=None, delay=0.0, credit_after=None):
         self.behaviours, self.cost, self.costs = behaviours or {}, cost, \
             costs or {}
         self.limit_remaining, self.key_usage, self.label = \
@@ -145,6 +149,7 @@ class FakeDecisions:
         self.key_status, self.clock, self.slow_s = key_status, clock, slow_s
         self.retry_after, self.crash_at, self.delay = retry_after, crash_at, \
             delay
+        self.credit_after = credit_after
         self.lock = threading.Lock()
         self.calls, self.n_post, self.billed = [], 0, 0.0
         self.n_model, self.attempts, self.answered = Counter(), Counter(), \
@@ -210,9 +215,19 @@ class FakeDecisions:
                 raise Crash(f'injected crash at call {n}')
             if self.delay:
                 time.sleep(self.delay)
+            if self.credit_after is not None and n > self.credit_after:
+                raise _err(url, 402, '{"error":{"code":402,"message":'
+                                     '"Insufficient credits"}}')
             if beh == 'unauth':
                 raise _err(url, 401, '{"error":{"code":401,"message":'
                                      '"No auth credentials found"}}')
+            if beh == 'hang' and c > 1:   # answers W, then never again
+                if self.clock:
+                    self.clock.sleep(self.slow_s)
+                raise urllib.error.URLError(TimeoutError('timed out'))
+            if beh == 'flaky408' and a == 1:
+                raise _err(url, 408, '{"error":{"code":408,"message":'
+                                     '"Request timed out"}}')
             if beh == 'storm':
                 raise _err(url, 502, '{"error":"upstream"}')
             if beh == 'ratelimit' and a == 1:
@@ -253,10 +268,10 @@ class FakeDecisions:
                 self.inflight_model[model] -= 1
 
     def _answers(self, beh, model, body, data, c):
-        if beh == 'caching':
+        if beh in ('caching', 'sticky'):
             with self.lock:
                 hit = self.cache.get((model, data))
-            if hit and c - hit[0] <= CACHE_CALLS:
+            if hit and (beh == 'sticky' or c - hit[0] <= CACHE_CALLS):
                 return dict(hit[1])
         st, qs = body.get('state', {}), body.get('questions', {})
         h = hashlib.sha256(data).hexdigest()
@@ -279,7 +294,7 @@ class FakeDecisions:
             else:
                 p = oracle(st, t)
                 p = round(1 - p, 3) if neg else p
-                if beh in ('jevlike', 'caching'):
+                if beh in ('jevlike', 'caching', 'sticky'):
                     sd = 0.03 if beh == 'jevlike' else 0.05
                     p = round(_clip(p + random.Random(f'{h}|{qid}|{c}')
                                     .gauss(0, sd)), 2)
@@ -291,9 +306,10 @@ class FakeDecisions:
             out[qid] = p
         if beh == 'partial' and out:
             out.pop(list(out)[-1])
-        if beh == 'caching':
-            with self.lock:
-                self.cache[(model, data)] = (c, dict(out))
+        if beh in ('caching', 'sticky'):
+            with self.lock:         # sticky keeps its first answer
+                if beh == 'caching' or (model, data) not in self.cache:
+                    self.cache[(model, data)] = (c, dict(out))
         return out
 
 

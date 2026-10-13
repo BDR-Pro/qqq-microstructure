@@ -3113,6 +3113,127 @@ model. It refuses and logs nothing, and the message names the three ways
 forward: set the key, use `--proxy-auth` where a proxy adds it, or use
 `--engine local`. A night is never decided by an undeclared model.
 
+### The battery: randomized, outcome-free, and declared before it ran — `decider_battery.py`
+
+The owner then asked for the deciders to be tested here, with randomization,
+and for the best one to be chosen, built in and iterated. One live night says
+nothing about which model reads this state well. And the record can never be
+backtested (above). So the test is a **battery of randomized experiments
+whose right answers are known by construction**, and no market outcome
+enters it anywhere.
+
+**What it sends.** 377 requests per model, the same bytes to every model:
+- **24 synthetic states**, in 4 blocks of 6, half Stressed and half Calm.
+  - Each state draws 11 of the 17 tickers that have been in a q5 basket.
+  - Each name is given a condition: Ordinary (hold), Earnings or an Extreme
+    move (skip), or Moderate (unlabelled). Every state has at least 6
+    Ordinary names, so every label can be reached through `guard.rule`.
+  - Moves are folded coherently into the 5-day return and the volatility,
+    anchored to each ticker's real volatility on 2026-10-12.
+- **The real 2026-10-13 state (S0)**, byte-identical to what both hosted
+  models answered live. It is diagnostic only and carries no labels.
+- **What is randomized, every draw from a committed seed:**
+  - the question and name order;
+  - opaque question ids and key order;
+  - ±3 bps jitter, a date shift, and a paraphrase of the book sentence;
+  - which name gets an earnings flag (E4) or an extreme move of 1.5, 3 or 6
+    times its volatility (E5);
+  - which regime a state's QQQ row is swapped into (E6);
+  - a derangement of the tickers' feature rows, or anonymised labels (E7);
+  - negated questions (E8);
+  - the order in which every (model, request) pair is sent.
+
+**What it measures**, per model:
+
+| Gate | Passes if | Catches |
+|---|---|---|
+| G1 | ≥ 98% valid answers, ≥ 95% complete, ≥ 90% from one build and provider, p95 ≤ 60 s, median ≤ $0.01 | a model that cannot serve the night |
+| G2a | the excess wobble under nuisances is ≤ 0.05, and ≤ half the cross-name spread (which must be ≥ 0.01) | answers moved by order, ids or rounding; a lethargic model gets no credit for stability |
+| G2b | the lower bound of its context dependence is ≤ 0.05 | a joint answerer (Nimble measured 0.14) |
+| G3a | an earnings flag lowers p(hold) by ≥ 0.05 against the 10 untreated names, in ≥ 75% of states, Holm p < 0.05 | a model that ignores the one fact the question names |
+| G3b | a stressed QQQ row raises p(hedge) by ≥ 0.05 and raises the hedge rate, Holm p < 0.05 | a model that cannot see market stress |
+| G4 | ≤ 10% of decisions flip on a retest, under its handling | a coin |
+| G5 | decision accuracy Q ≥ the earnings rule's + 0.05 (the rule scores 0.599) | a model no better than the control |
+| G6 | its answers follow the feature rows, not the ticker names (Φ ≥ 0.5) | a model answering from its memory of a ticker |
+
+Q is the balanced decision accuracy through the declared rule: skips of
+skip-criteria names, holds of Ordinary names, hedges of Stressed states and
+no hedge in Calm ones, a quarter each. A noisy model is asked three times in
+a seeded order and averaged ("k3") if its retest noise or order sensitivity
+calls for it. That handling is fixed before Q is looked at.
+
+**The candidates.** All 18 paid decision models on OpenRouter, each pinned.
+Moving aliases (`~...`) and `:free` routes are refused. The incumbent
+(Perplexity Decider) and the reference (Jev) are never dropped for budget.
+
+**The selection rule, fixed in code** (`battery_score.select`):
+1. The eligible models are those that pass all eight gates.
+2. They are ranked by Q, with ties broken by AUC, lifts, flips, board
+   score, cost and id.
+3. **The incumbent is replaced only if:**
+   - it fails a gate (then the best eligible model is declared); or
+   - the leader beats it by at least 0.03 in Q, with the lower bound of a
+     paired, regime-stratified bootstrap above 0 at a Bonferroni-corrected
+     alpha.
+4. If nothing passes, the incumbent stays and the failures are recorded.
+5. The control, the reference and the 2.46 gate never change.
+
+**Spend.** The cap is $8, and a resume can raise it to at most $12.
+- The run refuses to start unless at least the cap plus $10 of credit
+  remains.
+- A pilot call per model measures the real cost first. If the projection
+  exceeds the cap, block 4 is dropped first, then the dearest unscored
+  models, and that decision is written once and never changed.
+
+**Integrity.**
+- **What the lock pins.** `lock_v1.json` pins every byte the run sends: plan
+  `56311a1b…`, items `2c1db06e…`, states `a2ac1bec…`, S0 `a974818a…`,
+  anchors `0b70e99f…`.
+- **When the run refuses.** It refuses a dirty tree, a lock mismatch, a
+  second run directory for the same plan, and a resume of a run that has
+  been scored. Whether to extend a run is never decided after seeing its
+  result.
+- **Auth.** With `--auth proxy` no key is ever read. Every printed or written
+  string is scrubbed, and `scrub-check` fails on anything key-shaped.
+
+**Built and reviewed before any live call.**
+- **The stand-ins.** Ten stand-in models with known behaviour run end to end
+  through the real items:
+  - The oracle and the noisy, Jev-like model pass.
+  - The constant, random, lethargic, ticker-prior and rule-clone models fail
+    the gates they should.
+  - The joint answerer fails G2b.
+- **The adversarial review.** An adversarial review (4 lenses, every finding
+  checked by a refuter) confirmed and fixed 16 of 19 findings. Among them:
+  - a failed pilot call could have dropped most candidates;
+  - a hung model could stall every block;
+  - an API cache could make a noisy model look deterministic, so the retest
+    now sends different bytes;
+  - a partial result could have been inspected before deciding to extend.
+
+**Its limits.**
+- **Coherence is not profit.** The battery picks the model that reads the
+  state as the question asks, and stably. Only the forward 63-night gate
+  measures value.
+- **Q weighs the hedge half equally with the skip half.** A model that never
+  skips but hedges well can qualify. That follows the repo's own reading,
+  that the hedge question is the one with evidence behind it, and it is
+  declared rather than patched.
+- **Stressed states are synthetic.**
+
+**The grader gains randomization inference** (`guard.randomization`). Each
+record's verdict now adds these lines below the unchanged gate line:
+- the skips and hedges it made;
+- the split of its edge into skip and hedge parts;
+- a sign-flip p-value;
+- an activity-matched null: random skip sets of the same size each night,
+  and the same number of hedged nights placed at random.
+
+Its label says whether the selection beats random choices of the same
+activity, or the edge is just exposure. The 63-night gate at t > 2.46 is
+untouched. Records outside the three declared slots print as
+`[not a gated record]`.
+
 ### Reading
 
 A decision model's speed is irrelevant to a book that trades twice a day in

@@ -282,6 +282,8 @@ def test_qmap_maps_every_sent_id_back():
                 assert f'`{shown.get(t, t)}`' in text, (it['item_id'], sent)
         if it['meta'].get('factors', {}).get('opaque'):
             assert all(re.fullmatch(r'q[0-9a-f]{8}', k) for k in q)
+        elif it['arm'] == 'Cb':
+            assert all(qm[k] + '_b' == k for k in q)
         elif it['arm'] != 'AN':
             assert all(qm[k] == k for k in q)
 
@@ -290,8 +292,17 @@ def test_e1_retest_and_runtime_orders():
     for sid, st in STATES.items():
         core = bi._body(st['state'], st['labels'])
         ca, cb = ITEMS[f'E1|{sid}|Ca'], ITEMS[f'E1|{sid}|Cb']
-        assert json.dumps(ca['body']) == json.dumps(cb['body']) == \
-            json.dumps(core)
+        assert json.dumps(ca['body']) == json.dumps(core)
+        # C^b: the same state and questions, in the same order, under other
+        # ids -- other bytes, so a cache cannot answer the retest with C^a
+        assert send(cb, 'm') != send(ca, 'm')
+        assert cb['body']['state'] == ca['body']['state']
+        assert [(cb['qmap'][k], v) for k, v in
+                cb['body']['questions'].items()] == \
+            list(ca['body']['questions'].items())
+        assert list(cb['body']['questions']) == \
+            [k + D['plan']['generator']['cb_id_suffix']
+             for k in ca['body']['questions']]
         qids = bi.qids_of(st['labels'])
         orders = []
         for i in range(1, 7):
@@ -556,7 +567,7 @@ def test_plan_gates_carry_every_threshold():
                        'modal_share_min': 0.90, 'p95_latency_s_max': 60.0,
                        'median_cost_usd_max': 0.01}
     assert g['G2a'] == {'ex_nuis_max': 0.05, 'rel_max': 0.5, 'D_min': 0.01}
-    assert g['G2b'] == {'ex_ctx_max': 0.05}
+    assert g['G2b'] == {'ex_ctx_max': 0.05, 'lb_alpha': 0.05}
     assert g['G3a'] == {'E_bar_max': -0.05, 'frac_neg_min': 0.75,
                         'holm_p_lt': 0.05}
     assert g['G3b'] == {'G_bar_min': 0.05, 'delta_h_gt': 0.0,

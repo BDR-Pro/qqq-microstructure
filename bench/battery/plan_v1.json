@@ -235,6 +235,7 @@
   "rng_state": "default_rng(SeedSequence(seeds.items, spawn_key=(s,))), s = 1..24 for S01..S24, s = 0 for S0",
   "rng_block": "default_rng(SeedSequence(seeds.items, spawn_key=(100 + b,))), b = 1..4",
   "e1_order_seed": "battery-v1|{state_id}|O{i}",
+  "cb_id_suffix": "_b",
   "e9_order_seed": "{date}|{state_sha}|{j}|order-v1|http",
   "state_sha": "sha256(json.dumps(state, sort_keys=True))[:12], as logged",
   "numpy": "2.5"
@@ -273,7 +274,8 @@
    "D_min": 0.01
   },
   "G2b": {
-   "ex_ctx_max": 0.05
+   "ex_ctx_max": 0.05,
+   "lb_alpha": 0.05
   },
   "G3a": {
    "E_bar_max": -0.05,

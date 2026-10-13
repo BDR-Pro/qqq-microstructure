@@ -9,7 +9,7 @@
 # spares I and R; validity is what G1 reads; the dispatch order is the
 # seed's. No network anywhere.
 
-import os, sys, json, hashlib
+import os, sys, json, shutil, hashlib
 from collections import Counter
 import pytest
 
@@ -30,6 +30,9 @@ def plan_of(tmp_path, cands=('fake/const',), inc=I, ref=R, name='plan',
 
 
 def go(plan, out, fake, sleeps=None, **kw):
+    # a scratch plan is outside the repository: the tree checks are
+    # tested on their own, in a scratch git repository (TestTheTree)
+    kw.setdefault('check_tree', False)
     return br.run(plan, out, opener=fake,
                   sleep=(sleeps.append if sleeps is not None
                          else lambda s: None), **kw)
@@ -304,16 +307,28 @@ def test_a_502_storm_is_tried_six_times_then_recorded_invalid(tmp_path):
     # six tries in the pilot, six more in the end-of-run pass, then final
     assert [(ln['attempts'], ln['final']) for ln in w] == [(6, False),
                                                             (6, True)]
-    storm = by_model(run, 'fake/storm')
+    lines = [ln for ln in br.read_lines(run) if ln['model'] == 'fake/storm'
+             and ln['attempts']]
+    assert all(ln['http_status'] == 502 and not ln['valid'] for ln in lines)
+    assert len(f.posts('fake/storm')) == 6 * len(lines)
+    # the breaker: three calls in a row failed every try -- parked in the
+    # main pass while R answered, again in the retry pass: the rest of its
+    # keys are settled 'unavailable', never sent (a resume sends nothing)
+    calls = br.read_calls(run)
+    storm = [c for c in calls.values() if c['model'] == 'fake/storm']
+    assert all(c['final'] and not c['valid'] for c in storm)
     sent = [c for c in storm if c['attempts']]
-    assert all(c['http_status'] == 502 and not c['valid'] for c in sent)
-    assert len(f.posts('fake/storm')) == 12 * len(sent)
-    assert br.read_calls(run)['fake/storm|E0|S0|PP']['error'] == \
-        'no W provider'
+    assert len(sent) == 1 + br.BREAKER                      # W + the trip
+    assert Counter(c['error'].split(' after ')[0] for c in storm
+                   if not c['attempts']) == \
+        {'unavailable': len(storm) - len(sent) - 1, 'no W provider': 1}
+    assert calls['fake/storm|E0|S0|PP']['error'] == 'no W provider'
+    assert meta_of(run)['breaker'] == {
+        'fake/storm': {'trips': 2, 'others_answered': True}}
     # jittered back-off: 1, 2, 4, 8, 16 s (+-25%) between the six tries
     band = Counter(next(b for b in br.BACKOFF if 0.75 * b <= s <= 1.25 * b)
                    for s in sleeps)
-    assert band == {b: 2 * len(sent) for b in (1, 2, 4, 8, 16)}
+    assert band == {b: len(lines) for b in (1, 2, 4, 8, 16)}
 
 
 def test_a_401_aborts_the_run_with_exit_2(tmp_path):
@@ -422,7 +437,7 @@ def test_a_slow_model_completes_under_the_fake_clock(tmp_path):
     plan = plan_of(tmp_path, cands=['fake/slow'])
     f = FakeDecisions(clock=clock, slow_s=30)
     assert br.run(plan, tmp_path / 'run', opener=f, sleep=clock.sleep,
-                  now=clock.now) == br.DONE
+                  now=clock.now, check_tree=False) == br.DONE
     slow = by_model(tmp_path / 'run', 'fake/slow')
     assert slow and all(c['valid'] and c['latency_ms'] >= 30000
                         for c in slow)
@@ -431,7 +446,7 @@ def test_a_slow_model_completes_under_the_fake_clock(tmp_path):
 def test_the_deadline_stops_sending_and_a_resume_finishes(tmp_path):
     clock = Clock()
     plan = plan_of(tmp_path, cands=['fake/slow'])
-    kw = dict(sleep=clock.sleep, now=clock.now)
+    kw = dict(sleep=clock.sleep, now=clock.now, check_tree=False)
     f = FakeDecisions(clock=clock, slow_s=30)
     assert br.run(plan, tmp_path / 'run', opener=f, deadline_min=5,
                   **kw) == br.DEADLINE
@@ -521,3 +536,261 @@ def test_the_stand_ins_answer_as_declared(tmp_path):
     assert all(0.46 <= v <= 0.61 for v in leth[:-1]) and leth[-1] == 0.558
     b2b = [ans('fake/caching', f'E9|S0|B2B{i}') for i in (1, 2, 3)]
     assert b2b[0] == b2b[1] == b2b[2]    # identical bytes, back to back
+
+
+# ------------------------------------------------- statuses the API sends --
+
+def test_a_408_is_a_timeout_and_is_retried(tmp_path):
+    plan = plan_of(tmp_path, cands=['fake/flaky408'])
+    assert go(plan, tmp_path / 'run', FakeDecisions()) == br.DONE
+    sent = [c for c in by_model(tmp_path / 'run', 'fake/flaky408')
+            if c['attempts']]
+    assert sent and all(c['valid'] and c['attempts'] == 2 for c in sent)
+
+
+def test_a_402_stops_sending_and_leaves_its_key_open(tmp_path):
+    plan = plan_of(tmp_path, cands=['fake/const'])
+    run = tmp_path / 'run'
+    f = FakeDecisions(credit_after=40)
+    assert go(plan, run, f, concurrency=1) == br.CAPPED
+    assert meta_of(run)['status'] == 'no_credit'
+    assert len(f.posts()) == 41                       # nothing after it
+    lines = br.read_lines(run)
+    hit = [ln for ln in lines if ln['http_status'] == 402]
+    assert len(hit) == 1 and hit[0]['attempts'] == 1 and not hit[0]['final']
+    assert not any(ln['final'] and not ln['valid'] for ln in lines)
+    # topped up, the same command finishes exactly the planned keys
+    assert go(plan, run, FakeDecisions()) == br.DONE
+    p, items, _ = br.read_plan(plan)
+    calls = br.read_calls(run)
+    assert set(calls) == br.planned(p, items)
+    assert all(c['valid'] for c in calls.values())
+
+
+# ----------------------------------------------------- the pilot's cost --
+
+def test_a_failed_pilot_is_projected_at_the_measured_cost(tmp_path):
+    # two unscored models whose W fails -- an unbilled 400, a 502 storm not
+    # yet retried -- are not $0.01 a call: that projected $1.14 here and
+    # dropped block 4 for everyone at a $1 cap
+    cands = [{'id': m, 'price_in': 4e-8, 'X': None}
+             for m in ('fake/leaky', 'fake/storm')]
+    plan = plan_of(tmp_path, cands)
+    go(plan, tmp_path / 'run', FakeDecisions(cost=1e-4), max_usd=1.0)
+    meta = meta_of(tmp_path / 'run')
+    assert meta['scale_down'] == {'dropped_blocks': [], 'dropped_models': []}
+    assert meta['pilot_unmeasured'] == ['fake/leaky', 'fake/storm']
+    assert meta['pilot_costs'] == pytest.approx(
+        {m: 1e-4 for m in ('fake/leaky', 'fake/storm', I, R)})
+    assert meta['projection']['usd'] < 0.8
+
+
+# ----------------------------------------------------------- the breaker --
+
+def test_a_model_that_goes_down_is_parked_and_the_rest_finish(tmp_path):
+    # fake/hang answers W, then every call times out after 60 s: six tries
+    # each, ~6.5 minutes a call. Unparked, its 56 keys held every block
+    # boundary until the 90-minute deadline, and every resume again.
+    clock = Clock()
+    plan = plan_of(tmp_path, cands=['fake/const', 'fake/rule', 'fake/hang'])
+    run = tmp_path / 'run'
+    f = FakeDecisions(clock=clock, slow_s=60)
+    assert br.run(plan, run, opener=f, sleep=clock.sleep, now=clock.now,
+                  check_tree=False) == br.DONE
+    calls = br.read_calls(run)
+    p, items, _ = br.read_plan(plan)
+    assert set(calls) == br.planned(p, items)
+    assert all(c['valid'] for c in calls.values() if c['model'] != 'fake/hang')
+    hang = by_model(run, 'fake/hang')
+    assert calls['fake/hang|E0|S0|W']['valid']
+    gone = [c for c in hang if (c['error'] or '').startswith('unavailable')]
+    assert len(gone) > 40 and all(c['final'] and not c['attempts']
+                                  for c in gone)
+    # parked after three calls in the main pass and three in the retry pass
+    # (plus what was already in flight), never more
+    assert len(f.posts('fake/hang')) <= 1 + 2 * (br.BREAKER + 2) * br.TRIES
+    assert meta_of(run)['breaker'] == {
+        'fake/hang': {'trips': 2, 'others_answered': True}}
+    assert go(plan, run, FakeDecisions()) == br.DONE   # nothing left to send
+
+
+def test_an_outage_parks_everyone_settles_nothing_and_resumes(tmp_path):
+    clock = Clock()
+    plan = plan_of(tmp_path, cands=['fake/const'])
+    run = tmp_path / 'run'
+    down = {m: 'hang' for m in ('fake/const', I, R)}
+    f = FakeDecisions(clock=clock, slow_s=60, behaviours=down)
+    assert br.run(plan, run, opener=f, sleep=clock.sleep, now=clock.now,
+                  check_tree=False) == br.CAPPED
+    assert meta_of(run)['status'] == 'outage'
+    finals = [ln for ln in br.read_lines(run) if ln['final']]
+    assert {ln['item_id'] for ln in finals} == {'E0|S0|W'}  # nothing settled
+    assert go(plan, run, FakeDecisions()) == br.DONE
+    p, items, _ = br.read_plan(plan)
+    calls = br.read_calls(run)
+    assert set(calls) == br.planned(p, items)
+    assert all(c['valid'] for c in calls.values())
+
+
+# ------------------------------------------------- the back-to-back triple --
+
+def test_the_back_to_back_triple_goes_out_one_member_at_a_time(
+        tmp_path, monkeypatch):
+    seen, send = [], br._Run._send
+
+    def spy(self, ex, flight, per, m, iid, final):
+        if 'B2B' in iid:
+            seen.append((m, iid, [v[1] for v in flight.values()
+                                  if v[0] == m and 'B2B' in v[1]]))
+        return send(self, ex, flight, per, m, iid, final)
+    monkeypatch.setattr(br._Run, '_send', spy)
+    cands = ['fake/const', 'fake/rule', 'fake/caching']
+    assert go(plan_of(tmp_path, cands), tmp_path / 'run',
+              FakeDecisions(delay=0.005)) == br.DONE
+    assert len(seen) == 3 * 5
+    assert all(busy == [] for _, _, busy in seen)      # never two in flight
+    for m in {m for m, _, _ in seen}:
+        assert [i for x, i, _ in seen if x == m] == \
+            [f'E9|S0|B2B{k}' for k in (1, 2, 3)]
+
+
+# -------------------------------------------------------------- resuming --
+
+def _redeclare(d, edit):
+    """Edit the items under the plan and renew their shas and the lock: a
+    consistent declaration, but not the one a run started with."""
+    items = [json.loads(ln) for ln in open(d / 'items_v1.jsonl')]
+    for it in items:
+        if edit(it):
+            it['body_sha256'] = hashlib.sha256(
+                json.dumps(it['body']).encode()).hexdigest()
+    (d / 'items_v1.jsonl').write_text(''.join(json.dumps(it) + '\n'
+                                              for it in items))
+    lock = json.load(open(d / 'lock_v1.json'))
+    lock['items'] = hashlib.sha256((d / 'items_v1.jsonl').read_bytes()) \
+        .hexdigest()
+    (d / 'lock_v1.json').write_text(json.dumps(lock))
+
+
+def test_a_resume_goes_on_only_with_the_bytes_it_started_with(tmp_path):
+    plan = plan_of(tmp_path, cands=['fake/const'])
+    run = tmp_path / 'run'
+    with pytest.raises(Crash):
+        go(plan, run, FakeDecisions(crash_at=40))
+    meta = meta_of(run)
+    assert set(meta['shas']) == {'plan', 'items', 'states', 's0', 'anchors',
+                                 'lock'}
+
+    def edit(it):
+        if it['item_id'] != 'E1|S02|O1':
+            return False
+        it['body']['state'] = dict(it['body']['state'], date='20261014')
+        return True
+    _redeclare(tmp_path / 'plan', edit)
+    f = FakeDecisions()
+    assert go(plan, run, f) == br.REFUSED and f.calls == []
+
+
+def test_a_scored_run_is_frozen(tmp_path):
+    plan = plan_of(tmp_path)
+    run = tmp_path / 'run'
+    with pytest.raises(Crash):
+        go(plan, run, FakeDecisions(crash_at=30))
+    for name in ('summary.json', 'selection_v1.json'):
+        (run / name).write_text('{}')
+        f = FakeDecisions()
+        assert go(plan, run, f) == br.REFUSED and f.calls == []
+        os.remove(run / name)
+    assert go(plan, run, FakeDecisions()) == br.DONE
+
+
+# --------------------------------------------------------------- the tree --
+
+def _git(repo, *args):
+    import subprocess
+    subprocess.run(['git', '-C', str(repo), '-c', 'user.name=t', '-c',
+                    'user.email=t@example.com', '-c', 'commit.gpgsign=false',
+                    *args], check=True, capture_output=True)
+
+
+@pytest.fixture
+def repo(tmp_path, monkeypatch):
+    """A scratch repository with the plan committed in bench/battery, and
+    the runner's ROOT pointed at it."""
+    root = tmp_path / 'repo'
+    plan = fd.make_test_plan(root / 'bench' / 'battery', ['fake/const'], I, R)
+    (root / 'src').mkdir()
+    (root / 'src' / 'a.py').write_text('x = 1\n')
+    (root / 'tests').mkdir()
+    (root / 'tests' / 't.py').write_text('y = 1\n')
+    _git(root, 'init', '-q')
+    _git(root, 'add', '-A')
+    _git(root, 'commit', '-qm', 'the declaration')
+    monkeypatch.setattr(br, 'ROOT', str(root))
+    return root, plan
+
+
+def tree_go(plan, out, f=None):
+    f = f or FakeDecisions()
+    return br.run(plan, out, opener=f, sleep=lambda s: None), f
+
+
+def test_a_clean_tree_runs_and_records_it(repo):
+    root, plan = repo
+    rc, f = tree_go(plan, root / 'bench' / 'battery' / 'runs' / 'v1')
+    assert rc == br.DONE and f.posts()
+    meta = meta_of(root / 'bench' / 'battery' / 'runs' / 'v1')
+    assert meta['tree'] == 'clean' and meta['sessions'][0]['tree'] == 'clean'
+    assert meta['commit'] and meta['sessions'][0]['commit'] == meta['commit']
+    assert meta['plan'] == 'bench/battery/plan_v1.json'
+
+
+@pytest.mark.parametrize('out', ['elsewhere/v1', 'src', 'bench/battery',
+                                 'bench/battery/runs',
+                                 'bench/battery/runs/a/b'])
+def test_the_run_directory_is_one_child_of_runs(repo, out):
+    root, plan = repo
+    (root / 'src' / 'b.py').write_text('dirty\n')      # an out of src/ hid it
+    rc, f = tree_go(plan, root / out)
+    assert rc == br.REFUSED and f.calls == []
+
+
+@pytest.mark.parametrize('dirty', ['src/a.py', 'src/new.py', 'tests/new.py',
+                                   'bench/battery/notes.txt'])
+def test_an_uncommitted_change_is_refused(repo, dirty):
+    root, plan = repo
+    (root / dirty).write_text('changed\n')
+    rc, f = tree_go(plan, root / 'bench' / 'battery' / 'runs' / 'v1')
+    assert rc == br.REFUSED and f.calls == []
+
+
+def test_a_plan_outside_the_repository_or_uncommitted_is_refused(repo,
+                                                                tmp_path):
+    root, plan = repo
+    for where in (tmp_path / 'copy', root / 'reports' / 'battery'):
+        shutil.copytree(os.path.dirname(plan), where)
+        rc, f = tree_go(where / 'plan_v1.json', where / 'runs' / 'v1')
+        assert rc == br.REFUSED and f.calls == []
+    # verify's view of the same: the committed plan is clean
+    p, items, d = br.read_plan(plan)
+    assert br.tree_problems(plan, p, d) == []
+    q, _, e = br.read_plan(root / 'reports' / 'battery' / 'plan_v1.json')
+    probs = br.tree_problems(str(root / 'reports' / 'battery' /
+                                 'plan_v1.json'), q, e)
+    assert any(x.startswith('not committed') for x in probs)
+
+
+def test_a_second_run_of_a_plan_is_refused_on_disk_and_in_history(repo):
+    root, plan = repo
+    runs = root / 'bench' / 'battery' / 'runs'
+    assert tree_go(plan, runs / 'v1')[0] == br.DONE
+    _git(root, 'add', '-A')
+    _git(root, 'commit', '-qm', 'the run')
+    rc, f = tree_go(plan, runs / 'v2')                 # v1 is on disk
+    assert rc == br.REFUSED and f.calls == []
+    shutil.rmtree(runs / 'v1')                         # ... and then lost
+    _git(root, 'add', '-A')
+    _git(root, 'commit', '-qm', 'lose the run')
+    for out in ('v1', 'v2'):
+        rc, f = tree_go(plan, runs / out)
+        assert rc == br.REFUSED and f.calls == []

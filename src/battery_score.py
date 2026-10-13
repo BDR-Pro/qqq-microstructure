@@ -19,6 +19,9 @@
 #   - only complete blocks, and only each model's modal (build, provider),
 #     are analysed: a model is judged as the one object it would be
 #     declared as
+#   - only a finished run is scored -- done, or capped at the ceiling -- so
+#     nobody sees a partial result and then decides whether to extend it;
+#     and only against the bytes the run recorded
 #   - the incumbent stays unless a challenger clears a margin AND a
 #     Bonferroni bootstrap bound: the top model is the best of up to 17, so
 #     its lead is inflated by the selection itself
@@ -46,6 +49,8 @@ SLACK = 1e-12
 # rho_b2b well below 1 means back-to-back identical bytes vary less than
 # the same bytes spread over the run: a cache. Report-only, never a gate.
 CACHE_RHO_FLAG = 0.25
+# a variance this small is zero: np.var of identical floats can be 1e-33
+TINY = 1e-12
 # Q counts per state and decision set: skip-criteria skips and names,
 # Ordinary skips and names, hedges and decision sets, Extreme-only skips
 # and names (for Q_noE).
@@ -54,8 +59,9 @@ QROW = ['crit_skip', 'crit_n', 'ord_skip', 'ord_n', 'hedge', 'sets',
 
 
 class InsufficientAnalysisSet(SystemExit):
-    """Fewer complete blocks than the plan's floor: select exits 6 and the
-    run must be resumed (spec section 7)."""
+    """Fewer complete blocks than the plan's floor: select exits 6 and
+    writes no selection (spec section 7). Only a finished run is scored, so
+    this is a finished run's outcome."""
 
     def __init__(self, msg):
         super().__init__(EXIT_INSUFFICIENT)
@@ -120,22 +126,53 @@ def plan_of(run_dir, plan_path=None):
     raise FileNotFoundError(f'plan {p} named by run_meta.json not found')
 
 
+def finished(meta, plan):
+    """(True, None) when a run may be scored, else (False, why). Done; or
+    capped with its last session at the spend ceiling, where a resume could
+    not send another call. Anything else -- running (a crash), deadline,
+    capped below the ceiling, out of credit, an outage -- is resumed first:
+    whether to extend a run is never decided after seeing its result."""
+    st = (meta or {}).get('status')
+    if st == 'done':
+        return True, None
+    ceil = (plan.get('spend') or {}).get('max_usd_ceiling')
+    last = ((meta or {}).get('sessions') or [{}])[-1]
+    if st == 'capped' and _ok(ceil) and _ok(last.get('max_usd')) and \
+            last['max_usd'] >= ceil - 1e-9:
+        return True, None
+    more = f' (a capped run goes on up to --max-usd {ceil})' \
+        if st == 'capped' else ''
+    return False, (f'the run is not finished (status {st}): resume it with '
+                   f'the same command{more}, then score')
+
+
 def check_lock(plan_path, plan, meta):
     """Refuse to score against bytes other than the ones the run used: the
-    plan sha run_meta recorded, and the lock beside the plan."""
+    shas run_meta recorded when the run started, and the lock beside the
+    plan -- which a run cannot do without."""
     d = os.path.dirname(os.path.abspath(plan_path))
     shas = {'plan': _sha_file(plan_path)}
     for k in ('states', 'items', 's0', 'anchors'):
         p = os.path.join(d, plan['files'].get(k) or '')
         if plan['files'].get(k) and os.path.exists(p):
             shas[k] = _sha_file(p)
-    want = (meta or {}).get('plan_sha') or (meta or {}).get('plan_sha256')
-    if want and want != shas['plan']:
-        raise ValueError('the plan does not match the run (run_meta '
-                         'plan_sha) -- refusing to score')
     lock = os.path.join(d, plan['files'].get('lock',
                                              f'lock_{plan["version"]}.json'))
+    if os.path.exists(lock):
+        shas['lock'] = _sha_file(lock)
+    meta = meta or {}
+    want = dict(meta.get('shas') or {})
+    want['plan'] = meta.get('plan_sha') or meta.get('plan_sha256') or \
+        want.get('plan')
+    want['items'] = meta.get('items_sha') or want.get('items')
+    bad = sorted(k for k, v in want.items() if v and shas.get(k) != v)
+    if bad:
+        raise ValueError(f'{", ".join(bad)} do not match the run (run_meta) '
+                         f'-- refusing to score')
     if not os.path.exists(lock):
+        if meta:
+            raise ValueError('no lock beside the plan -- refusing to score '
+                             'a run against undeclared bytes')
         return shas, 'absent'
     lk = _json(lock)
     bad = [k for k in shas if k in lk and lk[k] != shas[k]]
@@ -287,6 +324,33 @@ def ex(sq, phi):
         return float('nan')
     return math.sqrt(max(0.0, float(np.mean(sq)) - (phi if _ok(phi)
                                                      else 0.0)))
+
+
+def ex_lb(dev, rep, strata, phi_factor, B, seed, alpha):
+    """The one-sided (1 - alpha) lower bound of ex: per state s, dev[s] and
+    rep[s] are (sum, count) of its squared deviations and of its repeat
+    pairs' (p_Ca - p_Cb)^2 / 2. States are resampled with replacement within
+    their stratum -- a state's deviations and its repeat pairs move
+    together, so phi's own sampling error is in the bound -- and the bound
+    is sqrt(max(0, alpha quantile of mean dev - phi_factor * mean rep)). A
+    model with no effect at all clears it whatever its noise; the point
+    estimate alone fails a noisy one by chance (64 answers against 0.05^2).
+    nan without deviations."""
+    ss = [s for s in strata if dev.get(s, (0, 0))[1] or rep.get(s, (0, 0))[1]]
+    if not any(dev.get(s, (0, 0))[1] for s in ss):
+        return float('nan')
+    w = strat_weights([strata[s] for s in ss], B, seed)
+    d = np.asarray([dev.get(s, (0.0, 0))[0] for s in ss], float)
+    dn = np.asarray([dev.get(s, (0.0, 0))[1] for s in ss], float)
+    r = np.asarray([rep.get(s, (0.0, 0))[0] for s in ss], float)
+    rn = np.asarray([rep.get(s, (0.0, 0))[1] for s in ss], float)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        msq = (w @ d) / (w @ dn)
+        phi = np.where(w @ rn > 0, phi_factor * (w @ r) / (w @ rn), 0.0)
+    x = (msq - phi)[np.isfinite(msq)]
+    if not len(x):
+        return float('nan')
+    return math.sqrt(max(0.0, float(np.quantile(x, alpha))))
 
 
 def neg_coherence(pairs, B, seed):
@@ -481,13 +545,16 @@ def score_model(P, cx):
     G = cx.G
     out = {}
 
-    # noise primitives, on the core states
-    pc, sq_rep, disp, sq_O = {}, [], [], []
+    # noise primitives, on the core states (C^b is C^a under other ids: a
+    # fresh draw of the same question, which no response cache can serve)
+    pc, sq_rep, disp, sq_O, rep_s = {}, [], [], [], {}
     for s in cx.A:
         st = cx.states[s]
         ca, cb = g('E1', s, 'Ca'), g('E1', s, 'Cb')
         if ca and cb:
-            sq_rep += [(ca[x] - cb[x]) ** 2 / 2 for x in ca if x in cb]
+            v = [(ca[x] - cb[x]) ** 2 / 2 for x in ca if x in cb]
+            sq_rep += v
+            rep_s[s] = (float(sum(v)), len(v))
         m = mean_p([ca, cb])
         if m:
             pc[s] = m
@@ -594,13 +661,14 @@ def score_model(P, cx):
                  'factor_ols': fac}
 
     # E3: context independence on the synthetic states; S0 apart
-    sq_X, by_t = [], {}
+    sq_X, by_t, dev_s = [], {}, {}
     for s in cx.A:
         c = g('E3', s, 'CX')
         if not c or s not in pc:
             continue
         d = [(c[x] - pc[s][x]) ** 2 for x in c if x in pc[s]]
         sq_X += d
+        dev_s[s] = (float(sum(d)), len(d))
         by_t.setdefault(str(cx.meta('E3', s, 'CX').get('cx_type')),
                         []).extend(d)
     s0c = mean_p([P.get(i) for i, it in cx.item.items()
@@ -611,7 +679,14 @@ def score_model(P, cx):
             if it['state_id'] == 'S0' and it['arm'].startswith('alone_') \
                     and P.get(i):
                 sq_S0 += [(P[i][x] - s0c[x]) ** 2 for x in P[i] if x in s0c]
-    out['E3'] = {'ex_ctx': ex(sq_X, phi), 'n_answers': len(sq_X),
+    g2b = G['G2b']
+    # strata: the CX type (6, 1 or 1 questions asked), so every resample
+    # keeps the declared mix
+    cxt = {s: str(cx.meta('E3', s, 'CX').get('cx_type')) for s in cx.A}
+    out['E3'] = {'ex_ctx': ex(sq_X, phi),
+                 'ex_ctx_lb': ex_lb(dev_s, rep_s, cxt, hg['phi_factor'],
+                                    cx.B, cx.seed, g2b['lb_alpha']),
+                 'lb_alpha': g2b['lb_alpha'], 'n_answers': len(sq_X),
                  'ex_by_cx_type': {t: ex(v, phi) for t, v in
                                    sorted(by_t.items())},
                  'S0': {'rms_alone': math.sqrt(_mean(sq_S0)) if sq_S0
@@ -770,13 +845,13 @@ def score_model(P, cx):
                               or (_ok(rho) and rho <= fl['rho_neg_max'])),
                  'S0': {'CE': _mean(ce0), 'n': len(ce0)}}
 
-    out['E9'] = score_s0(P, cx, h, phi, s0c, ex_O)
+    out['E9'] = score_s0(P, cx, h, phi, s0c)
     out['q_counts'] = {k: [list(map(float, r)) for r in rows[k]]
                        for k in ('k1', 'k3')}
     return out
 
 
-def score_s0(P, cx, h, phi, ctrl, ex_O):
+def score_s0(P, cx, h, phi, ctrl):
     """E9: the real state S0 -- its decisions under k1, k3 and h against
     the rule's, the back-to-back caching ratio, and its nuisance and order
     deviations. Diagnostic only: S0 carries no labels."""
@@ -803,9 +878,13 @@ def score_s0(P, cx, h, phi, ctrl, ex_O):
                       for x in ps[0] if all(x in p for p in ps)])
 
     vb, vr = var(b2b), var(reps)
-    rho = vb / vr if _ok(vb) and _ok(vr) and vr > 0 else float('nan')
-    still = _ok(vb) and _ok(vr) and vb == 0 and vr == 0 and \
-        _ok(ex_O) and ex_O > 0
+    rho = vb / vr if _ok(vb) and _ok(vr) and vr > TINY else float('nan')
+    # identical bytes answered identically all run long, while the same
+    # question under other ids (C^b) is not: a cache that never expires
+    # (rho is 0/0 there). A deterministic model answers C^b as C^a, phi 0,
+    # however much a reordering moves it -- that is order, not a cache.
+    still = _ok(vb) and _ok(vr) and vb <= TINY and vr <= TINY and \
+        _ok(phi) and phi > TINY
 
     def dev(ps):
         sq = [(p[x] - ctrl[x]) ** 2 for p in ps if p for x in p
@@ -823,8 +902,8 @@ def score_s0(P, cx, h, phi, ctrl, ex_O):
             'caching_flag': bool((_ok(rho) and rho < cache) or still),
             'caching_reason': 'rho_b2b < %g' % cache
             if _ok(rho) and rho < cache else
-            ('identical bytes, identical answers; reorderings vary'
-             if still else None),
+            ('identical bytes, identical answers; the same question under '
+             'new ids varies' if still else None),
             'nuisance': dev([arm.get('S0V')]),
             'order': dev([arm.get(f'S0O{j}{c}') for j in range(3)
                           for c in 'ab']),
@@ -901,6 +980,10 @@ def score(run_dir, plan_path=None):
     plan_path = plan_of(run_dir, plan_path)
     L = load(plan_path)
     plan, states, s0 = L['plan'], L['states'], L['s0']
+    if meta:        # without run_meta only a test's hand-made log, by path
+        ok, why = finished(meta, plan)
+        if not ok:
+            raise ValueError(why)
     refuse_aliases(models_of(plan))
     shas, lock = check_lock(plan_path, plan, meta)
     items = {it['item_id']: it for it in L['items']}
@@ -919,8 +1002,10 @@ def score(run_dir, plan_path=None):
                                 G['analysis_set']['block_final_share_min'])
     A_states = sorted(s for s in states if states[s]['block'] in A)
     cx = Ctx(plan, states, L['items'], s0, A_states)
+    # within the analysis set: S0's items count where they were dispatched,
+    # so a block that never ran takes none of them in with it
     planned_A = [i for i, it in items.items() if it['experiment'] != 'E0'
-                 and (it['state_id'] == 'S0' or it['block'] in A)]
+                 and it['block'] in A]
     res, holm_in = {}, {}
     for m in models:
         o = ops[m]
@@ -1001,7 +1086,9 @@ def gates(r, G, q_rule, hp):
         'G2a': bool(_le(r['E2']['ex_nuis'], G['G2a']['ex_nuis_max'])
                     and _le(r['E2']['rel'], G['G2a']['rel_max'])
                     and _ge(r['noise']['D'], G['G2a']['D_min'])),
-        'G2b': bool(_le(r['E3']['ex_ctx'], G['G2b']['ex_ctx_max'])),
+        # the bound, not the point: no context effect passes whatever the
+        # noise (pre-declared with the plan's lb_alpha)
+        'G2b': bool(_le(r['E3']['ex_ctx_lb'], G['G2b']['ex_ctx_max'])),
         'G3a': bool(_le(e4['E_bar'], G['G3a']['E_bar_max'])
                     and _ge(e4['frac_neg'], G['G3a']['frac_neg_min'])
                     and _ok(pa) and pa < G['G3a']['holm_p_lt']),
@@ -1048,7 +1135,7 @@ def choose(summary, plan):
     if not aset['sufficient']:
         raise InsufficientAnalysisSet(
             f'{len(aset["blocks"])} complete block(s) {aset["blocks"]} < '
-            f'{aset["blocks_min"]}: resume the run')
+            f'{aset["blocks_min"]}: no selection from this run')
     X = {c['id']: c.get('X') for c in plan['candidates']}
     E = [m for m in models if not models[m]['failed']]
     ranked = rank(E, models, X)
@@ -1088,9 +1175,13 @@ def choose(summary, plan):
     if branch != 'none' and _ok(o.get('provider_share')) and \
             o['provider_share'] < 1 and o.get('pin_probe') == 'ok':
         pin = {'order': [o['provider']], 'allow_fallbacks': False}
+    # dated: whether the measured build names a date; an undated build is
+    # declared in guard as DECIDER = (pin, suffix, False), so its record is
+    # still the gated one (guard.decider_slot)
     decider = {'pin': dec, 'handling': handling, 'version': 'q1',
                'suffix': '#perm3.q1' if handling == 'k3' else '',
                'provider_pin': pin, 'build': o.get('build'),
+               'dated': _build_date(o.get('build')) is not None,
                'provider': o.get('provider')}
     ro = models[R]['ops'] if R in models else {}
     if R not in models or not models[R]['gates']['G1']:
@@ -1197,19 +1288,24 @@ def iterate_outcome(summary, plan):
 
 def select(run_dir):
     """Read summary.json, apply section 3 (or section 4 in iterate mode) and
-    write the outcome beside it. A summary missing, or scored before the
-    last calls landed (a resume), is re-scored first: score is
-    deterministic, so this only ever brings it up to date."""
+    write the outcome beside it. Only for a finished run (see finished). A
+    summary missing, or scored before the last calls landed, is re-scored
+    first: score is deterministic, so this only ever brings it up to date.
+    An outcome already written from another summary is never replaced."""
+    meta = _json(os.path.join(run_dir, 'run_meta.json'))
+    plan_path = plan_of(run_dir)
+    plan = _json(plan_path)
+    ok, why = finished(meta, plan)
+    if not ok:
+        raise ValueError(why)
     sp = os.path.join(run_dir, 'summary.json')
     cp = os.path.join(run_dir, 'calls.jsonl')
     cur = _sha_file(cp) if os.path.exists(cp) else None
     if not os.path.exists(sp) or _json(sp).get('calls_sha256') != cur:
         score(run_dir)
     summary = _json(sp)
-    plan_path = plan_of(run_dir)
     if _sha_file(plan_path) != summary['plan_sha256']:
         raise ValueError('summary.json was scored against another plan')
-    plan = _json(plan_path)
     if plan.get('mode') == 'iterate':
         out = iterate_outcome(summary, plan)
         name = f'iter_r{plan["round"]}_outcome.json' if 'round' in plan \
@@ -1223,8 +1319,17 @@ def select(run_dir):
         name = f'selection_{plan.get("version", "v1")}.json'
     out['summary_sha256'] = _sha_file(sp)
     out['plan_sha256'] = summary['plan_sha256']
+    out['run'] = {'status': meta.get('status'),
+                  'sessions': [{k: x.get(k) for k in (
+                      'commit', 'tree', 'max_usd', 'status', 'code_changed')}
+                      for x in meta.get('sessions') or []]}
     out = _clean(out)
-    with open(os.path.join(run_dir, name), 'w', encoding='utf-8') as f:
+    path = os.path.join(run_dir, name)
+    old = _json(path) if os.path.exists(path) else None
+    if old is not None and old.get('summary_sha256') != out['summary_sha256']:
+        raise ValueError(f'{name} already holds the outcome of another '
+                         f'summary -- it is never replaced')
+    with open(path, 'w', encoding='utf-8') as f:
         f.write(json.dumps(out, indent=1) + '\n')
     return out
 
