@@ -1,44 +1,47 @@
 # Part of qqq-microstructure.
 #
-# Tonight's SHADOW decisions (guard.py, RESULTS 27), made entirely on this
-# machine: no hosted API, no cloud runner. The model, its server and the
-# questions never leave 127.0.0.1; market data comes in from Yahoo (as
-# everywhere in this repo) and the answers go out by git push.
+# Tonight's SHADOW decisions (guard.py, RESULTS 27), run on the owner's own
+# machine. It never trades.
 #
-# The decider is Kev 1.0 (github.com/jaredpalmer/kev, Apache-2.0 code and
-# weights), an open-weight Jev lookalike, in ggml-org's GGUF conversion,
-# served by llama.cpp's own /v1/systemone server -- one native program, no
-# Python ML stack. Checked against Kev's own reference server before it was
-# declared (RESULTS 27): the same answers to within 0.015.
+# Two engines. The record's is HOSTED (the owner: "local host or API through
+# OpenRouter, it is okay"):
+#   - the decider: Perplexity Decider v1.1 27B, the best model on both
+#     independent decision boards that can be reached (Decision Index 62.75,
+#     Jev 60.11; JevBench intelligence 75.7, Jev 63.6; calibration on par);
+#   - the reference: Jev 1.13 itself;
+#   - both through OpenRouter's Decisions API (Jev's request shape; the
+#     response names the dated build and the provider, which the record
+#     logs), with OPENROUTER_API_KEY from this machine's environment;
+#   - beside them the earnings-rule control, on the identical state.
+# LOCAL is Kev 1.0 (Apache-2.0, an open-weight Jev lookalike) in llama.cpp's
+# own /v1/systemone server on 127.0.0.1, no key, no network for the model.
 #
-#   python src/decide_local.py --setup      once: own clone, download, verify
-#   python src/decide_local.py --schedule   once: weekday task (Windows) or
-#                                           systemd timer (Linux)
+#   python src/decide_local.py --setup      once: own clone (and, for
+#                                           --engine local, the model)
 #   python src/decide_local.py --dry-run    any time: ask and print, write
 #                                           nothing
+#   python src/decide_local.py --schedule   once: weekday task (Windows) or
+#                                           systemd timer (Linux)
 #   python src/decide_local.py              what the schedule runs
+#   add --engine local to any of these for Kev on this machine
 #
-# Every run checks, before anything is asked:
-#   - the model file and the llama.cpp release against pinned sha256 sums;
-#   - that the server it started is the pinned decision model, refuses a
-#     missing or wrong key, and was shaped by no config file or LLAMA_*
-#     variable (llama-server reads both silently);
-#   - that the answer comes back under the pinned name, which carries the
-#     file, its revision, the llama.cpp build and the platform -- a different
-#     build is a different decider and starts its own record.
+# Hosted: every answer must come back from the pinned model (any dated build
+# of it; the build and provider name the record). Local: the model file and
+# the llama.cpp release are checked against pinned sha256 sums every night;
+# the server must be the pinned decision model, refuse a missing or wrong
+# key, and read no config file or LLAMA_* variable; its name carries the
+# file, revision, llama.cpp build and platform.
 #
 # The schedule decides from a DEDICATED clone (<home>/repo), never from your
 # working copy: it pulls, decides, commits only reports/guard_log.csv and
 # pushes. A night's decisions count only if they reach the remote before that
-# night's close; any left unpushed from an earlier night are dropped.
+# night's close; any left unpushed from an earlier night are dropped. It runs
+# at 09:17 ET and again at 13:47 ET (a sleeping PC, no network yet, a basket
+# registered late); a night already decided is never asked again, and an
+# answer that arrives after the 15:50 ET cutoff is not logged.
 #
-# Speed: the server runs 16 parallel slots, so llama.cpp reads the ~650-token
-# state once per request and shares it across the questions (with one slot it
-# re-reads it for every question: 532 s instead of 85 s on 4 cloud vCPUs, and
-# no closer to Kev's reference -- RESULTS 27). The schedule tries at 09:17 ET
-# and again at 13:47 ET (a sleeping PC, no network yet, a basket registered
-# late); a night already decided is never asked again, and an answer that
-# arrives after the 15:50 ET cutoff is not logged.
+# Local speed: 16 parallel slots let llama.cpp read the ~650-token state once
+# per request (85 s a night on 4 cloud vCPUs; one slot took 532 s).
 
 import os, re, sys, json, time, shutil, socket, secrets, hashlib, \
     platform, argparse, subprocess, tarfile, zipfile, datetime as dt
@@ -70,6 +73,11 @@ MODELS = {
                     'Kev-4B-Q8_0.gguf',
                     '7c2ebed90560522c2801389db482ac1d'
                     'c4c36d828f201f6074c1d60e433948da', 4483801504),
+    'kev-9b-q8_0': ('ggml-org/Kev-9B-GGUF',
+                    'ec2bbfe6620218aee2e01cc93bb78dee2a96ed58',
+                    'Kev-9B-Q8_0.gguf',
+                    'd30b225bfdc985d1856bb04a990be760'
+                    '08d0cf40dccbf78938e3069744bc614c', 9529735648),
     'kev-4b-bf16': ('ggml-org/Kev-4B-GGUF',
                     'd924f2e2c3872da8b8aaf3eb4453b4126deceb79',
                     'Kev-4B-BF16.gguf',
@@ -82,6 +90,16 @@ HF_URL = 'https://huggingface.co/{}/resolve/{}/{}'
 NP = 16                     # parallel slots: questions share the state's
                             # prefill (a basket of up to 15 names + the hedge)
 CTX = 16384                 # the slots' shared KV pool (~750 tokens each)
+
+# The hosted engine (RESULTS 27): decision models on OpenRouter's Decisions
+# API, which takes Jev's request shape and answers with the versioned model
+# and the provider. backend in the log -> pinned model id.
+DECISIONS = 'https://openrouter.ai/api/alpha/decisions'
+HOSTED = {
+    'http': 'perplexity/pplx-decider-v1.1-27b',  # the decider: best on both
+                                                 # independent boards
+    'jev': 'typesafe/jev-1.13',                  # the reference: Jev itself
+}
 TIMEOUT = 3 * 3600          # one request of 12 questions, worst case on a CPU
 TASK = 'qqq-guard-decider'
 RUNS_ET = ('09:17', '13:47')            # a try, and a catch-up
@@ -468,10 +486,15 @@ def night_state(today, build, t, cache=True):
 
 
 def run(m, dry_run=False, threads=None, server=Server, tonight=None,
-        path=None, now=None):
-    """Decide tonight with the control (earnings rule) and the decider (Kev),
-    or with --dry-run just ask and print. Returns the backends that logged.
-    A failure of one backend never stops the other from being logged.
+        path=None, now=None, engine='hosted', opener=None):
+    """Decide tonight, or with --dry-run just ask and print. Returns the
+    backends that logged. A failure of one never stops the others.
+
+    engine 'hosted' (the record's): the control, the decider (Perplexity
+    Decider) and the reference (Jev), the last two through OpenRouter's
+    Decisions API with OPENROUTER_API_KEY from this machine's environment.
+    engine 'local': the control and Kev on a local llama.cpp, no key.
+
     `now` pins the clock (tests); left out, every answer is stamped with the
     real time it arrived."""
     import guard
@@ -480,32 +503,49 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
     today = t.strftime('%Y%m%d')
     cutoff = t.replace(hour=guard.CUTOFF[0], minute=guard.CUTOFF[1],
                        second=0, microsecond=0)
+    backends = ['rule'] + (list(HOSTED) if engine == 'hosted' else ['http'])
     if not dry_run:
         if t >= cutoff:
             raise SystemExit(f'{t:%H:%M} ET is past the cutoff -- nothing '
                              f'to decide tonight')
         log = guard.read_log(path)
-        todo = [b for b in ('rule', 'http')
+        todo = [b for b in backends
                 if not ((log.date == today) & (log.backend == b)).any()]
         if not todo:
-            say(f'{today}: both backends already decided')
+            say(f'{today}: every backend already decided')
             return []
     else:
-        todo = ['rule', 'http']
-    if server is Server:
+        todo = backends
+    if engine == 'hosted':
+        key = os.environ.get('OPENROUTER_API_KEY')
+        if not key:
+            raise SystemExit('set OPENROUTER_API_KEY in this machine\'s '
+                             'environment (never in a file in the repo), or '
+                             'run --engine local')
+    elif server is Server:
         check_model(m)
         check_llama()
     today, names, state = night_state(today, tonight or guard.tonight, t,
                                       cache=not dry_run)
     done = []
-    if 'rule' in todo:
+
+    def once(b, ask):
         try:
-            guard.answer('rule', guard.ask_rule, names, today, state,
-                         dry_run=dry_run, path=path, now=now)
-            done.append('rule')
+            guard.answer(b, ask, names, today, state, dry_run=dry_run,
+                         path=path, now=now)
+            done.append(b)
         except SystemExit as ex:
-            say(f'rule: {ex}')
-    if 'http' in todo:
+            say(f'{b}: {ex}')
+        except Exception as ex:                 # never lose another's row
+            say(f'{b}: {type(ex).__name__}: {ex}')
+
+    if 'rule' in todo:
+        once('rule', guard.ask_rule)
+    if engine == 'hosted':
+        for b, pin in HOSTED.items():
+            if b in todo:
+                once(b, hosted_ask(pin, key, opener))
+    elif 'http' in todo:
         try:
             with server(m, threads=threads) as s:
                 left = (cutoff - (now or dt.datetime.now(guard.ET))) \
@@ -522,14 +562,29 @@ def run(m, dry_run=False, threads=None, server=Server, tonight=None,
                         raise SystemExit(f'the server answered as {model!r}, '
                                          f'not the pinned {s.alias!r}')
                     return p, model, ms
-                guard.answer('http', ask, names, today, state,
-                             dry_run=dry_run, path=path, now=now)
-                done.append('http')
+                once('http', ask)
         except SystemExit as ex:
             say(f'http: {ex}')
         except Exception as ex:                 # never lose the control's row
             say(f'http: {type(ex).__name__}: {ex}')
     return done
+
+
+def hosted_ask(pin, key, opener=None):
+    """A decider on OpenRouter's Decisions API, held to its pin: the answer
+    must come back from that model (any dated build of it -- the build and
+    the provider are what the record logs), or nothing is logged."""
+    import guard
+
+    def ask(st, nm):
+        kw = {'opener': opener} if opener else {}
+        p, who, ms = guard.ask_http(st, nm, DECISIONS, key, pin, **kw)
+        # the pinned id, optionally its dated build, optionally @provider
+        if not re.fullmatch(re.escape(pin) + r'(-\d{8})?(@[^@]+)?', who):
+            raise SystemExit(f'OpenRouter answered as {who!r}, not the '
+                             f'pinned {pin!r} -- not logged')
+        return p, who, ms
+    return ask
 
 
 # --------------------------------------------------------------- schedule --
@@ -555,9 +610,9 @@ def local_trigger(at_et, ref=None):
 
 
 def windows_task(runs_et=RUNS_ET, ref=None):
-    """The PowerShell that registers the task. Paths travel in environment
-    variables (QQQ_PY, QQQ_SCRIPT, QQQ_REPO), never inside the script text,
-    so no quote in a path can break or rewrite it."""
+    """The PowerShell that registers the task. Paths and arguments travel in
+    environment variables (QQQ_PY, QQQ_SCRIPT, QQQ_ARGS, QQQ_REPO), never
+    inside the script text, so no quote in a path can break or rewrite it."""
     trig = []
     for i, at in enumerate(runs_et):
         hhmm, days = local_trigger(at, ref)
@@ -566,7 +621,7 @@ def windows_task(runs_et=RUNS_ET, ref=None):
     return '\n'.join([
         "$ErrorActionPreference = 'Stop'",
         "$a = New-ScheduledTaskAction -Execute $env:QQQ_PY "
-        "-Argument ('\"' + $env:QQQ_SCRIPT + '\"') "
+        "-Argument ('\"' + $env:QQQ_SCRIPT + '\"' + $env:QQQ_ARGS) "
         "-WorkingDirectory $env:QQQ_REPO",
         *trig,
         "$s = New-ScheduledTaskSettingsSet -WakeToRun -StartWhenAvailable "
@@ -575,7 +630,7 @@ def windows_task(runs_et=RUNS_ET, ref=None):
         "-MultipleInstances IgnoreNew",
         f"Register-ScheduledTask -TaskName '{TASK}' -Action $a -Trigger "
         f"@({','.join(f'$t{i}' for i in range(len(runs_et)))}) -Settings $s "
-        f"-Description 'qqq shadow decider: Kev, local' -Force | Out-Null",
+        f"-Description 'qqq shadow decider' -Force | Out-Null",
     ])
 
 
@@ -584,12 +639,16 @@ def systemd_quote(s):
         .replace('%', '%%') + '"'
 
 
-def systemd_units(python, script, repo, runs_et=RUNS_ET):
+def systemd_units(python, script, repo, runs_et=RUNS_ET, args=()):
     service = '\n'.join([
-        '[Unit]', 'Description=qqq shadow decider (Kev, local)', '',
+        '[Unit]', 'Description=qqq shadow decider', '',
         '[Service]', 'Type=oneshot',
         f'WorkingDirectory={str(repo).replace("%", "%%")}',
-        f'ExecStart={systemd_quote(python)} {systemd_quote(script)}',
+        'ExecStart=' + ' '.join(systemd_quote(x)
+                                for x in (python, script, *args)),
+        # the hosted engine's key, OPENROUTER_API_KEY=..., in this optional
+        # file (mode 600): a user service does not see the login shell's env
+        'EnvironmentFile=-%h/.config/qqq-decider.env',
         'TimeoutStartSec=4h', 'Nice=10', ''])
     timer = '\n'.join([
         '[Unit]', 'Description=qqq shadow decider, weekdays before the close',
@@ -599,13 +658,14 @@ def systemd_units(python, script, repo, runs_et=RUNS_ET):
     return service, timer
 
 
-def schedule(runs_et=RUNS_ET, remove=False):
+def schedule(runs_et=RUNS_ET, remove=False, engine='hosted'):
     repo = dedicated()
     script = repo / 'src' / 'decide_local.py'
     if not script.exists() and not remove:
         raise SystemExit('run --setup first (the schedule runs the dedicated '
                          'clone)')
     python = sys.executable
+    args = () if engine == 'hosted' else ('--engine', engine)
     if os.name == 'nt':
         ps = (f"Unregister-ScheduledTask -TaskName '{TASK}' -Confirm:$false"
               if remove else windows_task(runs_et))
@@ -613,6 +673,8 @@ def schedule(runs_et=RUNS_ET, remove=False):
                             'Bypass', '-Command', ps], capture_output=True,
                            text=True, env=dict(os.environ, QQQ_PY=python,
                                                QQQ_SCRIPT=str(script),
+                                               QQQ_ARGS=''.join(
+                                                   ' ' + x for x in args),
                                                QQQ_REPO=str(repo)))
         if r.returncode:
             raise SystemExit(f'Task Scheduler refused: {r.stderr.strip()}')
@@ -635,7 +697,7 @@ def schedule(runs_et=RUNS_ET, remove=False):
             (d / f'{TASK}.{ext}').unlink(missing_ok=True)
         say(f'removed the {TASK} timer')
         return
-    service, timer = systemd_units(python, script, repo, runs_et)
+    service, timer = systemd_units(python, script, repo, runs_et, args)
     d.mkdir(parents=True, exist_ok=True)
     (d / f'{TASK}.service').write_text(service)
     (d / f'{TASK}.timer').write_text(timer)
@@ -657,7 +719,7 @@ def schedule(runs_et=RUNS_ET, remove=False):
 
 # ------------------------------------------------------------------ setup --
 
-def setup(m):
+def setup(m, local=False):
     h = home()
     h.mkdir(parents=True, exist_ok=True)
     (h / MARK).write_text('qqq-microstructure local decider home\n')
@@ -670,6 +732,11 @@ def setup(m):
         git('clone', '-q', url, str(repo), cwd=h, timeout=1800)
     else:
         git('pull', '--ff-only', '-q', cwd=repo)
+    if not local:
+        say('ready for the hosted engine: set OPENROUTER_API_KEY in this '
+            'machine\'s environment, then --dry-run and --schedule. (For the '
+            'local Kev engine: --setup --engine local downloads ~4.5 GB.)')
+        return
     asset, sha, _ = LLAMA[plat()]
     arc = fetch(LLAMA_URL.format(asset), archive(), sha)
     dest = llama_dir()
@@ -700,7 +767,7 @@ def setup(m):
         f'python src/decide_local.py --dry-run, then --schedule')
 
 
-def nightly(m, threads=None):
+def nightly(m, threads=None, engine='hosted'):
     """What the schedule runs, from the dedicated clone."""
     import guard
     if ROOT.resolve() != dedicated():
@@ -710,32 +777,37 @@ def nightly(m, threads=None):
                          f'copy; here, use --dry-run')
     today = dt.datetime.now(guard.ET).strftime('%Y%m%d')
     sync(ROOT, today)
-    run(m, threads=threads)
+    run(m, threads=threads, engine=engine)
     # whatever this run, or an earlier one today, logged goes out now
-    publish(ROOT, f'guard: decisions before the close (local, '
-                  f'{model_name(m)})')
+    who = 'hosted: ' + ', '.join(HOSTED.values()) if engine == 'hosted' \
+        else f'local: {model_name(m)}'
+    publish(ROOT, f'guard: decisions before the close ({who})')
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Tonight\'s shadow decisions, '
-                                 'made entirely on this machine (Kev on '
-                                 'llama.cpp, 127.0.0.1).')
+    ap = argparse.ArgumentParser(description='Tonight\'s shadow decisions: '
+                                 'the earnings rule, Perplexity Decider and '
+                                 'Jev through OpenRouter (hosted), or Kev on '
+                                 'a local llama.cpp (local).')
     ap.add_argument('--setup', action='store_true')
     ap.add_argument('--schedule', action='store_true')
     ap.add_argument('--unschedule', action='store_true')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--model', choices=sorted(MODELS), default=DEFAULT_MODEL)
     ap.add_argument('--threads', type=int)
+    ap.add_argument('--engine', choices=('hosted', 'local'), default='hosted',
+                    help='hosted: OpenRouter, key in OPENROUTER_API_KEY '
+                         '(default); local: Kev on llama.cpp, no key')
     a = ap.parse_args()
     try:
         if a.setup:
-            setup(a.model)
+            setup(a.model, local=a.engine == 'local')
         elif a.schedule or a.unschedule:
-            schedule(remove=a.unschedule)
+            schedule(remove=a.unschedule, engine=a.engine)
         elif a.dry_run:
-            run(a.model, dry_run=True, threads=a.threads)
+            run(a.model, dry_run=True, threads=a.threads, engine=a.engine)
         else:
-            nightly(a.model, a.threads)
+            nightly(a.model, a.threads, a.engine)
     except SystemExit as ex:
         if ex.code not in (None, 0):
             say(f'stopped: {ex}')           # the log says why a night was

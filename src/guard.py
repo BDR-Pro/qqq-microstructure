@@ -30,13 +30,12 @@
 #     question is the one with evidence behind it.
 #
 # Integrity rules, enforced, not hoped for:
-#   - one decision per night per backend (the decider, and the earnings-rule
-#     control it is compared with); a night is never re-decided
+#   - one decision per night per backend (the decider, the reference and
+#     the earnings-rule control); a night is never re-decided
 #   - a decision time-stamped at or after 15:50 ET on its night is ignored by
 #     the grader (it could have seen the close)
 #   - the log is append-only and committed before the close, from the
-#     owner's own machine (decide_local.py: Kev on llama.cpp, 127.0.0.1,
-#     pinned by sha256) -- never from a cloud runner or a hosted API
+#     owner's own machine (decide_local.py) -- never from a cloud runner
 #   - an answer is stamped when it ARRIVES; one that arrives at or after the
 #     cutoff is not logged (a local model on a CPU takes minutes)
 #   - one record per (backend, model): a new decider starts its own record and
@@ -45,13 +44,16 @@
 #
 # PRE-DECLARED GATE: the shadow book may be proposed for a dated re-freeze only
 # if, over at least 63 decided-and-graded nights, its paired nightly
-# difference against the frozen book has mean > 0 AND paired t > 2.
+# difference against the frozen book has mean > 0 AND paired t > GATE_T
+# (2.46: three records can pass, so 2's 2.5% level is split three ways).
 # Otherwise the frozen book stands, and that is a recorded result.
 #
 # Backends:
-#   http   any Jev-compatible server: DECIDER_URL, DECIDER_KEY if it needs
-#          one, DECIDER_MODEL. The record's decider is Kev on a local
-#          llama.cpp, started and stopped by decide_local.py (RESULTS 27).
+#   http   any Jev-compatible endpoint (DECIDER_URL, DECIDER_KEY,
+#          DECIDER_MODEL for a dry run). In the record, decide_local.py runs:
+#            http  the decider, Perplexity Decider v1.1 27B, via OpenRouter
+#            jev   the reference, Jev 1.13 itself, via OpenRouter
+#          (or, with --engine local, Kev on a local llama.cpp as 'http')
 #   rule   the deterministic baseline any model must beat: skip a name that
 #          reports earnings tonight, never hedge
 #
@@ -74,7 +76,12 @@ ET = ZoneInfo('America/New_York')
 CUTOFF = (15, 50)                       # NYSE MOC entry cutoff, ET
 COLS = ['date', 'decided_et', 'backend', 'model', 'question', 'ticker', 'p',
         'decision', 'latency_ms', 'state_sha']
-GATE_NIGHTS, GATE_T = 63, 2.0
+# The gate: 63 nights and paired t above the threshold. Three records can
+# each reach it -- the decider (Perplexity Decider), the reference (Jev) and
+# the earnings-rule control -- so the one-sided 2.5% of t > 2 is split three
+# ways (Bonferroni, 62 df): t > 2.46. Fixed 2026-10-13, before any of the
+# three had a graded night.
+GATE_NIGHTS, GATE_T = 63, 2.46
 BOOK = 'BOOK'
 # PRE-DECLARED DECISION RULE (fixed 2026-10-12, before any decided night had
 # an outcome): skip a name only if p(hold) < 0.5 AND it sits at least
@@ -130,6 +137,10 @@ def parse_answers(resp, names):
 
 def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
              opener=urllib.request.urlopen, timeout=None):
+    """Any Jev-compatible endpoint: a local llama-server, TypeSafe, or
+    OpenRouter's Decisions API. The decider's name is the model the response
+    says answered -- versioned on OpenRouter -- and, when the response names
+    one, the provider that served it ('model@provider')."""
     body = json.dumps(request_body(state, names, model)).encode()
     headers = {'Content-Type': 'application/json'}
     if key:
@@ -144,10 +155,13 @@ def ask_http(state, names, url, key=None, model='jev-latest', tries=4,
             to = timeout or float(os.environ.get('DECIDER_TIMEOUT', 600))
             with opener(req, timeout=to) as r:
                 resp = json.loads(r.read().decode())
-            return parse_answers(resp, names), resp.get('model', model), \
+            who = resp.get('model', model)
+            if resp.get('provider'):
+                who = f'{who}@{resp["provider"]}'
+            return parse_answers(resp, names), who, \
                 int((time.time() - t0) * 1000)
         except urllib.error.HTTPError as ex:
-            if ex.code in (429, 529) and i < tries - 1:
+            if ex.code in (429, 502, 503, 504, 529) and i < tries - 1:
                 time.sleep(2 ** i)              # the documented back-off
                 continue
             raise SystemExit(f'decision server refused ({ex.code}): '
@@ -409,9 +423,11 @@ def verdict(t):
             f'skipped, {int(t.hedged.sum())} nights hedged')
     if n < GATE_NIGHTS:
         return head + f'\n  gate: not before {GATE_NIGHTS} nights -- no verdict'
-    return head + ('\n  gate: PASSED -- the shadow book may be proposed for a '
-                   'dated re-freeze' if m > 0 and tt > GATE_T else
-                   '\n  gate: not passed -- the frozen book stands')
+    if m > 0 and tt > GATE_T:
+        return head + (f'\n  gate: PASSED (t > {GATE_T}) -- the shadow book '
+                       f'may be proposed for a dated re-freeze')
+    return head + f'\n  gate: not passed (t > {GATE_T} needed) -- the frozen ' \
+        f'book stands'
 
 
 def main():

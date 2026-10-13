@@ -165,7 +165,7 @@ def test_tonight_is_logged_once_per_backend(tmp_path, home):
     st = {'names': {'MU': {'earnings_tonight': True}, 'STX': {}, 'INTC': {}}}
     tonight = lambda t: ('20261013', NAMES, st)
     path = str(tmp_path / 'guard_log.csv')
-    assert dl.run('kev-4b-q8_0', server=stub, tonight=tonight, path=path,
+    assert dl.run('kev-4b-q8_0', engine='local', server=stub, tonight=tonight, path=path,
                   now=NOW) == ['rule', 'http']
     log = g.read_log(path)
     assert len(log) == 2 * (len(NAMES) + 1)
@@ -175,16 +175,16 @@ def test_tonight_is_logged_once_per_backend(tmp_path, home):
     assert set(h.model) == {dl.model_name('kev-4b-q8_0')}
     assert log.state_sha.nunique() == 1                 # one state, both
     # a second run the same night asks nothing and logs nothing
-    assert dl.run('kev-4b-q8_0', server=stub, tonight=tonight, path=path,
+    assert dl.run('kev-4b-q8_0', engine='local', server=stub, tonight=tonight, path=path,
                   now=NOW) == []
     assert len(g.read_log(path)) == len(log)
     # a dry run asks but never writes
-    dl.run('kev-4b-q8_0', dry_run=True, server=stub, tonight=tonight,
+    dl.run('kev-4b-q8_0', engine='local', dry_run=True, server=stub, tonight=tonight,
            path=str(tmp_path / 'dry.csv'), now=NOW)
     assert not os.path.exists(tmp_path / 'dry.csv')
     # past the cutoff nothing is attempted
     with pytest.raises(SystemExit, match='cutoff'):
-        dl.run('kev-4b-q8_0', server=stub, tonight=tonight,
+        dl.run('kev-4b-q8_0', engine='local', server=stub, tonight=tonight,
                path=str(tmp_path / 'late.csv'),
                now=NOW.replace(hour=15, minute=50))
 
@@ -194,13 +194,13 @@ def test_a_failing_decider_never_costs_the_controls_row(tmp_path, home,
     st = {'names': {n: {} for n in NAMES}}
     path = str(tmp_path / 'g.csv')
     monkeypatch.setenv('STUB_MODEL', 'some-other-model')    # wrong label
-    assert dl.run('kev-4b-q8_0', server=stub, tonight=lambda t: (
+    assert dl.run('kev-4b-q8_0', engine='local', server=stub, tonight=lambda t: (
         '20261013', NAMES, st), path=path, now=NOW) == ['rule']
     assert set(g.read_log(path).backend) == {'rule'}
     # the catch-up run asks only the decider, about the SAME cached state
     monkeypatch.delenv('STUB_MODEL')
     other = {'names': {n: {'earnings_tonight': True} for n in NAMES}}
-    assert dl.run('kev-4b-q8_0', server=stub, tonight=lambda t: (
+    assert dl.run('kev-4b-q8_0', engine='local', server=stub, tonight=lambda t: (
         '20261013', NAMES, other), path=path, now=NOW) == ['http']
     assert g.read_log(path).state_sha.nunique() == 1
 
@@ -406,15 +406,20 @@ def test_the_windows_task_wakes_runs_on_battery_and_holds_no_path():
                  '-AllowStartIfOnBatteries', '-DontStopIfGoingOnBatteries',
                  '-MultipleInstances IgnoreNew', '@($t0,$t1)'):
         assert flag in ps
-    # paths reach PowerShell only through the environment
+    # paths and arguments reach PowerShell only through the environment
     assert '$env:QQQ_PY' in ps and '$env:QQQ_SCRIPT' in ps
+    assert '$env:QQQ_ARGS' in ps
     assert ':\\' not in ps and '/home' not in ps
 
 
 def test_systemd_units_quote_paths_and_run_twice_a_day():
     service, timer = dl.systemd_units('/opt/py 3/python', '/r/a "b" 50%/x.py',
                                       '/r/50%')
-    assert 'ExecStart="/opt/py 3/python" "/r/a \\"b\\" 50%%/x.py"' in service
+    assert 'ExecStart="/opt/py 3/python" "/r/a \\"b\\" 50%%/x.py"\n' in service
+    # the hosted engine's key comes from an optional user env file
+    assert 'EnvironmentFile=-%h/.config/qqq-decider.env' in service
+    local, _ = dl.systemd_units('/p', '/s.py', '/r', args=('--engine', 'local'))
+    assert 'ExecStart="/p" "/s.py" "--engine" "local"' in local
     assert 'WorkingDirectory=/r/50%%' in service
     assert 'OnCalendar=Mon..Fri 09:17 America/New_York' in timer
     assert 'OnCalendar=Mon..Fri 13:47 America/New_York' in timer
