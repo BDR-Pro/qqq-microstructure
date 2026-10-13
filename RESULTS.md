@@ -3344,6 +3344,36 @@ owner first asked for, not the best model.
   Something else is drawing on the same key.
 - About $18 of credit remained afterwards.
 
+### Iteration round 1: nothing adopted, so the decider stands as declared
+
+Branch (c) iterates on the incumbent. Round 1 was declared before its run
+(`bench/battery/iter_r1/`, PR #36). It ran the same pinned model in four
+arms, each on the same 18 fresh states with a new seed, 262 calls per arm.
+It cost $0.21.
+
+| Arm | Q | ex_nuis (G2a needs ≤ 0.05) | AUC | Fails |
+|---|---|---|---|---|
+| **k1.q1, the control (today's wording)** | **0.907** | 0.13 | 0.970 | G2a |
+| k1.q2, the hedge question points at the QQQ row | 0.907 | 0.13 | 0.982 | G2a |
+| k1.q1s3, z-scores computed in code | 0.704 | 0.08 | 0.943 | G2a, G3b |
+| k1.q1b2, every field defined in the book sentence | 0.759 | 0.09 | 0.967 | G2a |
+
+- **The result replicates.** On new states the control's Q is 0.907,
+  against 0.905 in v1.
+- **q2 changes nothing:** dQ is exactly 0.
+- **s3 and b2 trade accuracy for stability.** They roughly halve the
+  model's sensitivity to name order, but cost 15–20 points of Q, and
+  neither reaches the 0.05 bar. With z-scores (s3) it also stops
+  responding to market stress, failing G3b.
+- **The decision.** No variant clears the adopt rule, so the declared
+  stopping rule ends the iteration after round 1 (`next: stop`). There is
+  no round 2 and no holdout.
+- **What stands.** The decider stays `perplexity/pplx-decider-v1.1-27b` at
+  `k1.q1`: today's wording, one canonical call a night. The runtime does
+  not change.
+- **What G2a means here.** Its order sensitivity is a known property of the
+  record's decider, not a defect a request view can fix.
+
 ### Reading
 
 A decision model's speed is irrelevant to a book that trades twice a day in
