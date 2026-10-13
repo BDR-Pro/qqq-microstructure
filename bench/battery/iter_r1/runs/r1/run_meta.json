@@ -1,0 +1,70 @@
+{
+ "plan": "bench/battery/iter_r1/plan_iter_r1.json",
+ "plan_sha": "9f1d3779c6fb2098e9d705ccd6832e5a2121816e8b8fad383fd8d6e55e3a37d0",
+ "items_sha": "4c252766ea22c7b58a849ff94a1e51be7f476a44c77f3ccf4e38e5095f49a047",
+ "shas": {
+  "plan": "9f1d3779c6fb2098e9d705ccd6832e5a2121816e8b8fad383fd8d6e55e3a37d0",
+  "items": "4c252766ea22c7b58a849ff94a1e51be7f476a44c77f3ccf4e38e5095f49a047",
+  "states": "2df457eed2a02fe887739edda998655bc7572ccd293eab8bcea62ad975c6e5e4",
+  "anchors": "0b70e99f4c1611f3fbf5be0dc0dad907406b3d0a4381e0c64caf14d1076dc1ab",
+  "lock": "16a2d307101419013826f5de3f24bda4724fa126bfa0056a0e5249d53f8f700d"
+ },
+ "commit": "84bf6848a8c48df8fd5e7bd778c4fd969db33fc9",
+ "tree": "clean",
+ "python": "3.13.16",
+ "numpy": "2.5.3",
+ "started_utc": "2026-10-13T19:26:45.105Z",
+ "ended_utc": "2026-10-13T19:31:32.429Z",
+ "key_before": {
+  "limit_remaining": 15.589274247000006,
+  "usage": 84.410725753
+ },
+ "key_after": {
+  "limit_remaining": 15.384551126999995,
+  "usage": 84.615448873
+ },
+ "pilot_costs": {
+  "perplexity/pplx-decider-v1.1-27b#k1.q1": 0.00019368,
+  "perplexity/pplx-decider-v1.1-27b#k1.q2": 0.00019368,
+  "perplexity/pplx-decider-v1.1-27b#k1.q1s3": 0.00019368,
+  "perplexity/pplx-decider-v1.1-27b#k1.q1b2": 0.00019368
+ },
+ "projection": {
+  "usd": 0.20325346979363548,
+  "calls": 1048,
+  "limit_usd": 2.4000000000000004,
+  "after_scale_down_usd": 0.20325346979363548,
+  "after_scale_down_calls": 1048
+ },
+ "scale_down": {
+  "dropped_blocks": [],
+  "dropped_models": []
+ },
+ "status": "done",
+ "spent_usd": 0.21147708000000048,
+ "breaker": {},
+ "sessions": [
+  {
+   "started_utc": "2026-10-13T19:26:45.105Z",
+   "ended_utc": "2026-10-13T19:31:32.429Z",
+   "auth": "proxy",
+   "max_usd": 3.0,
+   "commit": "84bf6848a8c48df8fd5e7bd778c4fd969db33fc9",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 15.589274247000006,
+    "usage": 84.410725753
+   },
+   "key_after": {
+    "limit_remaining": 15.384551126999995,
+    "usage": 84.615448873
+   },
+   "spent_before_usd": 0,
+   "status": "done",
+   "parked": [],
+   "spent_usd": 0.21147708000000048,
+   "key_usage_delta": 0.20472312000001125
+  }
+ ],
+ "pilot_unmeasured": []
+}
