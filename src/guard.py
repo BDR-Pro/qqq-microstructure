@@ -34,8 +34,11 @@
 #     control it is compared with); a night is never re-decided
 #   - a decision time-stamped at or after 15:50 ET on its night is ignored by
 #     the grader (it could have seen the close)
-#   - the log is append-only and committed before the close (guard.yml, in
-#     GitHub Actions: Tev1-4B via a pinned Ollama, digest-checked)
+#   - the log is append-only and committed before the close, from the
+#     owner's own machine (decide_local.py: Kev on llama.cpp, 127.0.0.1,
+#     pinned by sha256) -- never from a cloud runner or a hosted API
+#   - an answer is stamped when it ARRIVES; one that arrives at or after the
+#     cutoff is not logged (a local model on a CPU takes minutes)
 #   - one record per (backend, model): a new decider starts its own record and
 #     its own 63-night clock, never pooled with the old one
 #   - --dry-run asks and prints, writes nothing: for trying a decider by hand
@@ -46,14 +49,14 @@
 # Otherwise the frozen book stands, and that is a recorded result.
 #
 # Backends:
-#   http   any Jev-compatible server: DECIDER_URL (e.g. a local LocalJev/Kev
-#          server, or https://api.typesafe.ai/v1/systemone), DECIDER_KEY if it
-#          needs one, DECIDER_MODEL (default jev-latest)
+#   http   any Jev-compatible server: DECIDER_URL, DECIDER_KEY if it needs
+#          one, DECIDER_MODEL. The record's decider is Kev on a local
+#          llama.cpp, started and stopped by decide_local.py (RESULTS 27).
 #   rule   the deterministic baseline any model must beat: skip a name that
 #          reports earnings tonight, never hedge
 #
-#   python src/guard.py --decide                 # before 15:50 ET
-#   python src/guard.py --decide --backend rule
+#   python src/decide_local.py                   # the nightly run (both)
+#   python src/guard.py --dry-run                # try a server by hand
 #   python src/guard.py --grade
 
 import os, sys, csv, json, time, argparse, hashlib, datetime as dt
@@ -209,22 +212,33 @@ def build_state(names, today, download=None, earnings=None):
     return st
 
 
-def earnings_tonight(names, today):
+def earnings_tonight(names, today, lookup=None, tries=3, wait=5):
     """{name: True} for names reporting between today's close and the next
-    open, from Yahoo's earnings calendar."""
+    open, from Yahoo's earnings calendar. A lookup that still fails after
+    `tries` is NOT read as "no report" -- the night is refused, because the
+    earnings rule is the control and must not silently hold a reporter."""
     import yfinance as yf
+    lookup = lookup or (lambda n: yf.Ticker(n.replace('.', '-'))
+                        .get_earnings_dates(limit=8))
     lo = pd.Timestamp(today).tz_localize(ET) + pd.Timedelta(hours=15)
     hi = lo + pd.Timedelta(hours=19)            # through the next 10:00
-    out = {}
+    out, failed = {}, []
     for n in names:
-        try:
-            e = yf.Ticker(n.replace('.', '-')).get_earnings_dates(limit=8)
-            ts = [t.tz_convert(ET) for t in (e.index if e is not None else [])]
-            out[n] = any(lo <= t <= hi for t in ts)
-        except Exception as ex:                 # unknown reads as no report;
-            print(f'earnings lookup failed for {n}: {ex}',   # say so
-                  file=sys.stderr)
-            out[n] = False
+        for i in range(tries):
+            try:
+                e = lookup(n)
+                if e is None:
+                    raise ValueError('no calendar returned')
+                out[n] = any(lo <= t.tz_convert(ET) <= hi for t in e.index)
+                break
+            except Exception as ex:
+                if i == tries - 1:
+                    failed.append(f'{n} ({ex})')
+                else:
+                    time.sleep(wait * (i + 1))
+    if failed:
+        raise SystemExit('earnings lookup failed for ' + ', '.join(failed)
+                         + ' -- not deciding on an unknown calendar')
     return out
 
 
@@ -243,11 +257,24 @@ def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
     if ((log.date == today) & (log.backend == backend)).any():
         raise SystemExit(f'{today} already decided by the {backend} backend '
                          f'-- a night is never re-decided')
+    if now_et.strftime('%Y%m%d') != today:
+        raise SystemExit(f'{now_et:%Y-%m-%d} ET is not the decision day '
+                         f'{today}')
     if (now_et.hour, now_et.minute) >= CUTOFF:
         raise SystemExit(f'{now_et:%H:%M} ET is at or past the {CUTOFF[0]}:'
                          f'{CUTOFF[1]:02d} cutoff -- too late to decide '
                          f'tonight honestly')
+    t0, w0 = time.monotonic(), time.time()
     p, model, ms = ask(state, names)
+    # stamped when the answer arrived, not when it was asked: a local model
+    # on a CPU can take minutes, and an answer after the cutoff is no answer.
+    # The later of the two clocks: monotonic time stops while a machine
+    # sleeps, wall time can be stepped; the larger elapsed is the safe one.
+    done = now_et + dt.timedelta(seconds=max(time.monotonic() - t0,
+                                             time.time() - w0))
+    if done.date() != now_et.date() or (done.hour, done.minute) >= CUTOFF:
+        raise SystemExit(f'the answer arrived {done:%H:%M} ET, at or past the '
+                         f'cutoff -- nothing logged for tonight')
     d = rule(p, names)
     sha = hashlib.sha256(json.dumps(state, sort_keys=True)
                          .encode()).hexdigest()[:12]
@@ -259,9 +286,57 @@ def decide(backend, names, today, now_et, state, path=GLOG, ask=None):
         for k in names + [BOOK]:
             if k not in p:
                 continue
-            w.writerow([today, now_et.strftime('%Y-%m-%d %H:%M:%S'), backend,
+            w.writerow([today, done.strftime('%Y-%m-%d %H:%M:%S'), backend,
                         model, 'hedge_book' if k == BOOK else 'hold', k,
                         f'{p[k]:.4f}', d[k], ms, sha])
+    return p
+
+
+def basket(paper, today):
+    """Tonight's names: the basket registered for the decision day's month.
+    Not registered yet (the 1st, before the morning registration) -> None:
+    deciding on last month's names would grade against the wrong book."""
+    rows = paper[paper.month == f'{today[:4]}-{today[4:6]}']
+    return rows.iloc[-1].q5.split(';') if len(rows) else None
+
+
+def tonight(now=None, download=None, earnings=None):
+    """(date, names, state) for tonight, built once so that every backend
+    asked tonight -- the decider and the control -- sees the identical state.
+    Refuses (SystemExit) rather than decide on a partial picture: no basket
+    for this month, or any name or QQQ missing from the market data."""
+    today = (now or dt.datetime.now(ET)).strftime('%Y%m%d')
+    names = basket(pd.read_csv(PAPER, dtype=str), today)
+    if not names:
+        raise SystemExit(f'no basket registered for {today[:4]}-{today[4:6]} '
+                         f'yet -- not deciding on last month\'s names')
+    ern = (earnings or earnings_tonight)(names, today)
+    state = build_state(names, today, download=download, earnings=ern)
+    missing = [n for n in names if n not in state['names']] + \
+        ([] if 'QQQ' in state else ['QQQ'])
+    if missing:
+        raise SystemExit('no market data for ' + ', '.join(missing) +
+                         ' -- not deciding on a partial state')
+    return today, names, state
+
+
+def answer(backend, ask, names, today, state, dry_run=False, path=GLOG,
+           now=None):
+    """Ask one backend about tonight. A dry run prints and writes nothing;
+    otherwise decide() logs it (and refuses a repeat or a late answer)."""
+    if dry_run:
+        p, model, ms = ask(state, names)
+        d = rule(p, names)
+        print(f'{today} DRY RUN, nothing written -- {model}, {ms} ms')
+        for k in names + [BOOK]:
+            if k in p:
+                print(f'  {k:6s} {p[k]:.4f}  {d[k]}')
+        return p
+    p = decide(backend, names, today, now or dt.datetime.now(ET), state,
+               path=path, ask=ask)
+    print(f'{today} [{backend}]: ' + '  '.join(f'{k} {v:.2f}'
+                                              for k, v in p.items())
+          + f'  -> {path} (commit before the close)')
     return p
 
 
@@ -343,20 +418,22 @@ def main():
     ap = argparse.ArgumentParser(description='A Jev-style decision model in '
                                  'shadow mode: decides, is graded, never '
                                  'trades.')
-    ap.add_argument('--decide', action='store_true')
+    ap.add_argument('--decide', action='store_true',
+                    help='retired: the record\'s decisions come only from '
+                         'src/decide_local.py (Kev, local, pinned)')
     ap.add_argument('--grade', action='store_true')
     ap.add_argument('--dry-run', action='store_true',
                     help='ask and print tonight\'s answers; write nothing '
                          '(any machine, any time -- the record is untouched)')
     ap.add_argument('--backend', choices=['http', 'rule'], default='http')
     a = ap.parse_args()
+    if a.decide:
+        raise SystemExit('the record\'s decisions come only from '
+                         'python src/decide_local.py (it pins the model, the '
+                         'runtime and the server); here, use --dry-run')
     paper = pd.read_csv(PAPER, dtype=str)
-    if a.decide or a.dry_run:
-        now = dt.datetime.now(ET)
-        today = now.strftime('%Y%m%d')
-        names = paper.iloc[-1].q5.split(';')
-        state = build_state(names, today,
-                            earnings=earnings_tonight(names, today))
+    if a.dry_run:
+        today, names, state = tonight()
         if a.backend == 'http':
             url = os.environ.get('DECIDER_URL')
             if not url:
@@ -368,17 +445,8 @@ def main():
                 os.environ.get('DECIDER_MODEL', 'jev-latest'))
         else:
             ask = ask_rule
-        if a.dry_run:
-            p, model, ms = ask(state, names)
-            d = rule(p, names)
-            print(f'{today} DRY RUN, nothing written -- {model}, {ms} ms')
-            for k in names + [BOOK]:
-                if k in p:
-                    print(f'  {k:6s} {p[k]:.4f}  {d[k]}')
-            return
-        p = decide(a.backend, names, today, now, state, ask=ask)
-        print(f'{today}: ' + '  '.join(f'{k} {v:.2f}' for k, v in p.items())
-              + '  -> reports/guard_log.csv (commit before the close)')
+        answer(a.backend, ask, names, today, state, dry_run=True)
+        return
     if a.grade:
         from paper_bench import official_prints
         log = read_log()

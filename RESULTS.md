@@ -2522,7 +2522,7 @@ reverses several of them.
 
 ---
 
-## 27. A Jev-style decision model, added in shadow mode — `guard.py`, `jev_local.py`
+## 27. A Jev-style decision model, added in shadow mode — `guard.py`, `decide_local.py`
 
 The owner asked to add "a locally hosted decision model like Jev for better
 performance". Jev turned out to be real: TypeSafe AI's "System One" decision
@@ -2676,7 +2676,9 @@ decided). Both builds gave identical answers on a rerun.
   sensible. Either way it is one night and carries no evidence.
 
 **The decider from 2026-10-13 is Tev1-4B** (`tev1:4b-q4_K_M`, digest above).
-This was declared before any decided night had an outcome. The reasons:
+This was declared before any decided night had an outcome. *Superseded the
+next morning, before Tev1 decided a single night, by Kev on the owner's own
+machine; see the next subsection.* The reasons:
 - it was trained for these question types, unlike a chat model read through
   its next-token logits;
 - it scores 73.3% against Jev's 76.0% on Ollama's comparison (vendor-reported).
@@ -2696,6 +2698,154 @@ This was declared before any decided night had an outcome. The reasons:
 Qwen3.5-0.8B's single night stays its own one-night record.
 `python src/guard.py --dry-run` asks a decider and prints the answers without
 writing anything, for trying one by hand.
+
+### Everything local: Kev, the open-weight Jev lookalike — `decide_local.py`
+
+The owner then set two rules: use an open-weight Jev lookalike, and host
+everything locally. `guard.yml` broke the second rule: it ran Tev1 on
+GitHub's cloud runner. It was removed (PR #28) before its first scheduled
+night, so **Tev1 never decided a night.**
+
+**The survey** was run on 2026-10-12. It read primary sources (repositories at
+pinned commits, Hugging Face model cards and API) and put each claim through
+an adversarial check. Third-party scores come from two public boards, JevBench
+v1.6.1 and Decision Index v0.3.2; they were not re-measured here.
+
+| Model | Open weights, licence | Jev API | vs Jev (who measured) | Verdict |
+|---|---|---|---|---|
+| **Kev 1.0** (jaredpalmer) | yes; Apache-2.0 code, adapter, head and base | closest: built to TypeSafe's spec, served by its own server and by llama.cpp | 4B: 0.817 vs 0.857 (Kev's author, dev set); Decision Index 39.5 vs 60.11. 27B: JevBench 78.9/64.2/93.7 vs 77.1/63.6/90.6 | **chosen (4B)** |
+| H2O-Lightning-4B | yes, Apache-2.0 | via a Python shim that by default forces every yes/no to at least 0.801 | JevBench 75.0/60.0/90.0, measured on older weights than the download | no |
+| Tev1 (Together) | yes; licence "being finalized" | via Ollama, prompt capped at 2,050 tokens | Decision Index 34.1 (4B) | retired |
+| Nimble (Bespoke) | v3 non-commercial; v4 no weights | via Ollama | Ollama's own comparison: 75.7% vs 76.0% | no |
+| Clef / Clef-Flash (Cloudflare) | yes, Apache-2.0 | not Jev's semantics: answers all questions jointly | JevBench capability 75.3 (Clef), 63.8 (Clef-Flash) | no |
+| JevK5 | trained on OpenAI-terms outputs | GPU-only server | Decision Index 41.5 (4B) | no |
+| Laya, SemIf, Verdict, jeff, CLM | — | — | near chance on both boards | no |
+
+Kev-4B is the only candidate where every part is Apache-2.0, the training data
+is stated, and two independent local servers exist. Its card says "No output
+of Jev (TypeSafe's hosted decision model) was used." The price is accuracy:
+on the independent Decision Index it scores 39.5 against Jev's 60.11.
+
+**What runs.** ggml-org's GGUF conversion runs in llama.cpp's own
+`/v1/systemone` server (release b11429). It is one native program, needs no
+Python stack, and runs on Windows and Linux. All of the following were checked
+here:
+- **Same weights as Kev v1.0.** Every file of `jaredpalmer/kev-4b` at the
+  conversion's source revision is blob-identical to the `v1.0` tag.
+- **Same calibration.** The GGUF stores Kev's shipped temperature 2.40605,
+  the value in Kev's `head.pt`. (`result.json`'s 2.297 is one
+  cross-validation fold.)
+- **llama.cpp loads it as a decision model.** It reports "decision model type:
+  kev" and `output_modalities: ["decisions"]`.
+- **Locked to this machine.** It refuses requests without the key (401) and
+  binds 127.0.0.1.
+- **Deterministic.** Two runs of tonight's request gave identical answers.
+
+**Speed.** The b11429 server keeps no state cache for decision requests. Its
+source makes checkpoints "only for completion tasks". So it re-reads the
+~650-token state for each of the 12 questions: about 45 s per question, or
+8.5 minutes a night, on 4 cloud vCPUs. Peak memory was measured at 9.7 GB for
+BF16, 8.2 GB of it the mapped model file, so about 6 GB for Q8_0. A desktop
+is faster. The run starts hours before the cutoff,
+and an answer that arrives late is not logged.
+
+**Is the GGUF route really Kev?** The thresholds were declared before any
+comparison was seen: max |Δp| ≤ 0.02 between Q8_0 and BF16; ≤ 0.03 between the
+0.8B GGUF and Kev's fp32 reference; ≤ 0.05 between Q8_0 and Kev's bf16
+reference (Kev's own bf16-vs-fp32 serving gap); and no decision change under
+guard's rule in any of them.
+
+| Check, threshold declared before running | Threshold | Result |
+|---|---|---|
+| A. Kev-4B Q8_0 vs BF16, both on llama.cpp | max \|Δp\| ≤ 0.02 | **0.0103**; decisions identical |
+| B. Kev-0.8B on llama.cpp vs Kev's own fp32 reference server | ≤ 0.03 | **0.0028** (mean 0.0014); identical |
+| C. Kev-4B Q8_0 on llama.cpp vs Kev's own reference server (bf16)* | ≤ 0.05 | **0.0148** (mean 0.0061); identical |
+
+\*The fp32 4B reference needs ~19 GB of memory, more than the test machine
+had. 0.05 is Kev's own stated bf16-vs-fp32 serving gap.
+
+**The GGUF route is Kev.** At the reference precision (B), llama.cpp's
+implementation agrees to 0.003. The Q8_0 file the owner will run stays within
+0.015 of the reference and changes no decision.
+
+**Kev's own server is faster.** It keeps the state cached:
+71 s warm, 141 s cold, for 4B on the same CPU. It needs a 9 GB Python/torch
+install that is untested on Windows. llama.cpp needs nothing, and nine minutes
+once a day is acceptable, so llama.cpp is the default.
+
+**Tonight, as the decider will see it** (2026-10-13, state through the 10-12
+close; Kev-4B Q8_0):
+- **Hold:** p(hold) 0.51–0.70, median 0.605, so all 11 names are held.
+- **Hedge:** p(hedge) 0.477, so no hedge.
+
+Unlike Tev1's two sizes, Kev's answers sit near the middle: an ordinary night,
+with mild doubt. This is one night, so it is not evidence.
+
+**The decider from the first night it runs on the owner's machine** is
+`kev-4b-q8_0@d924f2e2+llama.cpp-b11429-win-x64` (`-linux-x64` on the VM).
+That name is logged with every answer and carries the file, its revision, the
+runtime and the platform build, so any other build is a different decider
+with its own record and its own 63-night clock. Run it on one machine only. The
+earnings-rule control decides beside it, on the identical state.
+
+`decide_local.py` does the whole night locally:
+- **Setup.** `--setup` makes its own clone of the repository, downloads
+  llama.cpp and the model, and checks both against pinned sha256 sums. A file
+  that does not match is deleted, never used.
+- **The nightly run.** It pulls, logs the control, and starts llama-server on
+  127.0.0.1 with a fresh random key passed in the environment. Before asking,
+  it confirms the server refuses requests without the key and serves the pinned
+  model. It then asks, stops the server, commits **only**
+  `reports/guard_log.csv` from its own clone and pushes it. Nothing of the
+  owner's working copy is touched.
+- **Scheduling.** `--schedule` registers a weekday Task Scheduler task on
+  Windows (wakes the PC, runs on battery, runs late if the PC was off) or a
+  systemd timer on Linux. Both run at 09:17 ET and again at 13:47 ET. The
+  second run is a catch-up after a wake without network or a basket
+  registered late; a night already decided is never asked again.
+- **Timestamps.** `guard.decide` now stamps an answer when it *arrives*, on
+  the later of the monotonic and wall clocks, and refuses one at or after the
+  cutoff.
+
+**Refused rather than guessed.** An adversarial review (four lenses, every
+finding independently re-checked) led to these rules:
+- **This month's basket.** A night is decided only on the basket registered
+  for its own month. On the 1st, before registration, there is no decision.
+- **A complete state.** Every name and QQQ must have market data. Without it
+  (no network yet after a wake) the night is not decided on part of the
+  picture.
+- **A known earnings calendar.** A lookup that still fails after retries
+  stops the night. The control must never silently hold a name that reports.
+- **Pushed before the close.** Answers count only if they reach the remote
+  before that night's close. Unpushed answers from an earlier night are
+  dropped, never pushed late.
+- **One state per night.** It is cached, so a catch-up run asks Kev about
+  exactly what the control saw.
+- **A failing Kev never costs the control's row.**
+- **A sealed server.** It is started in an environment with no `LLAMA_*`
+  variables and empty config directories, and it is refused if it read a
+  config file, accepts a wrong key, or answers under another name.
+  (llama-server silently applies `config.ini` files and `LLAMA_ARG_*`
+  variables.)
+- **No proxy.** Requests to the local server bypass any system proxy.
+- **Checked every night.** The llama.cpp files on disk are re-checked against
+  the pinned release before each night.
+- **Unfinished rows are dropped.** If a run is killed between deciding and
+  committing, any uncommitted rows from an earlier night are discarded, not
+  pushed late.
+
+**One trust that remains:** the dedicated clone runs the code on `main` as
+pulled each morning. Anyone who can push to `main` can change the decider's
+code. That is the same trust as the repository itself. A code change that alters
+the answers would not change the logged name, so watch
+`src/decide_local.py` and `src/guard.py` in the history.
+
+All of this was tested end to end here, against a stand-in remote and with
+the real model, twice. The second run came after the review fixes:
+- `--setup` downloaded and verified both files for real.
+- The nightly run found its home with no environment set.
+- The control and Kev were logged, one commit holding only the log was
+  pushed, and the server was stopped.
 
 ### Reading
 
