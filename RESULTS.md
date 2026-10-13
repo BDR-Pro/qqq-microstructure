@@ -2741,13 +2741,26 @@ here:
   binds 127.0.0.1.
 - **Deterministic.** Two runs of tonight's request gave identical answers.
 
-**Speed.** The b11429 server keeps no state cache for decision requests. Its
-source makes checkpoints "only for completion tasks". So it re-reads the
-~650-token state for each of the 12 questions: about 45 s per question, or
-8.5 minutes a night, on 4 cloud vCPUs. Peak memory was measured at 9.7 GB for
-BF16, 8.2 GB of it the mapped model file, so about 6 GB for Q8_0. A desktop
-is faster. The run starts hours before the cutoff,
-and an answer that arrives late is not logged.
+**Speed.** The server shares the ~650-token state across the questions of
+a request, but only when it has more than one slot. *Corrected after review:*
+an earlier version of this section said b11429 keeps no state cache for
+decision requests, citing its "only for completion tasks" line. That line
+governs reuse across requests. Within a request the server groups the
+questions by slot (`server_decision_group_tasks`), and the runner's first
+setting of one slot (`-np 1`) made it re-read the state for every question.
+Measured on 4 cloud vCPUs, the same request each time:
+
+| Slots | One night (12 questions) | Peak memory | Max \|Δp\| vs Kev's reference |
+|---|---|---|---|
+| 1 | 532 s | ~6 GB | 0.0148 |
+| 12 | 83 s | 6.7 GB | 0.0090 |
+| **16 (the runner)** | **85 s** | **6.9 GB** | **0.0090** (identical to 12) |
+
+Sharing changed no decision, and it brings the answers closer to Kev's own
+server. The runner uses 16 slots with a 16,384-token shared pool, enough for
+a basket of up to 15 names. BF16 needs 9.7 GB (8.2 GB of it the mapped model
+file). A desktop is faster still. The run starts hours before the cutoff, and
+an answer that arrives late is not logged.
 
 **Is the GGUF route really Kev?** The thresholds were declared before any
 comparison was seen: max |Δp| ≤ 0.02 between Q8_0 and BF16; ≤ 0.03 between the
@@ -2768,10 +2781,9 @@ had. 0.05 is Kev's own stated bf16-vs-fp32 serving gap.
 implementation agrees to 0.003. The Q8_0 file the owner will run stays within
 0.015 of the reference and changes no decision.
 
-**Kev's own server is faster.** It keeps the state cached:
-71 s warm, 141 s cold, for 4B on the same CPU. It needs a 9 GB Python/torch
-install that is untested on Windows. llama.cpp needs nothing, and nine minutes
-once a day is acceptable, so llama.cpp is the default.
+**Kev's own server** takes 71 s warm and 141 s cold for 4B on the same CPU,
+about what llama.cpp now takes. It needs a 9 GB Python/torch install that is
+untested on Windows, so llama.cpp, which needs nothing, is the default.
 
 **Tonight, as the decider will see it** (2026-10-13, state through the 10-12
 close; Kev-4B Q8_0):
@@ -2841,11 +2853,97 @@ the answers would not change the logged name, so watch
 `src/decide_local.py` and `src/guard.py` in the history.
 
 All of this was tested end to end here, against a stand-in remote and with
-the real model, twice. The second run came after the review fixes:
-- `--setup` downloaded and verified both files for real.
-- The nightly run found its home with no environment set.
-- The control and Kev were logged, one commit holding only the log was
-  pushed, and the server was stopped.
+the real model, three times:
+- **After the review fixes:** `--setup` downloaded and verified both files
+  for real, and the nightly run found its home with no environment set.
+- **With 16 slots:** the whole night, from building the state to pushing,
+  took 115 s of wall time.
+- **Every run:** the control and Kev were logged, one commit holding only the
+  log was pushed, and the server was stopped.
+
+### Nimble, the other open-weight candidate: measured, not adopted
+
+The owner pointed at "Nimble: A Qwen-Based Alternative to Jev". That is
+section 2 of a DataCamp roundup, *Top 7 Open-Source TypeSafe Jev
+Alternatives* (2026-09-23); Kev is section 3 of the same piece. The article
+covers only the first Nimble release and gives no accuracy, licence or
+training-data facts, so Nimble was checked on primary sources and run here on
+tonight's frozen state. The findings were re-checked adversarially.
+
+**There are several Nimbles (Bespoke Labs, LoRA adapters on Qwen3.5-9B):**
+
+| Release | Licence | What is known |
+|---|---|---|
+| original (2026-09-18) | Apache-2.0 | 2,676 synthetic rows (GPT-5.6, Claude Sonnet 5; no human review; no finance); fitted temperature 2.179 |
+| v2 (2026-09-23) | Apache-2.0 | 4,926 rows; temperature copied from the original, not fitted. Decision Index 40.95 |
+| current `Bespoke-Nimble-9B` main, "v3-12026" (2026-09-24) | Apache-2.0 | 12,026 rows, undescribed; temperature 1.0, not fitted; no evaluation published. **This is what Ollama's `nimble:9b` ships** (its licence layer names this adapter; inferred from its name "merged-current") |
+| `Bespoke-Nimble-9B-v3` (2026-09-30) | **CC BY-NC 4.0** | a separate, larger adapter. Decision Index 54.67, the best Nimble; ECE 0.123, the worst calibrated |
+| 27B-v3, v4 | — | hosted by Bespoke only: not local |
+
+On the independent Decision Index (v0.3.2) the scores are:
+- Jev 60.11;
+- Nimble v3 54.67 (non-commercial);
+- Nimble v2 40.95;
+- Kev-4B 39.5, confirmed to be the exact Kev 1.0 weights run here.
+
+Kev-4B's calibration error there is 0.032, against Jev's 0.074.
+
+Bespoke says Nimble's labels were not derived from Jev, but its pipeline did
+send 300 seed scenarios to Jev and publishes Jev's answers to them. The
+Ollama page's "75.7% vs Jev 76.0%" compares Ollama's own run of its build
+with Bespoke's run of Jev. It is not like for like.
+
+**Measured here** (Ollama 0.40.3, `nimble:9b-q8_0`, the Apache build; the
+same frozen 2026-10-13 state and the same 12 questions as Kev):
+
+| Name | Kev-4B | Nimble, joint | Nimble, joint reversed | Nimble, one at a time |
+|---|---|---|---|---|
+| MU | 0.55 | 0.41 | 0.44 | 0.52 |
+| BE | 0.66 | 0.09 **skip** | 0.41 | 0.64 |
+| STX | 0.56 | 0.12 **skip** | 0.28 **skip** | 0.32 **skip** |
+| SNDK | 0.58 | 0.10 **skip** | 0.24 **skip** | 0.21 **skip** |
+| NBIS | 0.63 | 0.21 | 0.53 | 0.81 |
+| IREN | 0.51 | 0.30 | 0.37 | 0.45 **skip** |
+| LRCX | 0.60 | 0.76 | 0.64 | 0.97 |
+| WDC | 0.58 | 0.50 | 0.46 | 0.88 |
+| AMAT | 0.64 | 0.84 | 0.79 | 0.95 |
+| INTC | 0.63 | 0.18 **skip** | 0.06 **skip** | 0.35 **skip** |
+| CAT | 0.70 | 0.87 | 0.95 | 0.95 |
+| hedge (BOOK) | 0.48 | 0.55 **hedge** | 0.72 **hedge** | 0.60 **hedge** |
+
+Decisions are guard's pre-declared rule. Each Nimble column was
+deterministic.
+
+**What the table shows:**
+- **Nimble's answer for a name depends on the other questions asked with
+  it.** Every Nimble release writes the whole question list into each
+  question's prompt (Bespoke's own prompt builder), and the effect is large.
+  Reversing the order of the same 12 questions moved answers by up to 0.32
+  (mean 0.14) and turned BE from skip into hold. Asked alone, BE went from
+  0.09 to 0.64. The basket and its order change every month, so in its
+  native mode Nimble's record would mix views on the stocks with artifacts of
+  the question list. Kev's prompt is the state plus one question, so by
+  construction its answers depend only on that question.
+- **Asked one question at a time, Nimble is fair but slow and heavy.** It
+  took 14 minutes a night here (Kev: 85 s), with 10.4 GB of memory at Q8_0
+  (Kev: 6.9 GB). An Apache Q4_K_M build of 5.6 GB exists on Ollama but is
+  unmeasured. Nimble is also still unevaluated and uncalibrated in that build.
+- **It disagrees with Kev.** It would skip three or four names and hedge
+  where Kev holds everything. That is one night; whether either is right only
+  the forward record can say.
+
+**Verdict: Kev stays the decider.** Each usable form of Nimble fails on one
+count:
+- the Nimble that scores best independently is non-commercial;
+- the Apache Nimble that runs locally is unevaluated, uncalibrated and
+  trained on undescribed data;
+- in its own joint mode, its answers depend on the question list.
+
+**If Nimble is wanted anyway,** the honest form is a second shadow record:
+Ollama `nimble:9b-q8_0` pinned by digest, one question per request, declared
+before its first night. Its gate must be tightened for two deciders: with
+63 nights, Bonferroni halves the one-sided 2.5% level, so the gate becomes
+paired t > 2.30 instead of 2. It is not added unless the owner asks.
 
 ### Reading
 

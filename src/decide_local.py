@@ -32,12 +32,13 @@
 # pushes. A night's decisions count only if they reach the remote before that
 # night's close; any left unpushed from an earlier night are dropped.
 #
-# Speed: llama.cpp b11429 keeps no state cache for decision requests, so it
-# re-reads the ~650-token state for each of the 12 questions: ~9 minutes on 4
-# cloud vCPUs, less on a desktop. The schedule tries at 09:17 ET and again at
-# 13:47 ET (a sleeping PC, no network yet, a basket registered late); a night
-# already decided is never asked again, and an answer that arrives after the
-# 15:50 ET cutoff is not logged.
+# Speed: the server runs 16 parallel slots, so llama.cpp reads the ~650-token
+# state once per request and shares it across the questions (with one slot it
+# re-reads it for every question: 532 s instead of 85 s on 4 cloud vCPUs, and
+# no closer to Kev's reference -- RESULTS 27). The schedule tries at 09:17 ET
+# and again at 13:47 ET (a sleeping PC, no network yet, a basket registered
+# late); a night already decided is never asked again, and an answer that
+# arrives after the 15:50 ET cutoff is not logged.
 
 import os, re, sys, json, time, shutil, socket, secrets, hashlib, \
     platform, argparse, subprocess, tarfile, zipfile, datetime as dt
@@ -78,7 +79,9 @@ MODELS = {
 DEFAULT_MODEL = 'kev-4b-q8_0'
 HF_URL = 'https://huggingface.co/{}/resolve/{}/{}'
 
-CTX = 8192                  # Kev's validated context; bounds the KV memory
+NP = 16                     # parallel slots: questions share the state's
+                            # prefill (a basket of up to 15 names + the hedge)
+CTX = 16384                 # the slots' shared KV pool (~750 tokens each)
 TIMEOUT = 3 * 3600          # one request of 12 questions, worst case on a CPU
 TASK = 'qqq-guard-decider'
 RUNS_ET = ('09:17', '13:47')            # a try, and a catch-up
@@ -379,7 +382,7 @@ class Server:
         cmd = self.cmd or [str(server_binary()), '-m',
                            str(model_file(self.m))]
         cmd = cmd + ['--alias', self.alias, '--host', '127.0.0.1', '--port',
-                     str(self.port), '-c', str(CTX), '-np', '1']
+                     str(self.port), '-c', str(CTX), '-np', str(NP)]
         if self.threads:
             cmd += ['-t', str(self.threads)]
         empty = home() / 'empty-config'
