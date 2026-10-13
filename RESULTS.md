@@ -3242,3 +3242,122 @@ shared risk is high. That can only be measured forward, and only the gate
 decides whether it ever touches capital. Until then, the evidence-backed lever
 for this book's risk is the book-level hedge (§21, and the numbers above), and
 that is a change of the traded object for the owner to decide.
+
+
+---
+
+## 28. Leverage on the traded book: tested, and 1× stands — `leverage.py`
+
+The owner asked whether leverage might perform well. §19 had rejected
+leverage on the v2 book, at a flat 5%/yr. This asks again for the book that
+`orders.py` actually trades: long the frozen model's Q5 basket overnight,
+unhedged. It uses IBKR's real financing, commissions and margin rules, and
+§26's five worlds and one-year fan, imported rather than copied.
+
+**The decision rule, written into the script's header before any run.**
+Leverage above 1× is worth considering only if all three hold:
+- at the live-volatility stress, it **raises** the half-the-edge world's
+  median one-year return;
+- it does **not lower** that world's 5th percentile;
+- its chance of a margin call stays **under 1%** in every world.
+
+Otherwise 1× stands. Half the edge is the world a GO verdict leaves most
+plausible. The live stress is the volatility the basket is actually showing.
+An account that is liquidated cannot wait for its edge.
+
+**What the account pays, as measured on 2026-10-13:**
+- **Financing.** IBKR Pro's blended tiers on the actual debit: the benchmark
+  is 3.88% (EFFR on 2026-10-09; the Fed hiked in September), so 5.38% on the
+  first $100k and 4.88% to $1M.
+- **Interest every calendar day.** Under T+1, each morning's sale and each
+  evening's buy settle on the same day. The settled debit therefore never
+  closes while the book trades nightly, so interest is charged every
+  calendar day, about 1.45 days a trading night, which is ~2.2 bps per unit
+  borrowed.
+- **Reg T.** Exposure is capped at 2× equity at the end-of-day check.
+- **Maintenance.** IBKR's own calculator puts maintenance at 25% on the
+  11-name October basket. It rises to about 75% if only 3 names are held.
+- **Portfolio margin.** It needs $110k, so neither capital tested gets it.
+- **Commissions.** Leverage spreads the per-order minimums over more
+  notional. At $25k, cost per traded dollar falls from 3.90 bps at 1× to 2.07
+  bps at 2×. This is the one channel where leverage helps a small account.
+
+**The data.** The real 2003–2026 walk-forward series lives only on the
+owner's machine. Here the book is a **factor proxy**: real QQQ and SPY
+overnight returns up to the frozen cutoff, with §21's alpha and betas and a
+Student-t residual scaled to §21's residual Sharpe. Every table prints a
+PROXY banner. The authoritative run is
+`python src/leverage.py --real --capital 25000` on the owner's machine.
+
+**The decision world: half the edge, at the live basket's volatility**
+(34 live nights, sd 205 bps). The fan is one year, 10,000 paths, at fixed
+notional:
+
+```
+                           $25,000                         $100,000
+                 median     p5   P(<-20%)  dip 1/20   median     p5   P(<-20%)  dip 1/20
+  1.00x           +8.9%  -35.8%     13%      -52%     +16.3%  -33.3%     10%      -53%
+  1.25x          +12.8%  -48.0%     16%      -63%     +20.0%  -48.3%     14%      -65%
+  1.50x          +16.8%  -61.0%     20%      -72%     +23.1%  -57.9%     17%      -71%
+  2.00x          +19.0%  -67.7%     28%      -78%     +24.8%  -64.0%     25%      -77%
+  QQQ held 1x    +15.6%  -18.0%      4%      -32%     +15.6%  -18.0%      4%      -32%
+  QLD-like 2x    +21.0%  -40.7%     16%      -57%     +21.0%  -40.7%     16%      -57%
+  (P(margin call) 0.0% in every row; financing at 2x: $940/yr at $25k, $3,935/yr at $100k)
+```
+
+**The verdict: 1× stands at both capitals.**
+- Every level above 1× raises the median and lowers the 5th percentile, and
+  the p5 clause vetoes all of them.
+- At $25k, 2× buys 10 points of median for 32 points of p5. At $100k it buys
+  8 points for 31.
+- Even for someone who wants 2× exposure, holding a daily-2× QQQ fund beats
+  the book at 2× on both median and tail at the live volatility.
+- At $25k, plain QQQ beats the book's own 1× median.
+
+**What the growth view adds (Kelly, with Reg T and maintenance applied).**
+- **At the backtest's volatility (~116 bps):** the growth-optimal leverage
+  sits at the Reg T cap, about 2×, in every world with an edge. 2× compounds
+  faster than 1× in 4 of 5 worlds.
+- **At the live volatility:** the growth-optimal leverage drops to:
+
+  | Capital | As backtested | Half the edge | No edge |
+  |---|---|---|---|
+  | $25k | 1.69 | 1.24 | 0 |
+  | $100k | 1.62 | 1.12 | 1.02 |
+
+  At the live volatility, 2× out-compounds 1× only as backtested. At half
+  the edge it compounds at +1% a year against +3% at $25k, and +5% against
+  +10% at $100k.
+- **The textbook optimum is unreachable.** The no-margin figure of ~4.8× is
+  out of reach under Reg T, and portfolio margin needs $110k.
+
+**Realized, on the 34 real live nights:**
+
+| Capital | 1× | 1.25× | 1.5× | 2× | QQQ overnight 2× |
+|---|---|---|---|---|---|
+| $25k | −1.3% (dip −7.7%) | −1.4% | −1.7% | −2.7% (dip −16.1%) | +2.0% |
+| $100k | −0.5% (dip −8.3%) | −0.8% | −1.0% | −2.8% (dip −16.6%) | +2.0% |
+
+This is one short path, and evidence of nothing about the edge. It shows how
+fast leverage deepens the dips of a basket whose live overnight beta to QQQ
+is 2.38. At 2× the account carries about 4.5 units of overnight QQQ beta.
+
+**Reading.** Leverage could earn its keep only if two things hold:
+1. A GO verdict, which rules out "no edge" but not "half the edge".
+2. The basket's volatility falling back toward the backtest's.
+
+Even then, the fixed-notional tail cost is large. The script is the
+machinery for asking again then, with `--real`. It answers nothing about this
+year: no live money moves before the forward test passes (§19).
+
+**Reviewed.** The script was reviewed through three adversarial lenses:
+mechanics, statistics and honesty. 8 of 16 findings were confirmed and
+fixed. Among them:
+- Kelly figures ignored the margin rules;
+- commissions were not re-priced when the 2× cap shrank the book;
+- the expected return overstated the levered rows at the live stress;
+- one proxy world was mislabelled.
+
+The 20 tests check planted Kelly truth, financing and day counts, commission
+parity with `paper_bench`, the margin-call rule, and that every proxy table
+carries its banner.
