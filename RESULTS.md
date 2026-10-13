@@ -3234,6 +3234,116 @@ activity, or the edge is just exposure. The 63-night gate at t > 2.46 is
 untouched. Records outside the three declared slots print as
 `[not a gated record]`.
 
+### The battery's result: Perplexity Decider is the best by far, and stays
+
+The run went out from a cloud session at the declaration's merge commit
+(`6a864cc`), with the tree clean, on 2026-10-13 from 18:00 to 19:05 UTC.
+- **Delivery.** All 6,786 requests were settled; the analysis set is all 4
+  blocks; nothing was scaled down.
+- **Cost.** **$1.04**, against a pilot projection of $1.82 and a cap of $8.
+- **Models that could not answer.** Three never returned a usable answer and
+  were smoke-stopped after 3 calls: Span-01, Span-01-lite and classify-1.
+- **A brief outage.** GPT-6 Luna tripped the circuit breaker once, was
+  parked, and completed in the retry pass.
+- **Outputs.** `bench/battery/runs/v1/` holds every call, `summary.json` and
+  `selection_v1.json`. Its scrub check is clean.
+
+| Model | Q | handling | ex_nuis | earnings DiD | stress dH | flips | fails |
+|---|---|---|---|---|---|---|---|
+| **perplexity/pplx-decider-v1.1-27b** | **0.905** | k3 | 0.11 | −0.88 | +0.54 | 0.02 | G2a |
+| liquid/d1 | 0.782 | k3 | 0.17 | −0.70 | +0.27 | 0.13 | G2a, G4 |
+| openai/gpt-6-luna-decisions | 0.745 | k3 | 0.25 | −0.67 | +0.10 | 0.11 | G2a, G4 |
+| inception/mercury-decide | 0.744 | k3 | 0.35 | −0.74 | +0.34 | 0.14 | G2a, G4 |
+| jaredpalmer/kev-4b | 0.716 | k3 | 0.08 | −0.26 | +0.04 | 0.06 | G1, G2a, G3a, G3b |
+| upstage/solar-decide | 0.711 | k3 | 0.06 | −0.54 | +0.09 | 0.12 | G2a, G4 |
+| cloudflare/clef | 0.674 | k3 | 0.09 | −0.53 | +0.04 | 0.06 | G2a, G2b, G3b |
+| nace-ai/drex-v2.0 | 0.651 | k3 | 0.14 | −0.73 | +0.09 | 0.06 | G2a |
+| typesafe/jev-1.13 (reference) | 0.645 | k3 | 0.10 | −0.55 | +0.04 | 0.07 | G2a, G3b, G5 |
+| microsoft/microsoft-decision-1 | 0.623 | k3 | 0.20 | −0.62 | +0.07 | 0.09 | G2a, G3b, G5 |
+| nace-ai/drex-v1.5 | 0.615 | k3 | 0.14 | −0.89 | +0.08 | 0.02 | G2a, G5 |
+| cloudflare/clef-flash | 0.610 | k3 | 0.10 | −0.36 | +0.01 | 0.06 | G1, G2a, G2b, G3a, G3b, G5 |
+| cloudflare/clef-omni | 0.602 | k3 | 0.09 | −0.34 | −0.01 | 0.08 | G2a, G3b, G5 |
+| togethercomputer/tev1-4b-experimental | 0.568 | k3 | 0.14 | −0.41 | +0.06 | 0.11 | G2a, G3b, G4, G5 |
+| upstage/solar-decide-flash | 0.499 | k3 | 0.01 | +0.07 | −0.01 | 0.05 | G3a, G3b, G5 |
+| scaledown/classify-1, respan/span-01, -lite | — | — | — | — | — | — | all (no valid answer) |
+| *earnings rule (control), offline* | *0.599* | | | | | | |
+
+**No model passed all eight gates, so the declared rule takes branch (c).**
+The incumbent stays declared at `k1.q1` and the runtime is unchanged.
+
+It stays on merit, not by default. **Perplexity Decider leads on every axis
+but one:**
+- **Q:** 0.905, ahead of the next model (0.782) and of the rule (0.599).
+- **Its bootstrap:** it ranks first in 99.96% of draws.
+- **Both halves:**
+  - it skips 89% of skip-criteria names and wrongly skips 11% of Ordinary
+    ones;
+  - it hedges 83% of Stressed states and 0% of Calm ones;
+  - with the earnings labels removed, Q is still 0.888.
+- **Earnings:** an earnings flag lowers its p(hold) by 0.88, in every state.
+- **Stress:** a stressed QQQ row raises its p(hedge) by 0.54.
+- **Features, not tickers:** its answers follow the feature rows, not the
+  ticker names (Φ 0.997).
+- **Context:** it shows no dependence on the other questions asked with it.
+- **Repeats:** identical bytes answer identically.
+- **Delivery:** every call was valid, and its p95 latency was 0.9 s.
+
+**Its one failure, G2a, is the order of the names.** Its answers move by
+0.11 when only the order of the names and questions changes. Those order
+draws are in every nuisance arm; the other nuisances (opaque ids, key order,
+jitter, a date shift, a paraphrase) each regress to about zero. Averaging
+three seeded orders (k3) brings its decision flips down to 2.4%, and Q from
+0.890 to 0.905. But G2a is judged on single draws, and the declared
+iteration menu allows k5 only for repeat noise, which this model does not
+have.
+- **What iterates next.** Branch (c) iterates on the incumbent with the menu's
+  q2, s3 and b2 variants. A variant is adopted only if it makes the model
+  pass every gate in a fresh holdout.
+
+**Jev, the reference, never hedges.** Its hedge true-positive rate is 0, and
+a stressed market row moves its p(hedge) by only 0.04. It does not beat the
+rule by the required margin either. It stays the reference: it is what the
+owner first asked for, not the best model.
+
+**Silent model change under one build string.**
+- **The bytes were identical.** The battery's requests for the real
+  2026-10-13 state are byte-identical to the record's (sha `5489fee7…`), and
+  the API reported the same build, `pplx-decider-v1.1-27b-20261006@Perplexity`.
+- **The answers were not.** At 18:00–18:51 UTC eight answers were identical
+  to each other: hedge 0.248, IREN 0.379, so IREN is skipped and the book not
+  hedged. At 11:25 UTC, twice, the same bytes had drawn hedge 0.558 and IREN
+  0.587, with every answer between 0.46 and 0.61. The largest difference on
+  any question is 0.455.
+- **Conclusion.** The build string does not pin the model's behaviour. The
+  morning's "lethargic" decider was not this model's normal output.
+- **The guard against it.** A nightly canary: one fixed reference request
+  logged apart from the record, flagging a change the build string does not
+  show.
+
+**What the battery cannot settle, and the forward gate must.**
+- **The hedge half has to beat QQQ's overnight premium.**
+  - The gate grades a hedged night as the shadow book minus QQQ's overnight
+    return. That return has averaged about +4.5 bps a night live and about +5
+    over the long run.
+  - So a decider that hedges a third of the nights passes only if QQQ
+    averages about −40 bps on exactly those nights. That is crash timing.
+  - RESULTS 21's evidence for hedging is about tail and alpha retention, not
+    the mean. The 2.46 gate is unchanged, so this is stated now, before any
+    night, not discovered later.
+- **It also skips after big up-moves.** Its p(hold) falls by 0.49 after an
+  extreme up-move, against 0.63 after a down-move. The basket is selected on
+  overnight persistence (§15B), so the decider may skip names the strategy
+  wants to hold. The shadow record will show whether that costs anything.
+
+**Cost and the key.**
+- In the stretches when nothing else was using the key, its usage moved in
+  step with the run's own measured spend: $0.248 against $0.241, $0.242
+  against $0.233.
+- During the run's last 17 minutes the key rose $4.59 against $0.26 of
+  battery spend. Earlier in the day it fell $11.77 before the run started.
+  Something else is drawing on the same key.
+- About $18 of credit remained afterwards.
+
 ### Reading
 
 A decision model's speed is irrelevant to a book that trades twice a day in
@@ -3313,6 +3423,26 @@ notional:
 - Even for someone who wants 2× exposure, holding a daily-2× QQQ fund beats
   the book at 2× on both median and tail at the live volatility.
 - At $25k, plain QQQ beats the book's own 1× median.
+
+**Read the verdict for what it is.** Leverage scales the whole fan, so
+whenever the 5th percentile is a loss, it is a deeper loss at any L above 1.
+The rule's p5 clause therefore could not be met by any leverage on this
+book, and "1× stands" was settled by the rule's shape, not by the data. The
+informative results are the price of the trade, 10 points of median for 32
+of p5 at 2×, and these:
+- **Funding beats borrowing.** The one real gain from leverage at $25k is
+  that it spreads IBKR's per-order minimums over more notional: commission
+  per traded dollar falls from 3.90 bps at 1× to 2.07 bps at 2×. That is
+  the sign of a sub-scale account. More capital gets the same saving
+  without the debit or the tail.
+- **This was the worst candidate book.** RESULTS 20 left open modest
+  leverage on the scaled or hedged book. This section levered the raw,
+  unhedged book, whose live beta is 2.4. If more return is ever wanted,
+  the evidence-backed order is to hedge, then volatility-scale, and only
+  then, after a GO, to consider leverage.
+- **Proxy only.** The Kelly figures and "P(margin call) 0.0%" come from a
+  factor proxy with an iid residual, with no clustering inside the basket.
+  They are not the book's numbers until `--real` has run.
 
 **What the growth view adds (Kelly, with Reg T and maintenance applied).**
 - **At the backtest's volatility (~116 bps):** the growth-optimal leverage

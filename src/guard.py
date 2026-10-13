@@ -121,6 +121,62 @@ QUESTIONS = {'q1': {
                'false': 'do not hedge: an ordinary night'})}}
 
 
+# The iteration menu (RESULTS 27, battery spec 4): request VIEWS of the one
+# shared schema-2 state, and wordings, that a selected decider may be
+# re-tested with. None holds a threshold or a number; none is live until a
+# battery round adopts it and its suffix is declared.
+QUESTIONS['q2'] = {
+    'hold': QUESTIONS['q1']['hold'],
+    'hedge': (QUESTIONS['q1']['hedge'][0] + ' The QQQ row of the state '
+              'describes the market tonight.', QUESTIONS['q1']['hedge'][1])}
+BOOK_B2 = ('long these names overnight, equal weight: buy at the close '
+           'auction, sell at the next open auction. Per name, in basis '
+           'points: last_night = the last close-to-open move; nights5_avg = '
+           'the mean of the last 5 such moves; ret5d = the last 5 days\' '
+           'close-to-close return; vol20d = the standard deviation of the '
+           'last 20 daily close-to-close returns; earnings_tonight = reports '
+           'between today\'s close and tomorrow\'s open. QQQ: the same for '
+           'the market.')
+
+
+def _z(row):
+    """s3: the moves in units of the row's own volatility, computed in code
+    (keep math in code), next to the raw bps."""
+    v = row.get('vol20d') or 0
+    out = dict(row)
+    if v > 0:
+        out['last_night_z'] = round(row['last_night'] / v, 1)
+        out['ret5d_z'] = round(row['ret5d'] / (v * 5 ** 0.5), 1)
+    return out
+
+
+def view_s3(state):
+    st = dict(state, names={n: _z(r) for n, r in state['names'].items()})
+    if 'QQQ' in st:
+        st['QQQ'] = _z(st['QQQ'])
+    return st
+
+
+def view_b2(state):
+    return dict(state, book=BOOK_B2)
+
+
+VIEWS = {'s3': view_s3, 'b2': view_b2}
+
+
+def view_of(tags):
+    """A composed view from tags in a fixed order (e.g. 'b2s3'), or None."""
+    fs = [VIEWS[t] for t in ('s3', 'b2') if t in (tags or '')]
+    if not fs:
+        return None
+
+    def v(state):
+        for f in fs:
+            state = f(state)
+        return state
+    return v
+
+
 def question_order(seed, qids):
     """A seeded, reproducible order of question ids: sha256 of seed|id. The
     battery and the runtime share it, so the bytes tested are the bytes
@@ -241,8 +297,9 @@ def build_state(names, today, download=None, earnings=None):
     5-night overnight mean, the 5-day return, 20-day volatility (all bps,
     rounded) and whether it reports earnings tonight; the same for QQQ. All
     known before today's close."""
-    import yfinance as yf
-    download = download or yf.download
+    if download is None:                # tests pass their own; no yfinance
+        import yfinance as yf
+        download = yf.download
     v = download([n.replace('.', '-') for n in names + ['QQQ']],
                  period='3mo', interval='1d', auto_adjust=False,
                  actions=False, group_by='ticker', progress=False)

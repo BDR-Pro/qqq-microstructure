@@ -1,0 +1,517 @@
+{
+ "version": "v1",
+ "mode": "select",
+ "analysis_set": {
+  "blocks": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "states": [
+   "S01",
+   "S02",
+   "S03",
+   "S04",
+   "S05",
+   "S06",
+   "S07",
+   "S08",
+   "S09",
+   "S10",
+   "S11",
+   "S12",
+   "S13",
+   "S14",
+   "S15",
+   "S16",
+   "S17",
+   "S18",
+   "S19",
+   "S20",
+   "S21",
+   "S22",
+   "S23",
+   "S24"
+  ],
+  "strata": [
+   "calm",
+   "stressed",
+   "calm",
+   "stressed",
+   "stressed",
+   "calm",
+   "calm",
+   "stressed",
+   "calm",
+   "stressed",
+   "calm",
+   "stressed",
+   "stressed",
+   "calm",
+   "calm",
+   "stressed",
+   "stressed",
+   "calm",
+   "calm",
+   "calm",
+   "stressed",
+   "stressed",
+   "calm",
+   "stressed"
+  ]
+ },
+ "eligible": [],
+ "failed_gates": {
+  "perplexity/pplx-decider-v1.1-27b": [
+   "G2a"
+  ],
+  "typesafe/jev-1.13": [
+   "G2a",
+   "G3b",
+   "G5"
+  ],
+  "inception/mercury-decide": [
+   "G2a",
+   "G4"
+  ],
+  "cloudflare/clef": [
+   "G2a",
+   "G2b",
+   "G3b"
+  ],
+  "jaredpalmer/kev-4b": [
+   "G1",
+   "G2a",
+   "G3a",
+   "G3b"
+  ],
+  "openai/gpt-6-luna-decisions": [
+   "G2a",
+   "G4"
+  ],
+  "cloudflare/clef-omni": [
+   "G2a",
+   "G3b",
+   "G5"
+  ],
+  "cloudflare/clef-flash": [
+   "G1",
+   "G2a",
+   "G2b",
+   "G3a",
+   "G3b",
+   "G5"
+  ],
+  "microsoft/microsoft-decision-1": [
+   "G2a",
+   "G3b",
+   "G5"
+  ],
+  "upstage/solar-decide": [
+   "G2a",
+   "G4"
+  ],
+  "upstage/solar-decide-flash": [
+   "G3a",
+   "G3b",
+   "G5"
+  ],
+  "nace-ai/drex-v2.0": [
+   "G2a"
+  ],
+  "nace-ai/drex-v1.5": [
+   "G2a",
+   "G5"
+  ],
+  "liquid/d1": [
+   "G2a",
+   "G4"
+  ],
+  "scaledown/classify-1": [
+   "G1",
+   "G2a",
+   "G2b",
+   "G3a",
+   "G3b",
+   "G4",
+   "G5",
+   "G6"
+  ],
+  "togethercomputer/tev1-4b-experimental": [
+   "G2a",
+   "G3b",
+   "G4",
+   "G5"
+  ],
+  "respan/span-01": [
+   "G1",
+   "G2a",
+   "G2b",
+   "G3a",
+   "G3b",
+   "G4",
+   "G5",
+   "G6"
+  ],
+  "respan/span-01-lite": [
+   "G1",
+   "G2a",
+   "G2b",
+   "G3a",
+   "G3b",
+   "G4",
+   "G5",
+   "G6"
+  ]
+ },
+ "holm": {
+  "cloudflare/clef-omni|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "cloudflare/clef|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "inception/mercury-decide|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "liquid/d1|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "microsoft/microsoft-decision-1|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "nace-ai/drex-v1.5|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "nace-ai/drex-v2.0|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "openai/gpt-6-luna-decisions|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "perplexity/pplx-decider-v1.1-27b|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "perplexity/pplx-decider-v1.1-27b|G3b": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "togethercomputer/tev1-4b-experimental|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "togethercomputer/tev1-4b-experimental|G3b": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "typesafe/jev-1.13|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "typesafe/jev-1.13|G3b": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "upstage/solar-decide|G3a": {
+   "p": 4.9999750001249995e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "inception/mercury-decide|G3b": {
+   "p": 9.999950000249999e-06,
+   "p_holm": 0.00012999935000325,
+   "reject": true
+  },
+  "liquid/d1|G3b": {
+   "p": 1.4999925000374999e-05,
+   "p_holm": 0.00014999925000374999,
+   "reject": true
+  },
+  "openai/gpt-6-luna-decisions|G3b": {
+   "p": 1.4999925000374999e-05,
+   "p_holm": 0.00014999925000374999,
+   "reject": true
+  },
+  "nace-ai/drex-v2.0|G3b": {
+   "p": 2.9999850000749997e-05,
+   "p_holm": 0.00023999880000599998,
+   "reject": true
+  },
+  "microsoft/microsoft-decision-1|G3b": {
+   "p": 0.00011499942500287499,
+   "p_holm": 0.0008049959750201249,
+   "reject": true
+  },
+  "nace-ai/drex-v1.5|G3b": {
+   "p": 0.0004249978750106249,
+   "p_holm": 0.0025499872500637493,
+   "reject": true
+  },
+  "upstage/solar-decide|G3b": {
+   "p": 0.0008199959000204999,
+   "p_holm": 0.0040999795001024995,
+   "reject": true
+  },
+  "cloudflare/clef|G3b": {
+   "p": 0.11691441542792286,
+   "p_holm": 0.46765766171169143,
+   "reject": false
+  },
+  "upstage/solar-decide-flash|G3b": {
+   "p": 0.7586962065189674,
+   "p_holm": 1.0,
+   "reject": false
+  },
+  "cloudflare/clef-omni|G3b": {
+   "p": 0.8715956420217899,
+   "p_holm": 1.0,
+   "reject": false
+  },
+  "upstage/solar-decide-flash|G3a": {
+   "p": 1.0,
+   "p_holm": 1.0,
+   "reject": false
+  }
+ },
+ "ranking": [],
+ "top": null,
+ "incumbent": "perplexity/pplx-decider-v1.1-27b",
+ "branch": "none",
+ "switch_test": null,
+ "decider": {
+  "pin": "perplexity/pplx-decider-v1.1-27b",
+  "handling": "k1",
+  "version": "q1",
+  "suffix": "",
+  "provider_pin": null,
+  "build": "perplexity/pplx-decider-v1.1-27b-20261006",
+  "dated": true,
+  "provider": "Perplexity"
+ },
+ "reference": {
+  "id": "typesafe/jev-1.13",
+  "status": "raw",
+  "suffix": "",
+  "note": "one raw canonical call, no suffix",
+  "build": "typesafe/jev-1.13-20260917",
+  "provider": "TypeSafe"
+ },
+ "measured_builds": {
+  "perplexity/pplx-decider-v1.1-27b": {
+   "build": "perplexity/pplx-decider-v1.1-27b-20261006",
+   "provider": "Perplexity",
+   "modal_share": 1.0
+  },
+  "typesafe/jev-1.13": {
+   "build": "typesafe/jev-1.13-20260917",
+   "provider": "TypeSafe",
+   "modal_share": 1.0
+  },
+  "inception/mercury-decide": {
+   "build": "inception/mercury-decide-20260930",
+   "provider": "Inception",
+   "modal_share": 1.0
+  },
+  "cloudflare/clef": {
+   "build": "cloudflare/clef",
+   "provider": "PrimeIntellect",
+   "modal_share": 0.96
+  },
+  "jaredpalmer/kev-4b": {
+   "build": "jaredpalmer/kev-4b-20260924",
+   "provider": "Phala",
+   "modal_share": 0.5066666666666667
+  },
+  "openai/gpt-6-luna-decisions": {
+   "build": "openai/gpt-6-luna-decisions-20261006",
+   "provider": "OpenAI",
+   "modal_share": 1.0
+  },
+  "cloudflare/clef-omni": {
+   "build": "cloudflare/clef-omni-20261009",
+   "provider": "Cloudflare",
+   "modal_share": 1.0
+  },
+  "cloudflare/clef-flash": {
+   "build": "cloudflare/clef-flash",
+   "provider": "PrimeIntellect",
+   "modal_share": 0.7706666666666667
+  },
+  "microsoft/microsoft-decision-1": {
+   "build": "microsoft/microsoft-decision-1-20261009",
+   "provider": "Azure",
+   "modal_share": 1.0
+  },
+  "upstage/solar-decide": {
+   "build": "upstage/solar-decide-20260928",
+   "provider": "Upstage",
+   "modal_share": 1.0
+  },
+  "upstage/solar-decide-flash": {
+   "build": "upstage/solar-decide-flash-20261008",
+   "provider": "Upstage",
+   "modal_share": 1.0
+  },
+  "nace-ai/drex-v2.0": {
+   "build": "nace-ai/drex-v2.0-20261009",
+   "provider": "DeepInfra",
+   "modal_share": 1.0
+  },
+  "nace-ai/drex-v1.5": {
+   "build": "nace-ai/drex-v1.5-20261009",
+   "provider": "DeepInfra",
+   "modal_share": 1.0
+  },
+  "liquid/d1": {
+   "build": "liquid/d1-20260930",
+   "provider": "Liquid",
+   "modal_share": 1.0
+  },
+  "scaledown/classify-1": {
+   "build": null,
+   "provider": null,
+   "modal_share": null
+  },
+  "togethercomputer/tev1-4b-experimental": {
+   "build": "togethercomputer/tev1-4b-experimental-20260923",
+   "provider": "Together",
+   "modal_share": 1.0
+  },
+  "respan/span-01": {
+   "build": null,
+   "provider": null,
+   "modal_share": null
+  },
+  "respan/span-01-lite": {
+   "build": null,
+   "provider": null,
+   "modal_share": null
+  }
+ },
+ "results_note": "no candidate qualified",
+ "gate_unchanged": {
+  "GATE_NIGHTS": 63,
+  "GATE_T": 2.46
+ },
+ "sensitivity": {
+  "P_rank1": {
+   "perplexity/pplx-decider-v1.1-27b": 0.9996,
+   "upstage/solar-decide": 0.0,
+   "liquid/d1": 0.0001,
+   "inception/mercury-decide": 0.0,
+   "openai/gpt-6-luna-decisions": 0.0001,
+   "nace-ai/drex-v2.0": 0.0,
+   "togethercomputer/tev1-4b-experimental": 0.0,
+   "jaredpalmer/kev-4b": 0.0002,
+   "typesafe/jev-1.13": 0.0,
+   "microsoft/microsoft-decision-1": 0.0,
+   "nace-ai/drex-v1.5": 0.0,
+   "cloudflare/clef": 0.0,
+   "cloudflare/clef-flash": 0.0,
+   "cloudflare/clef-omni": 0.0,
+   "upstage/solar-decide-flash": 0.0
+  },
+  "P_rank1_pool": "all scored",
+  "winner_Q_k1": null,
+  "winner_Q_noE": null,
+  "winner_AUC_comb": null,
+  "S0_decisions": {
+   "perplexity/pplx-decider-v1.1-27b": [
+    {
+     "MU": "hold",
+     "BE": "hold",
+     "STX": "skip",
+     "SNDK": "hold",
+     "NBIS": "hold",
+     "IREN": "skip",
+     "LRCX": "hold",
+     "WDC": "hold",
+     "AMAT": "hold",
+     "INTC": "hold",
+     "CAT": "hold",
+     "BOOK": "none"
+    }
+   ]
+  }
+ },
+ "summary_sha256": "17e263be8084089b5760ad8b1f7d2c48f589061a85ab818fdd615c41c10aa14a",
+ "plan_sha256": "56311a1bb923fcf258abeb1fe7f2bfb704d09a82198b12a617c4bfb74eeb1b20",
+ "run": {
+  "status": "done",
+  "sessions": [
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "deadline",
+    "code_changed": null
+   },
+   {
+    "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+    "tree": "clean",
+    "max_usd": 8.0,
+    "status": "done",
+    "code_changed": null
+   }
+  ]
+ }
+}
