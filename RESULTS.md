@@ -2798,7 +2798,9 @@ with mild doubt. This is one night, so it is not evidence.
 That name is logged with every answer and carries the file, its revision, the
 runtime and the platform build, so any other build is a different decider
 with its own record and its own 63-night clock. Run it on one machine only. The
-earnings-rule control decides beside it, on the identical state.
+earnings-rule control decides beside it, on the identical state. *Superseded
+the same day, before Kev decided a single night, by the hosted deciders below
+(the owner allowed OpenRouter). Kev remains the `--engine local` option.*
 
 `decide_local.py` does the whole night locally:
 - **Setup.** `--setup` makes its own clone of the repository, downloads
@@ -2944,6 +2946,93 @@ Ollama `nimble:9b-q8_0` pinned by digest, one question per request, declared
 before its first night. Its gate must be tightened for two deciders: with
 63 nights, Bonferroni halves the one-sided 2.5% level, so the gate becomes
 paired t > 2.30 instead of 2. It is not added unless the owner asks.
+
+### Hosted is allowed: Perplexity Decider and Jev, through OpenRouter
+
+The owner then widened the rule: "local host or API through OpenRouter, it is
+okay". That changes the answer, because **OpenRouter serves real decision
+models, Jev included**. Its catalogue lists 21 models whose output is
+"decisions", among them:
+- `typesafe/jev-1.13`;
+- `perplexity/pplx-decider-v1.1-27b`;
+- `jaredpalmer/kev-4b`;
+- Clef, Tev1, Mercury Decide;
+- OpenAI's GPT-6 Luna Decisions and Microsoft-Decision-1.
+
+OpenRouter's Decisions API (`POST /api/alpha/decisions`) takes Jev's request
+shape and answers with the dated build and the provider. guard's client
+speaks it unchanged.
+
+**Measured on the two independent boards** (Decision Index v0.3.2, JevBench
+v1.6.1; neither re-measured here):
+
+| Model | Reachable as | Decision Index | JevBench intelligence / calibration |
+|---|---|---|---|
+| **Perplexity Decider v1.1 27B** | OpenRouter; Apache-2.0 weights | **62.75** | **75.7** / 89.9 |
+| Jev 1.13 | OpenRouter, TypeSafe | 60.11 | 63.6 / 90.6 |
+| Kev 27B | local only, about 16 GB at Q4 (unofficial file) | 58.78 | 64.2 / **93.7** |
+| Clef | OpenRouter | 53.08 | 59.1 / 91.6, but answers jointly |
+| Mercury Decide | OpenRouter | — | 65.9 / 81.3 |
+| Kev 4B (the local decider until now) | local or OpenRouter | 39.50 | — |
+| Qwen3-32B zero-shot (a plain LLM) | — | — | 33.9 / 89.9 |
+
+GPT-6 Luna Decisions, Microsoft-Decision-1, Solar Decide, Drex v2.0 and
+Span-01 are on neither board.
+
+**What the boards rule out:**
+- **A plain LLM read through its logprobs.** I had started building this
+  before finding the catalogue. The one zero-shot LLM on the board scores
+  half of Jev's intelligence. It was dropped.
+- **The unscored decision models.** Unmeasured is not better.
+
+**Kev-9B was also run here** (llama.cpp, Q8_0, ggml-org's file, built from
+weights identical to Kev's `v1.0` tag; same temperature as its `head.pt`):
+- 137–146 s a night and 11.8 GB of memory;
+- deterministic;
+- it would have skipped five names where Kev-4B skipped none.
+
+Its own README puts it at 41.0 on the held-out index, against 38.0 for 4B.
+That gap is too small to matter beside the hosted models.
+
+**Declared 2026-10-13, before any of them decided a night:**
+- **The decider** (backend `http`): `perplexity/pplx-decider-v1.1-27b`. It
+  is the most accurate model reachable, on both boards, and its calibration
+  matches Jev's. Its card scores each question as its own row, the state
+  plus that one question, so it has no cross-question effect. Its weights
+  are Apache-2.0. It needs about 49 GB of GPU memory, so it is hosted.
+- **The reference** (backend `jev`): `typesafe/jev-1.13`, Jev itself. It is
+  what the owner first asked for, and the standard every board measures
+  against.
+- **The control** (backend `rule`): the earnings rule, unchanged.
+- **Kev-4B on the owner's machine** stays available as `--engine local`,
+  with no key. It is not a declared record.
+- **The record logs the dated build and the provider**, e.g.
+  `typesafe/jev-1.13-20260917@TypeSafe`. An answer from any other model is
+  refused. A new dated build starts its own record.
+- **The gate is tightened.** Three records can each pass it, so 2's one-sided
+  2.5% is split three ways (Bonferroni, 62 df): paired t > **2.46** over at
+  least 63 nights.
+
+**What it costs and sends:**
+- Each night sends the ~650-token state and the 12 questions to OpenRouter
+  and the model's provider. These are public-market summary numbers.
+- At the listed rates ($0.02 and $0.042 per million input tokens) a night
+  costs well under a tenth of a cent.
+- Answers come back in about a second.
+- The key, `OPENROUTER_API_KEY`, lives only in the owner's machine's
+  environment, never in the repository or in CI.
+
+**Verified here, and what is not.**
+- Verified:
+  - Both decision endpoints exist (401 without a key, against 404 for a
+    nonexistent path).
+  - The client, the build-pinning and refusal, the per-decider failure
+    isolation, and the retry on a 502 pass against a stand-in for the API.
+- Not verified: no live answer has been seen. The key was added after this
+  session started, and a session only picks up new settings when it begins.
+  The first real answers come from `decide_local.py --dry-run` on the
+  owner's machine, or from a new session. Their probabilities must be read
+  before the first logged night.
 
 ### Reading
 
