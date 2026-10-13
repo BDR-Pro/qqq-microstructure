@@ -1,0 +1,222 @@
+{
+ "plan": "bench/battery/plan_v1.json",
+ "plan_sha": "56311a1bb923fcf258abeb1fe7f2bfb704d09a82198b12a617c4bfb74eeb1b20",
+ "items_sha": "2c1db06e1e1f6c251620700bafa6ffb75e79cb691f5ce1456a9cba64ce544a00",
+ "shas": {
+  "plan": "56311a1bb923fcf258abeb1fe7f2bfb704d09a82198b12a617c4bfb74eeb1b20",
+  "items": "2c1db06e1e1f6c251620700bafa6ffb75e79cb691f5ce1456a9cba64ce544a00",
+  "states": "a2ac1becfd3b7c874a04e6da86a34400601a7e05bdae126609ab03fec27d3c30",
+  "s0": "a974818aea06c44230dd589227d76ed84d06c9e118ec3f336c737082b7b2533c",
+  "anchors": "0b70e99f4c1611f3fbf5be0dc0dad907406b3d0a4381e0c64caf14d1076dc1ab",
+  "lock": "d18e8094a7a234d71cf937ddc1e5a415bbb509626aceea3d81fa0568f4bce01b"
+ },
+ "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+ "tree": "clean",
+ "python": "3.13.16",
+ "numpy": "2.5.3",
+ "started_utc": "2026-10-13T18:00:53.444Z",
+ "ended_utc": "2026-10-13T19:04:43.710Z",
+ "key_before": {
+  "limit_remaining": 23.622488059000005,
+  "usage": 76.377511941
+ },
+ "key_after": {
+  "limit_remaining": 17.995675707000004,
+  "usage": 82.004324293
+ },
+ "pilot_costs": {
+  "perplexity/pplx-decider-v1.1-27b": 0.00019486,
+  "typesafe/jev-1.13": 7.7952e-05,
+  "inception/mercury-decide": 1.55e-05,
+  "cloudflare/clef": 7.9044e-05,
+  "jaredpalmer/kev-4b": 5.6112e-05,
+  "openai/gpt-6-luna-decisions": 0.0002834,
+  "cloudflare/clef-omni": 0.0002802,
+  "cloudflare/clef-flash": 3.9522e-05,
+  "microsoft/microsoft-decision-1": 5.7456e-05,
+  "upstage/solar-decide": 0.000613,
+  "upstage/solar-decide-flash": 0.000613,
+  "nace-ai/drex-v2.0": 8.016e-05,
+  "nace-ai/drex-v1.5": 5.344e-05,
+  "liquid/d1": 0.00018772,
+  "scaledown/classify-1": 0.000613,
+  "togethercomputer/tev1-4b-experimental": 0.00035028,
+  "respan/span-01": 0.000613,
+  "respan/span-01-lite": 0.000613
+ },
+ "projection": {
+  "usd": 1.8173835420000002,
+  "calls": 6786,
+  "limit_usd": 6.4,
+  "after_scale_down_usd": 1.8173835420000002,
+  "after_scale_down_calls": 6786
+ },
+ "scale_down": {
+  "dropped_blocks": [],
+  "dropped_models": []
+ },
+ "status": "done",
+ "spent_usd": 1.0361065120000006,
+ "breaker": {
+  "openai/gpt-6-luna-decisions": {
+   "trips": 2,
+   "others_answered": true
+  }
+ },
+ "sessions": [
+  {
+   "started_utc": "2026-10-13T18:00:53.444Z",
+   "ended_utc": "2026-10-13T18:10:13.757Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 23.622488059000005,
+    "usage": 76.377511941
+   },
+   "key_after": {
+    "limit_remaining": 23.374071838000006,
+    "usage": 76.625928162
+   },
+   "spent_before_usd": 0,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.24070087099999957,
+   "key_usage_delta": 0.24841622099999938
+  },
+  {
+   "started_utc": "2026-10-13T18:10:18.028Z",
+   "ended_utc": "2026-10-13T18:19:35.432Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 23.371681937999995,
+    "usage": 76.628318062
+   },
+   "key_after": {
+    "limit_remaining": 23.173098362000005,
+    "usage": 76.826901638
+   },
+   "spent_before_usd": 0.240700871,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.2392862260000004,
+   "key_usage_delta": 0.1985835759999901
+  },
+  {
+   "started_utc": "2026-10-13T18:19:38.852Z",
+   "ended_utc": "2026-10-13T18:28:57.630Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 23.173098362000005,
+    "usage": 76.826901638
+   },
+   "key_after": {
+    "limit_remaining": 23.089482562,
+    "usage": 76.910517438
+   },
+   "spent_before_usd": 0.47998709700000003,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.021572150000000068,
+   "key_usage_delta": 0.08361580000000401
+  },
+  {
+   "started_utc": "2026-10-13T18:29:01.664Z",
+   "ended_utc": "2026-10-13T18:38:14.982Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 23.089482562,
+    "usage": 76.910517438
+   },
+   "key_after": {
+    "limit_remaining": 22.847424305999994,
+    "usage": 77.152575694
+   },
+   "spent_before_usd": 0.501559247,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.23250770599999815,
+   "key_usage_delta": 0.24205825600000708
+  },
+  {
+   "started_utc": "2026-10-13T18:38:18.591Z",
+   "ended_utc": "2026-10-13T18:47:32.314Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 22.847424305999994,
+    "usage": 77.152575694
+   },
+   "key_after": {
+    "limit_remaining": 22.806023855999996,
+    "usage": 77.193976144
+   },
+   "spent_before_usd": 0.734066953,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.03844309999999962,
+   "key_usage_delta": 0.04140044999999759
+  },
+  {
+   "started_utc": "2026-10-13T18:47:35.887Z",
+   "ended_utc": "2026-10-13T18:56:49.284Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 22.806023855999996,
+    "usage": 77.193976144
+   },
+   "key_after": {
+    "limit_remaining": 21.154136676999997,
+    "usage": 78.845863323
+   },
+   "spent_before_usd": 0.772510053,
+   "status": "deadline",
+   "parked": [],
+   "spent_usd": 0.2377265589999975,
+   "key_usage_delta": 1.6518871789999992
+  },
+  {
+   "started_utc": "2026-10-13T18:56:52.928Z",
+   "ended_utc": "2026-10-13T19:04:43.710Z",
+   "auth": "proxy",
+   "max_usd": 8.0,
+   "commit": "6a864cc182dbf4653678116ef0573bf048a1ed00",
+   "tree": "clean",
+   "key_before": {
+    "limit_remaining": 20.934339557,
+    "usage": 79.065660443
+   },
+   "key_after": {
+    "limit_remaining": 17.995675707000004,
+    "usage": 82.004324293
+   },
+   "spent_before_usd": 1.010236612,
+   "status": "done",
+   "parked": [
+    "openai/gpt-6-luna-decisions"
+   ],
+   "spent_usd": 0.025869900000000667,
+   "key_usage_delta": 2.9386638499999975
+  }
+ ],
+ "pilot_unmeasured": [
+  "respan/span-01",
+  "respan/span-01-lite",
+  "scaledown/classify-1"
+ ]
+}
