@@ -1,0 +1,202 @@
+{
+ "version": "iter_r1",
+ "mode": "iterate",
+ "round": 1,
+ "holdout": false,
+ "pin": "perplexity/pplx-decider-v1.1-27b",
+ "analysis_set": {
+  "blocks": [
+   1,
+   2,
+   3
+  ],
+  "states": [
+   "S01",
+   "S02",
+   "S03",
+   "S04",
+   "S05",
+   "S06",
+   "S07",
+   "S08",
+   "S09",
+   "S10",
+   "S11",
+   "S12",
+   "S13",
+   "S14",
+   "S15",
+   "S16",
+   "S17",
+   "S18"
+  ],
+  "strata": [
+   "stressed",
+   "stressed",
+   "calm",
+   "calm",
+   "calm",
+   "stressed",
+   "calm",
+   "calm",
+   "stressed",
+   "calm",
+   "stressed",
+   "stressed",
+   "calm",
+   "stressed",
+   "calm",
+   "stressed",
+   "calm",
+   "stressed"
+  ]
+ },
+ "control": {
+  "id": "perplexity/pplx-decider-v1.1-27b#k1.q1",
+  "tag": "k1.q1",
+  "version": "q1",
+  "handling": "k1"
+ },
+ "variants": [
+  "q2",
+  "s3",
+  "b2"
+ ],
+ "checks": {
+  "perplexity/pplx-decider-v1.1-27b#k1.q2": {
+   "tag": "k1.q2",
+   "menu": "q2",
+   "Q_h": 0.9067693744164332,
+   "Q_ctrl": 0.9067693744164332,
+   "delta_Q": 0.0,
+   "failed": [
+    "G2a"
+   ],
+   "gates": false,
+   "lower_bound": -0.11111111111111116,
+   "alpha": 0.016666666666666666,
+   "lb_ok": false,
+   "dq_ok": false,
+   "delta_AUC_comb": 0.012345679012345734,
+   "auc_ok": true,
+   "delta_Phi": 0.0,
+   "phi_ok": true,
+   "ok": false
+  },
+  "perplexity/pplx-decider-v1.1-27b#k1.q1s3": {
+   "tag": "k1.q1s3",
+   "menu": "s3",
+   "Q_h": 0.7041666666666666,
+   "Q_ctrl": 0.9067693744164332,
+   "delta_Q": -0.20260270774976663,
+   "failed": [
+    "G2a",
+    "G3b"
+   ],
+   "gates": false,
+   "lower_bound": -0.27298546171829335,
+   "alpha": 0.016666666666666666,
+   "lb_ok": false,
+   "dq_ok": false,
+   "delta_AUC_comb": -0.02663139329805997,
+   "auc_ok": false,
+   "delta_Phi": -0.0023180768265538276,
+   "phi_ok": true,
+   "ok": false
+  },
+  "perplexity/pplx-decider-v1.1-27b#k1.q1b2": {
+   "tag": "k1.q1b2",
+   "menu": "b2",
+   "Q_h": 0.7589402427637721,
+   "Q_ctrl": 0.9067693744164332,
+   "delta_Q": -0.1478291316526611,
+   "failed": [
+    "G2a"
+   ],
+   "gates": false,
+   "lower_bound": -0.2333055909606683,
+   "alpha": 0.016666666666666666,
+   "lb_ok": false,
+   "dq_ok": false,
+   "delta_AUC_comb": -0.0029320987654321007,
+   "auc_ok": true,
+   "delta_Phi": -6.872459095252914e-06,
+   "phi_ok": true,
+   "ok": false
+  }
+ },
+ "adopted": null,
+ "adopted_arm": null,
+ "kept": null,
+ "final": {
+  "version": "q1",
+  "handling": "k1",
+  "tag": "k1.q1",
+  "suffix": "",
+  "declared": {
+   "k": 1,
+   "version": "q1",
+   "views": ""
+  }
+ },
+ "next": "stop",
+ "stopping_rule": "stop at the first round that adopts nothing, or after round 2; then the holdout, if the final version is not the selection's own",
+ "origin": {
+  "selection": {
+   "path": "bench/battery/runs/v1/selection_v1.json",
+   "sha256": "fa28c603145f91fe1b694d7ad7acfd4f595c2dd63f9f6e69c5ef1597d85ee891",
+   "summary_sha256": "17e263be8084089b5760ad8b1f7d2c48f589061a85ab818fdd615c41c10aa14a",
+   "plan_sha256": "56311a1bb923fcf258abeb1fe7f2bfb704d09a82198b12a617c4bfb74eeb1b20"
+  },
+  "branch": "none",
+  "decider": {
+   "pin": "perplexity/pplx-decider-v1.1-27b",
+   "handling": "k1",
+   "version": "q1",
+   "suffix": "",
+   "provider_pin": null,
+   "build": "perplexity/pplx-decider-v1.1-27b-20261006",
+   "dated": true,
+   "provider": "Perplexity"
+  },
+  "sd_rep": 0.0,
+  "ex_ctx": 0.0,
+  "k5_allowed": false,
+  "sep_allowed": false,
+  "price_in": 2e-08,
+  "cost_per_call_usd": 0.0007741935483870966
+ },
+ "prior": null,
+ "decider": {
+  "pin": "perplexity/pplx-decider-v1.1-27b",
+  "handling": "k1",
+  "version": "q1",
+  "suffix": "",
+  "provider_pin": null,
+  "build": "perplexity/pplx-decider-v1.1-27b-20261006",
+  "dated": true,
+  "provider": "Perplexity",
+  "declared": {
+   "k": 1,
+   "version": "q1",
+   "views": "",
+   "provider": null,
+   "dated": true,
+   "measured_build": "perplexity/pplx-decider-v1.1-27b-20261006"
+  }
+ },
+ "summary_sha256": "578dcdb96cd0548a23b85ff1df19c6794666fb8067e3ba50d39e08bed9f012bc",
+ "plan_sha256": "9f1d3779c6fb2098e9d705ccd6832e5a2121816e8b8fad383fd8d6e55e3a37d0",
+ "run": {
+  "status": "done",
+  "sessions": [
+   {
+    "commit": "84bf6848a8c48df8fd5e7bd778c4fd969db33fc9",
+    "tree": "clean",
+    "max_usd": 3.0,
+    "status": "done",
+    "code_changed": null
+   }
+  ]
+ }
+}
