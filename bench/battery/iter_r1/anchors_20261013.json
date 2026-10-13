@@ -1,0 +1,24 @@
+{
+ "date": "20261013",
+ "source": "yfinance daily, end=2026-10-13 (exclusive), guard.build_state vol20d",
+ "vol20d": {
+  "AMAT": 246,
+  "AMD": 317,
+  "ASML": 174,
+  "BE": 507,
+  "CAT": 191,
+  "CRWV": 335,
+  "GEV": 181,
+  "INTC": 425,
+  "IREN": 369,
+  "LRCX": 268,
+  "MU": 290,
+  "NBIS": 422,
+  "SNDK": 420,
+  "SOFI": 175,
+  "STX": 442,
+  "TSM": 173,
+  "WDC": 400,
+  "QQQ": 96
+ }
+}
