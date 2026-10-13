@@ -1,0 +1,5234 @@
+{
+ "S01": {
+  "block": 1,
+  "regime": "calm",
+  "labels": [
+   "GEV",
+   "LRCX",
+   "AMAT",
+   "CAT",
+   "MU",
+   "SNDK",
+   "AMD",
+   "ASML",
+   "BE",
+   "SOFI",
+   "INTC"
+  ],
+  "conditions": {
+   "GEV": "Ordinary",
+   "LRCX": "Moderate",
+   "AMAT": "Ordinary",
+   "CAT": "Ordinary",
+   "MU": "Ordinary",
+   "SNDK": "Ordinary",
+   "AMD": "Earnings",
+   "ASML": "ExtremeDown",
+   "BE": "Earnings",
+   "SOFI": "Ordinary",
+   "INTC": "Ordinary"
+  },
+  "rows": {
+   "GEV": {
+    "last_night": 73,
+    "nights5_avg": -3,
+    "ret5d": -71,
+    "vol20d": 240,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 199,
+    "nights5_avg": 121,
+    "ret5d": 572,
+    "vol20d": 274,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 2,
+    "nights5_avg": 31,
+    "ret5d": 72,
+    "vol20d": 374,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -84,
+    "nights5_avg": -25,
+    "ret5d": -206,
+    "vol20d": 218,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 144,
+    "nights5_avg": -33,
+    "ret5d": 569,
+    "vol20d": 326,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 204,
+    "nights5_avg": 28,
+    "ret5d": 173,
+    "vol20d": 651,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": -156,
+    "nights5_avg": -50,
+    "ret5d": -596,
+    "vol20d": 372,
+    "earnings_tonight": true
+   },
+   "ASML": {
+    "last_night": -278,
+    "nights5_avg": -39,
+    "ret5d": -491,
+    "vol20d": 146,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 6,
+    "nights5_avg": -47,
+    "ret5d": 308,
+    "vol20d": 632,
+    "earnings_tonight": true
+   },
+   "SOFI": {
+    "last_night": 29,
+    "nights5_avg": -9,
+    "ret5d": 11,
+    "vol20d": 119,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -107,
+    "nights5_avg": -88,
+    "ret5d": -848,
+    "vol20d": 510,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -36,
+    "nights5_avg": 2,
+    "ret5d": -120,
+    "vol20d": 99
+   },
+   "stressed": {
+    "last_night": 165,
+    "nights5_avg": 41,
+    "ret5d": 542,
+    "vol20d": 214
+   }
+  },
+  "stressed_m": 2.226185200823642,
+  "stressed_sign": 1,
+  "cx_type": 1,
+  "e7_kind": "AN",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "GEV": {
+     "last_night": 73,
+     "nights5_avg": -3,
+     "ret5d": -71,
+     "vol20d": 240,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 199,
+     "nights5_avg": 121,
+     "ret5d": 572,
+     "vol20d": 274,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 2,
+     "nights5_avg": 31,
+     "ret5d": 72,
+     "vol20d": 374,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -84,
+     "nights5_avg": -25,
+     "ret5d": -206,
+     "vol20d": 218,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 144,
+     "nights5_avg": -33,
+     "ret5d": 569,
+     "vol20d": 326,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 204,
+     "nights5_avg": 28,
+     "ret5d": 173,
+     "vol20d": 651,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": -156,
+     "nights5_avg": -50,
+     "ret5d": -596,
+     "vol20d": 372,
+     "earnings_tonight": true
+    },
+    "ASML": {
+     "last_night": -278,
+     "nights5_avg": -39,
+     "ret5d": -491,
+     "vol20d": 146,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 6,
+     "nights5_avg": -47,
+     "ret5d": 308,
+     "vol20d": 632,
+     "earnings_tonight": true
+    },
+    "SOFI": {
+     "last_night": 29,
+     "nights5_avg": -9,
+     "ret5d": 11,
+     "vol20d": 119,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -107,
+     "nights5_avg": -88,
+     "ret5d": -848,
+     "vol20d": 510,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -36,
+    "nights5_avg": 2,
+    "ret5d": -120,
+    "vol20d": 99
+   }
+  }
+ },
+ "S02": {
+  "block": 1,
+  "regime": "stressed",
+  "labels": [
+   "ASML",
+   "SOFI",
+   "IREN",
+   "STX",
+   "CAT",
+   "WDC",
+   "LRCX",
+   "NBIS",
+   "INTC",
+   "AMAT",
+   "SNDK"
+  ],
+  "conditions": {
+   "ASML": "Ordinary",
+   "SOFI": "Ordinary",
+   "IREN": "Ordinary",
+   "STX": "Earnings",
+   "CAT": "ExtremeDown",
+   "WDC": "Ordinary",
+   "LRCX": "Ordinary",
+   "NBIS": "Ordinary",
+   "INTC": "Ordinary",
+   "AMAT": "Moderate",
+   "SNDK": "ExtremeUp"
+  },
+  "rows": {
+   "ASML": {
+    "last_night": -21,
+    "nights5_avg": -37,
+    "ret5d": -3,
+    "vol20d": 187,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -1,
+    "nights5_avg": 29,
+    "ret5d": 245,
+    "vol20d": 179,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -80,
+    "nights5_avg": -35,
+    "ret5d": 253,
+    "vol20d": 405,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -131,
+    "nights5_avg": -126,
+    "ret5d": -1265,
+    "vol20d": 772,
+    "earnings_tonight": true
+   },
+   "CAT": {
+    "last_night": 133,
+    "nights5_avg": 26,
+    "ret5d": -3351,
+    "vol20d": 469,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -169,
+    "nights5_avg": -46,
+    "ret5d": 176,
+    "vol20d": 607,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -42,
+    "nights5_avg": 14,
+    "ret5d": 455,
+    "vol20d": 273,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 258,
+    "nights5_avg": 26,
+    "ret5d": -608,
+    "vol20d": 589,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -272,
+    "nights5_avg": 135,
+    "ret5d": -1133,
+    "vol20d": 821,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -608,
+    "nights5_avg": -183,
+    "ret5d": -262,
+    "vol20d": 520,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 1345,
+    "nights5_avg": 335,
+    "ret5d": 722,
+    "vol20d": 667,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 16,
+    "nights5_avg": 5,
+    "ret5d": -94,
+    "vol20d": 80
+   },
+   "stressed": {
+    "last_night": 138,
+    "nights5_avg": 42,
+    "ret5d": 607,
+    "vol20d": 198
+   }
+  },
+  "stressed_m": 2.0626867755744187,
+  "stressed_sign": 1,
+  "cx_type": 1,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "ASML": {
+     "last_night": -21,
+     "nights5_avg": -37,
+     "ret5d": -3,
+     "vol20d": 187,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -1,
+     "nights5_avg": 29,
+     "ret5d": 245,
+     "vol20d": 179,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -80,
+     "nights5_avg": -35,
+     "ret5d": 253,
+     "vol20d": 405,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -131,
+     "nights5_avg": -126,
+     "ret5d": -1265,
+     "vol20d": 772,
+     "earnings_tonight": true
+    },
+    "CAT": {
+     "last_night": 133,
+     "nights5_avg": 26,
+     "ret5d": -3351,
+     "vol20d": 469,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -169,
+     "nights5_avg": -46,
+     "ret5d": 176,
+     "vol20d": 607,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": -42,
+     "nights5_avg": 14,
+     "ret5d": 455,
+     "vol20d": 273,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 258,
+     "nights5_avg": 26,
+     "ret5d": -608,
+     "vol20d": 589,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -272,
+     "nights5_avg": 135,
+     "ret5d": -1133,
+     "vol20d": 821,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -608,
+     "nights5_avg": -183,
+     "ret5d": -262,
+     "vol20d": 520,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 1345,
+     "nights5_avg": 335,
+     "ret5d": 722,
+     "vol20d": 667,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 138,
+    "nights5_avg": 42,
+    "ret5d": 607,
+    "vol20d": 198
+   }
+  }
+ },
+ "S03": {
+  "block": 1,
+  "regime": "calm",
+  "labels": [
+   "AMAT",
+   "NBIS",
+   "CAT",
+   "ASML",
+   "WDC",
+   "BE",
+   "TSM",
+   "SNDK",
+   "STX",
+   "CRWV",
+   "MU"
+  ],
+  "conditions": {
+   "AMAT": "Ordinary",
+   "NBIS": "Ordinary",
+   "CAT": "ExtremeDown",
+   "ASML": "Earnings",
+   "WDC": "Ordinary",
+   "BE": "Ordinary",
+   "TSM": "Ordinary",
+   "SNDK": "Moderate",
+   "STX": "Ordinary",
+   "CRWV": "Ordinary",
+   "MU": "ExtremeUp"
+  },
+  "rows": {
+   "AMAT": {
+    "last_night": -130,
+    "nights5_avg": -49,
+    "ret5d": -782,
+    "vol20d": 363,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 40,
+    "nights5_avg": 25,
+    "ret5d": 184,
+    "vol20d": 218,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -488,
+    "nights5_avg": -114,
+    "ret5d": -669,
+    "vol20d": 233,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 29,
+    "nights5_avg": 3,
+    "ret5d": -132,
+    "vol20d": 214,
+    "earnings_tonight": true
+   },
+   "WDC": {
+    "last_night": 76,
+    "nights5_avg": -8,
+    "ret5d": -477,
+    "vol20d": 429,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -178,
+    "nights5_avg": -65,
+    "ret5d": 53,
+    "vol20d": 495,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": -55,
+    "nights5_avg": -14,
+    "ret5d": -73,
+    "vol20d": 243,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 386,
+    "nights5_avg": 50,
+    "ret5d": 208,
+    "vol20d": 396,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 101,
+    "nights5_avg": 78,
+    "ret5d": -804,
+    "vol20d": 404,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 75,
+    "nights5_avg": 22,
+    "ret5d": 130,
+    "vol20d": 288,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 462,
+    "nights5_avg": 131,
+    "ret5d": 183,
+    "vol20d": 243,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 20,
+    "nights5_avg": 0,
+    "ret5d": -218,
+    "vol20d": 110
+   },
+   "stressed": {
+    "last_night": -131,
+    "nights5_avg": -25,
+    "ret5d": -801,
+    "vol20d": 281
+   }
+  },
+  "stressed_m": 2.9312796876262834,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "AMAT": {
+     "last_night": -130,
+     "nights5_avg": -49,
+     "ret5d": -782,
+     "vol20d": 363,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 40,
+     "nights5_avg": 25,
+     "ret5d": 184,
+     "vol20d": 218,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -488,
+     "nights5_avg": -114,
+     "ret5d": -669,
+     "vol20d": 233,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 29,
+     "nights5_avg": 3,
+     "ret5d": -132,
+     "vol20d": 214,
+     "earnings_tonight": true
+    },
+    "WDC": {
+     "last_night": 76,
+     "nights5_avg": -8,
+     "ret5d": -477,
+     "vol20d": 429,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": -178,
+     "nights5_avg": -65,
+     "ret5d": 53,
+     "vol20d": 495,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": -55,
+     "nights5_avg": -14,
+     "ret5d": -73,
+     "vol20d": 243,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 386,
+     "nights5_avg": 50,
+     "ret5d": 208,
+     "vol20d": 396,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 101,
+     "nights5_avg": 78,
+     "ret5d": -804,
+     "vol20d": 404,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 75,
+     "nights5_avg": 22,
+     "ret5d": 130,
+     "vol20d": 288,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 462,
+     "nights5_avg": 131,
+     "ret5d": 183,
+     "vol20d": 243,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 20,
+    "nights5_avg": 0,
+    "ret5d": -218,
+    "vol20d": 110
+   }
+  }
+ },
+ "S04": {
+  "block": 1,
+  "regime": "stressed",
+  "labels": [
+   "GEV",
+   "WDC",
+   "SNDK",
+   "IREN",
+   "SOFI",
+   "LRCX",
+   "CAT",
+   "MU",
+   "AMAT",
+   "INTC",
+   "ASML"
+  ],
+  "conditions": {
+   "GEV": "Earnings",
+   "WDC": "Ordinary",
+   "SNDK": "Ordinary",
+   "IREN": "Ordinary",
+   "SOFI": "ExtremeDown",
+   "LRCX": "Ordinary",
+   "CAT": "Ordinary",
+   "MU": "Ordinary",
+   "AMAT": "ExtremeDown",
+   "INTC": "ExtremeDown",
+   "ASML": "ExtremeDown"
+  },
+  "rows": {
+   "GEV": {
+    "last_night": -25,
+    "nights5_avg": 11,
+    "ret5d": -347,
+    "vol20d": 337,
+    "earnings_tonight": true
+   },
+   "WDC": {
+    "last_night": -242,
+    "nights5_avg": 86,
+    "ret5d": -428,
+    "vol20d": 507,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -189,
+    "nights5_avg": -30,
+    "ret5d": -275,
+    "vol20d": 686,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 188,
+    "nights5_avg": 92,
+    "ret5d": 501,
+    "vol20d": 504,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 76,
+    "nights5_avg": 43,
+    "ret5d": -2379,
+    "vol20d": 394,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 106,
+    "nights5_avg": -61,
+    "ret5d": 625,
+    "vol20d": 504,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -15,
+    "nights5_avg": 18,
+    "ret5d": 476,
+    "vol20d": 262,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 90,
+    "nights5_avg": -34,
+    "ret5d": 656,
+    "vol20d": 337,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 128,
+    "nights5_avg": -61,
+    "ret5d": -2662,
+    "vol20d": 370,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -74,
+    "nights5_avg": -42,
+    "ret5d": -4823,
+    "vol20d": 751,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": -534,
+    "nights5_avg": -161,
+    "ret5d": -203,
+    "vol20d": 270,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 26,
+    "nights5_avg": 1,
+    "ret5d": -6,
+    "vol20d": 79
+   },
+   "stressed": {
+    "last_night": -191,
+    "nights5_avg": -30,
+    "ret5d": -727,
+    "vol20d": 202
+   }
+  },
+  "stressed_m": 2.1015275071430297,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "GEV": {
+     "last_night": -25,
+     "nights5_avg": 11,
+     "ret5d": -347,
+     "vol20d": 337,
+     "earnings_tonight": true
+    },
+    "WDC": {
+     "last_night": -242,
+     "nights5_avg": 86,
+     "ret5d": -428,
+     "vol20d": 507,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": -189,
+     "nights5_avg": -30,
+     "ret5d": -275,
+     "vol20d": 686,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 188,
+     "nights5_avg": 92,
+     "ret5d": 501,
+     "vol20d": 504,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 76,
+     "nights5_avg": 43,
+     "ret5d": -2379,
+     "vol20d": 394,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 106,
+     "nights5_avg": -61,
+     "ret5d": 625,
+     "vol20d": 504,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -15,
+     "nights5_avg": 18,
+     "ret5d": 476,
+     "vol20d": 262,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 90,
+     "nights5_avg": -34,
+     "ret5d": 656,
+     "vol20d": 337,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 128,
+     "nights5_avg": -61,
+     "ret5d": -2662,
+     "vol20d": 370,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -74,
+     "nights5_avg": -42,
+     "ret5d": -4823,
+     "vol20d": 751,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": -534,
+     "nights5_avg": -161,
+     "ret5d": -203,
+     "vol20d": 270,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -191,
+    "nights5_avg": -30,
+    "ret5d": -727,
+    "vol20d": 202
+   }
+  }
+ },
+ "S05": {
+  "block": 1,
+  "regime": "stressed",
+  "labels": [
+   "CRWV",
+   "LRCX",
+   "AMD",
+   "ASML",
+   "CAT",
+   "SOFI",
+   "STX",
+   "GEV",
+   "WDC",
+   "SNDK",
+   "NBIS"
+  ],
+  "conditions": {
+   "CRWV": "Ordinary",
+   "LRCX": "Ordinary",
+   "AMD": "Ordinary",
+   "ASML": "Moderate",
+   "CAT": "Ordinary",
+   "SOFI": "Ordinary",
+   "STX": "Ordinary",
+   "GEV": "Moderate",
+   "WDC": "Earnings",
+   "SNDK": "Moderate",
+   "NBIS": "ExtremeUp"
+  },
+  "rows": {
+   "CRWV": {
+    "last_night": 159,
+    "nights5_avg": 25,
+    "ret5d": 586,
+    "vol20d": 435,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 10,
+    "nights5_avg": 37,
+    "ret5d": -163,
+    "vol20d": 197,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 251,
+    "nights5_avg": -48,
+    "ret5d": -1079,
+    "vol20d": 716,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": -16,
+    "nights5_avg": 19,
+    "ret5d": 854,
+    "vol20d": 228,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": 28,
+    "nights5_avg": -8,
+    "ret5d": -311,
+    "vol20d": 207,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 59,
+    "nights5_avg": 24,
+    "ret5d": 155,
+    "vol20d": 212,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -65,
+    "nights5_avg": 109,
+    "ret5d": -312,
+    "vol20d": 515,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 64,
+    "nights5_avg": -15,
+    "ret5d": 865,
+    "vol20d": 186,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -5,
+    "nights5_avg": 49,
+    "ret5d": 429,
+    "vol20d": 462,
+    "earnings_tonight": true
+   },
+   "SNDK": {
+    "last_night": -106,
+    "nights5_avg": 7,
+    "ret5d": 3648,
+    "vol20d": 757,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 1048,
+    "nights5_avg": 187,
+    "ret5d": 1006,
+    "vol20d": 517,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 47,
+    "nights5_avg": -3,
+    "ret5d": 78,
+    "vol20d": 97
+   },
+   "stressed": {
+    "last_night": 153,
+    "nights5_avg": 24,
+    "ret5d": 829,
+    "vol20d": 277
+   }
+  },
+  "stressed_m": 2.8879621813998266,
+  "stressed_sign": 1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "CRWV": {
+     "last_night": 159,
+     "nights5_avg": 25,
+     "ret5d": 586,
+     "vol20d": 435,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 10,
+     "nights5_avg": 37,
+     "ret5d": -163,
+     "vol20d": 197,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 251,
+     "nights5_avg": -48,
+     "ret5d": -1079,
+     "vol20d": 716,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": -16,
+     "nights5_avg": 19,
+     "ret5d": 854,
+     "vol20d": 228,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": 28,
+     "nights5_avg": -8,
+     "ret5d": -311,
+     "vol20d": 207,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 59,
+     "nights5_avg": 24,
+     "ret5d": 155,
+     "vol20d": 212,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -65,
+     "nights5_avg": 109,
+     "ret5d": -312,
+     "vol20d": 515,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 64,
+     "nights5_avg": -15,
+     "ret5d": 865,
+     "vol20d": 186,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -5,
+     "nights5_avg": 49,
+     "ret5d": 429,
+     "vol20d": 462,
+     "earnings_tonight": true
+    },
+    "SNDK": {
+     "last_night": -106,
+     "nights5_avg": 7,
+     "ret5d": 3648,
+     "vol20d": 757,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 1048,
+     "nights5_avg": 187,
+     "ret5d": 1006,
+     "vol20d": 517,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 153,
+    "nights5_avg": 24,
+    "ret5d": 829,
+    "vol20d": 277
+   }
+  }
+ },
+ "S06": {
+  "block": 1,
+  "regime": "calm",
+  "labels": [
+   "MU",
+   "SOFI",
+   "STX",
+   "SNDK",
+   "TSM",
+   "AMAT",
+   "GEV",
+   "CRWV",
+   "NBIS",
+   "IREN",
+   "BE"
+  ],
+  "conditions": {
+   "MU": "Ordinary",
+   "SOFI": "Ordinary",
+   "STX": "Ordinary",
+   "SNDK": "Ordinary",
+   "TSM": "Ordinary",
+   "AMAT": "Ordinary",
+   "GEV": "Ordinary",
+   "CRWV": "Moderate",
+   "NBIS": "Moderate",
+   "IREN": "ExtremeUp",
+   "BE": "ExtremeDown"
+  },
+  "rows": {
+   "MU": {
+    "last_night": 10,
+    "nights5_avg": -43,
+    "ret5d": 234,
+    "vol20d": 261,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 10,
+    "nights5_avg": 8,
+    "ret5d": -208,
+    "vol20d": 141,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -177,
+    "nights5_avg": 49,
+    "ret5d": -455,
+    "vol20d": 392,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 183,
+    "nights5_avg": -38,
+    "ret5d": 30,
+    "vol20d": 551,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": 15,
+    "nights5_avg": 35,
+    "ret5d": -229,
+    "vol20d": 158,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 70,
+    "nights5_avg": 22,
+    "ret5d": 253,
+    "vol20d": 217,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 76,
+    "nights5_avg": 23,
+    "ret5d": 125,
+    "vol20d": 181,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 26,
+    "nights5_avg": -23,
+    "ret5d": -1099,
+    "vol20d": 278,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 80,
+    "nights5_avg": -22,
+    "ret5d": 2406,
+    "vol20d": 563,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 142,
+    "nights5_avg": -46,
+    "ret5d": 3742,
+    "vol20d": 576,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -918,
+    "nights5_avg": -279,
+    "ret5d": -1974,
+    "vol20d": 495,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 19,
+    "nights5_avg": -7,
+    "ret5d": 50,
+    "vol20d": 89
+   },
+   "stressed": {
+    "last_night": -137,
+    "nights5_avg": -39,
+    "ret5d": -812,
+    "vol20d": 215
+   }
+  },
+  "stressed_m": 2.2377982162423606,
+  "stressed_sign": -1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "MU": {
+     "last_night": 10,
+     "nights5_avg": -43,
+     "ret5d": 234,
+     "vol20d": 261,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 10,
+     "nights5_avg": 8,
+     "ret5d": -208,
+     "vol20d": 141,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -177,
+     "nights5_avg": 49,
+     "ret5d": -455,
+     "vol20d": 392,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 183,
+     "nights5_avg": -38,
+     "ret5d": 30,
+     "vol20d": 551,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": 15,
+     "nights5_avg": 35,
+     "ret5d": -229,
+     "vol20d": 158,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 70,
+     "nights5_avg": 22,
+     "ret5d": 253,
+     "vol20d": 217,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 76,
+     "nights5_avg": 23,
+     "ret5d": 125,
+     "vol20d": 181,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 26,
+     "nights5_avg": -23,
+     "ret5d": -1099,
+     "vol20d": 278,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 80,
+     "nights5_avg": -22,
+     "ret5d": 2406,
+     "vol20d": 563,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 142,
+     "nights5_avg": -46,
+     "ret5d": 3742,
+     "vol20d": 576,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": -918,
+     "nights5_avg": -279,
+     "ret5d": -1974,
+     "vol20d": 495,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 19,
+    "nights5_avg": -7,
+    "ret5d": 50,
+    "vol20d": 89
+   }
+  }
+ },
+ "S07": {
+  "block": 2,
+  "regime": "calm",
+  "labels": [
+   "IREN",
+   "SOFI",
+   "WDC",
+   "AMAT",
+   "LRCX",
+   "BE",
+   "SNDK",
+   "ASML",
+   "NBIS",
+   "GEV",
+   "INTC"
+  ],
+  "conditions": {
+   "IREN": "Ordinary",
+   "SOFI": "ExtremeUp",
+   "WDC": "Moderate",
+   "AMAT": "Ordinary",
+   "LRCX": "Ordinary",
+   "BE": "Ordinary",
+   "SNDK": "Ordinary",
+   "ASML": "Ordinary",
+   "NBIS": "Ordinary",
+   "GEV": "ExtremeUp",
+   "INTC": "Ordinary"
+  },
+  "rows": {
+   "IREN": {
+    "last_night": -57,
+    "nights5_avg": 9,
+    "ret5d": 358,
+    "vol20d": 376,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 420,
+    "nights5_avg": 68,
+    "ret5d": 582,
+    "vol20d": 204,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -464,
+    "nights5_avg": -43,
+    "ret5d": -767,
+    "vol20d": 474,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -13,
+    "nights5_avg": 33,
+    "ret5d": 272,
+    "vol20d": 305,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 71,
+    "nights5_avg": -51,
+    "ret5d": 311,
+    "vol20d": 240,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 204,
+    "nights5_avg": 42,
+    "ret5d": 450,
+    "vol20d": 517,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 137,
+    "nights5_avg": -31,
+    "ret5d": -691,
+    "vol20d": 342,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": -26,
+    "nights5_avg": 18,
+    "ret5d": 101,
+    "vol20d": 141,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 94,
+    "nights5_avg": 46,
+    "ret5d": 835,
+    "vol20d": 423,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 370,
+    "nights5_avg": 49,
+    "ret5d": 302,
+    "vol20d": 209,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 94,
+    "nights5_avg": 24,
+    "ret5d": -117,
+    "vol20d": 333,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -36,
+    "nights5_avg": 6,
+    "ret5d": 66,
+    "vol20d": 89
+   },
+   "stressed": {
+    "last_night": 130,
+    "nights5_avg": 24,
+    "ret5d": 687,
+    "vol20d": 201
+   }
+  },
+  "stressed_m": 2.092027567718111,
+  "stressed_sign": 1,
+  "cx_type": 1,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "IREN": {
+     "last_night": -57,
+     "nights5_avg": 9,
+     "ret5d": 358,
+     "vol20d": 376,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 420,
+     "nights5_avg": 68,
+     "ret5d": 582,
+     "vol20d": 204,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -464,
+     "nights5_avg": -43,
+     "ret5d": -767,
+     "vol20d": 474,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -13,
+     "nights5_avg": 33,
+     "ret5d": 272,
+     "vol20d": 305,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 71,
+     "nights5_avg": -51,
+     "ret5d": 311,
+     "vol20d": 240,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 204,
+     "nights5_avg": 42,
+     "ret5d": 450,
+     "vol20d": 517,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 137,
+     "nights5_avg": -31,
+     "ret5d": -691,
+     "vol20d": 342,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": -26,
+     "nights5_avg": 18,
+     "ret5d": 101,
+     "vol20d": 141,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 94,
+     "nights5_avg": 46,
+     "ret5d": 835,
+     "vol20d": 423,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 370,
+     "nights5_avg": 49,
+     "ret5d": 302,
+     "vol20d": 209,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 94,
+     "nights5_avg": 24,
+     "ret5d": -117,
+     "vol20d": 333,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -36,
+    "nights5_avg": 6,
+    "ret5d": 66,
+    "vol20d": 89
+   }
+  }
+ },
+ "S08": {
+  "block": 2,
+  "regime": "stressed",
+  "labels": [
+   "IREN",
+   "CRWV",
+   "AMD",
+   "MU",
+   "BE",
+   "AMAT",
+   "NBIS",
+   "SOFI",
+   "WDC",
+   "STX",
+   "LRCX"
+  ],
+  "conditions": {
+   "IREN": "Ordinary",
+   "CRWV": "Moderate",
+   "AMD": "Ordinary",
+   "MU": "ExtremeUp",
+   "BE": "Ordinary",
+   "AMAT": "Ordinary",
+   "NBIS": "Ordinary",
+   "SOFI": "Ordinary",
+   "WDC": "Earnings",
+   "STX": "ExtremeUp",
+   "LRCX": "Moderate"
+  },
+  "rows": {
+   "IREN": {
+    "last_night": 79,
+    "nights5_avg": 40,
+    "ret5d": -120,
+    "vol20d": 463,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 353,
+    "nights5_avg": 115,
+    "ret5d": 977,
+    "vol20d": 426,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 184,
+    "nights5_avg": -91,
+    "ret5d": 608,
+    "vol20d": 606,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 2,
+    "nights5_avg": 104,
+    "ret5d": 4368,
+    "vol20d": 736,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -341,
+    "nights5_avg": -163,
+    "ret5d": 704,
+    "vol20d": 734,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -95,
+    "nights5_avg": 40,
+    "ret5d": 567,
+    "vol20d": 395,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 359,
+    "nights5_avg": -95,
+    "ret5d": 1964,
+    "vol20d": 951,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 104,
+    "nights5_avg": 44,
+    "ret5d": -423,
+    "vol20d": 213,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": 326,
+    "nights5_avg": -190,
+    "ret5d": -1112,
+    "vol20d": 967,
+    "earnings_tonight": true
+   },
+   "STX": {
+    "last_night": -113,
+    "nights5_avg": 54,
+    "ret5d": 4295,
+    "vol20d": 728,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 446,
+    "nights5_avg": 200,
+    "ret5d": -776,
+    "vol20d": 577,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 34,
+    "nights5_avg": 16,
+    "ret5d": -5,
+    "vol20d": 117
+   },
+   "stressed": {
+    "last_night": -148,
+    "nights5_avg": -25,
+    "ret5d": -688,
+    "vol20d": 219
+   }
+  },
+  "stressed_m": 2.2848179134529767,
+  "stressed_sign": -1,
+  "cx_type": 1,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "IREN": {
+     "last_night": 79,
+     "nights5_avg": 40,
+     "ret5d": -120,
+     "vol20d": 463,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 353,
+     "nights5_avg": 115,
+     "ret5d": 977,
+     "vol20d": 426,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 184,
+     "nights5_avg": -91,
+     "ret5d": 608,
+     "vol20d": 606,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 2,
+     "nights5_avg": 104,
+     "ret5d": 4368,
+     "vol20d": 736,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": -341,
+     "nights5_avg": -163,
+     "ret5d": 704,
+     "vol20d": 734,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -95,
+     "nights5_avg": 40,
+     "ret5d": 567,
+     "vol20d": 395,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 359,
+     "nights5_avg": -95,
+     "ret5d": 1964,
+     "vol20d": 951,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 104,
+     "nights5_avg": 44,
+     "ret5d": -423,
+     "vol20d": 213,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": 326,
+     "nights5_avg": -190,
+     "ret5d": -1112,
+     "vol20d": 967,
+     "earnings_tonight": true
+    },
+    "STX": {
+     "last_night": -113,
+     "nights5_avg": 54,
+     "ret5d": 4295,
+     "vol20d": 728,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 446,
+     "nights5_avg": 200,
+     "ret5d": -776,
+     "vol20d": 577,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -148,
+    "nights5_avg": -25,
+    "ret5d": -688,
+    "vol20d": 219
+   }
+  }
+ },
+ "S09": {
+  "block": 2,
+  "regime": "calm",
+  "labels": [
+   "BE",
+   "WDC",
+   "STX",
+   "INTC",
+   "SOFI",
+   "CAT",
+   "GEV",
+   "LRCX",
+   "TSM",
+   "SNDK",
+   "IREN"
+  ],
+  "conditions": {
+   "BE": "Ordinary",
+   "WDC": "ExtremeUp",
+   "STX": "Ordinary",
+   "INTC": "Ordinary",
+   "SOFI": "ExtremeDown",
+   "CAT": "Ordinary",
+   "GEV": "Earnings",
+   "LRCX": "Earnings",
+   "TSM": "Earnings",
+   "SNDK": "Ordinary",
+   "IREN": "Ordinary"
+  },
+  "rows": {
+   "BE": {
+    "last_night": -50,
+    "nights5_avg": -83,
+    "ret5d": 944,
+    "vol20d": 539,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -142,
+    "nights5_avg": -6,
+    "ret5d": 4701,
+    "vol20d": 694,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -31,
+    "nights5_avg": -19,
+    "ret5d": -157,
+    "vol20d": 417,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 77,
+    "nights5_avg": -8,
+    "ret5d": 448,
+    "vol20d": 345,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -544,
+    "nights5_avg": -147,
+    "ret5d": -114,
+    "vol20d": 265,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -62,
+    "nights5_avg": 5,
+    "ret5d": 40,
+    "vol20d": 170,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 30,
+    "nights5_avg": 36,
+    "ret5d": 254,
+    "vol20d": 192,
+    "earnings_tonight": true
+   },
+   "LRCX": {
+    "last_night": -55,
+    "nights5_avg": -29,
+    "ret5d": 354,
+    "vol20d": 279,
+    "earnings_tonight": true
+   },
+   "TSM": {
+    "last_night": -91,
+    "nights5_avg": 33,
+    "ret5d": -104,
+    "vol20d": 268,
+    "earnings_tonight": true
+   },
+   "SNDK": {
+    "last_night": 179,
+    "nights5_avg": 31,
+    "ret5d": 565,
+    "vol20d": 479,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -144,
+    "nights5_avg": 54,
+    "ret5d": -504,
+    "vol20d": 331,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -37,
+    "nights5_avg": -10,
+    "ret5d": 106,
+    "vol20d": 74
+   },
+   "stressed": {
+    "last_night": -143,
+    "nights5_avg": -31,
+    "ret5d": -750,
+    "vol20d": 278
+   }
+  },
+  "stressed_m": 2.892161517707933,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "BE": {
+     "last_night": -50,
+     "nights5_avg": -83,
+     "ret5d": 944,
+     "vol20d": 539,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -142,
+     "nights5_avg": -6,
+     "ret5d": 4701,
+     "vol20d": 694,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -31,
+     "nights5_avg": -19,
+     "ret5d": -157,
+     "vol20d": 417,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 77,
+     "nights5_avg": -8,
+     "ret5d": 448,
+     "vol20d": 345,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -544,
+     "nights5_avg": -147,
+     "ret5d": -114,
+     "vol20d": 265,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -62,
+     "nights5_avg": 5,
+     "ret5d": 40,
+     "vol20d": 170,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 30,
+     "nights5_avg": 36,
+     "ret5d": 254,
+     "vol20d": 192,
+     "earnings_tonight": true
+    },
+    "LRCX": {
+     "last_night": -55,
+     "nights5_avg": -29,
+     "ret5d": 354,
+     "vol20d": 279,
+     "earnings_tonight": true
+    },
+    "TSM": {
+     "last_night": -91,
+     "nights5_avg": 33,
+     "ret5d": -104,
+     "vol20d": 268,
+     "earnings_tonight": true
+    },
+    "SNDK": {
+     "last_night": 179,
+     "nights5_avg": 31,
+     "ret5d": 565,
+     "vol20d": 479,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -144,
+     "nights5_avg": 54,
+     "ret5d": -504,
+     "vol20d": 331,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -37,
+    "nights5_avg": -10,
+    "ret5d": 106,
+    "vol20d": 74
+   }
+  }
+ },
+ "S10": {
+  "block": 2,
+  "regime": "stressed",
+  "labels": [
+   "AMD",
+   "AMAT",
+   "NBIS",
+   "LRCX",
+   "INTC",
+   "STX",
+   "TSM",
+   "CRWV",
+   "IREN",
+   "BE",
+   "ASML"
+  ],
+  "conditions": {
+   "AMD": "Earnings",
+   "AMAT": "ExtremeUp",
+   "NBIS": "Ordinary",
+   "LRCX": "Ordinary",
+   "INTC": "Moderate",
+   "STX": "Ordinary",
+   "TSM": "Ordinary",
+   "CRWV": "ExtremeDown",
+   "IREN": "Ordinary",
+   "BE": "ExtremeUp",
+   "ASML": "Ordinary"
+  },
+  "rows": {
+   "AMD": {
+    "last_night": -358,
+    "nights5_avg": 77,
+    "ret5d": -1233,
+    "vol20d": 887,
+    "earnings_tonight": true
+   },
+   "AMAT": {
+    "last_night": 873,
+    "nights5_avg": 94,
+    "ret5d": 2062,
+    "vol20d": 533,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": -133,
+    "nights5_avg": 35,
+    "ret5d": -818,
+    "vol20d": 647,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 41,
+    "nights5_avg": -71,
+    "ret5d": -219,
+    "vol20d": 610,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -72,
+    "nights5_avg": 14,
+    "ret5d": 1527,
+    "vol20d": 387,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 41,
+    "nights5_avg": -102,
+    "ret5d": -802,
+    "vol20d": 779,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": 113,
+    "nights5_avg": 9,
+    "ret5d": -315,
+    "vol20d": 280,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 116,
+    "nights5_avg": -53,
+    "ret5d": -6613,
+    "vol20d": 976,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -154,
+    "nights5_avg": 155,
+    "ret5d": 157,
+    "vol20d": 694,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 1705,
+    "nights5_avg": 110,
+    "ret5d": 913,
+    "vol20d": 867,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 59,
+    "nights5_avg": 52,
+    "ret5d": -336,
+    "vol20d": 261,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -17,
+    "nights5_avg": -5,
+    "ret5d": 41,
+    "vol20d": 89
+   },
+   "stressed": {
+    "last_night": -131,
+    "nights5_avg": -29,
+    "ret5d": -778,
+    "vol20d": 238
+   }
+  },
+  "stressed_m": 2.4830382635458195,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "AMD": {
+     "last_night": -358,
+     "nights5_avg": 77,
+     "ret5d": -1233,
+     "vol20d": 887,
+     "earnings_tonight": true
+    },
+    "AMAT": {
+     "last_night": 873,
+     "nights5_avg": 94,
+     "ret5d": 2062,
+     "vol20d": 533,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": -133,
+     "nights5_avg": 35,
+     "ret5d": -818,
+     "vol20d": 647,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 41,
+     "nights5_avg": -71,
+     "ret5d": -219,
+     "vol20d": 610,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -72,
+     "nights5_avg": 14,
+     "ret5d": 1527,
+     "vol20d": 387,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 41,
+     "nights5_avg": -102,
+     "ret5d": -802,
+     "vol20d": 779,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": 113,
+     "nights5_avg": 9,
+     "ret5d": -315,
+     "vol20d": 280,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 116,
+     "nights5_avg": -53,
+     "ret5d": -6613,
+     "vol20d": 976,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -154,
+     "nights5_avg": 155,
+     "ret5d": 157,
+     "vol20d": 694,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 1705,
+     "nights5_avg": 110,
+     "ret5d": 913,
+     "vol20d": 867,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 59,
+     "nights5_avg": 52,
+     "ret5d": -336,
+     "vol20d": 261,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -131,
+    "nights5_avg": -29,
+    "ret5d": -778,
+    "vol20d": 238
+   }
+  }
+ },
+ "S11": {
+  "block": 2,
+  "regime": "calm",
+  "labels": [
+   "SNDK",
+   "BE",
+   "GEV",
+   "WDC",
+   "SOFI",
+   "MU",
+   "AMAT",
+   "TSM",
+   "LRCX",
+   "IREN",
+   "INTC"
+  ],
+  "conditions": {
+   "SNDK": "Ordinary",
+   "BE": "Moderate",
+   "GEV": "Earnings",
+   "WDC": "Ordinary",
+   "SOFI": "Ordinary",
+   "MU": "Ordinary",
+   "AMAT": "ExtremeDown",
+   "TSM": "Earnings",
+   "LRCX": "Ordinary",
+   "IREN": "Ordinary",
+   "INTC": "ExtremeDown"
+  },
+  "rows": {
+   "SNDK": {
+    "last_night": -151,
+    "nights5_avg": -42,
+    "ret5d": -549,
+    "vol20d": 439,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -306,
+    "nights5_avg": -53,
+    "ret5d": 201,
+    "vol20d": 393,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 96,
+    "nights5_avg": 5,
+    "ret5d": -101,
+    "vol20d": 207,
+    "earnings_tonight": true
+   },
+   "WDC": {
+    "last_night": -155,
+    "nights5_avg": 12,
+    "ret5d": 537,
+    "vol20d": 313,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 5,
+    "nights5_avg": 9,
+    "ret5d": -214,
+    "vol20d": 126,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -15,
+    "nights5_avg": -20,
+    "ret5d": 84,
+    "vol20d": 272,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -9,
+    "nights5_avg": -7,
+    "ret5d": -2030,
+    "vol20d": 296,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": 40,
+    "nights5_avg": 48,
+    "ret5d": -379,
+    "vol20d": 234,
+    "earnings_tonight": true
+   },
+   "LRCX": {
+    "last_night": -35,
+    "nights5_avg": 22,
+    "ret5d": 145,
+    "vol20d": 340,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -48,
+    "nights5_avg": 90,
+    "ret5d": 843,
+    "vol20d": 530,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -1199,
+    "nights5_avg": -187,
+    "ret5d": -659,
+    "vol20d": 709,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 23,
+    "nights5_avg": 20,
+    "ret5d": 129,
+    "vol20d": 114
+   },
+   "stressed": {
+    "last_night": 146,
+    "nights5_avg": 37,
+    "ret5d": 664,
+    "vol20d": 262
+   }
+  },
+  "stressed_m": 2.727720650613645,
+  "stressed_sign": 1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "SNDK": {
+     "last_night": -151,
+     "nights5_avg": -42,
+     "ret5d": -549,
+     "vol20d": 439,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": -306,
+     "nights5_avg": -53,
+     "ret5d": 201,
+     "vol20d": 393,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 96,
+     "nights5_avg": 5,
+     "ret5d": -101,
+     "vol20d": 207,
+     "earnings_tonight": true
+    },
+    "WDC": {
+     "last_night": -155,
+     "nights5_avg": 12,
+     "ret5d": 537,
+     "vol20d": 313,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 5,
+     "nights5_avg": 9,
+     "ret5d": -214,
+     "vol20d": 126,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -15,
+     "nights5_avg": -20,
+     "ret5d": 84,
+     "vol20d": 272,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -9,
+     "nights5_avg": -7,
+     "ret5d": -2030,
+     "vol20d": 296,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": 40,
+     "nights5_avg": 48,
+     "ret5d": -379,
+     "vol20d": 234,
+     "earnings_tonight": true
+    },
+    "LRCX": {
+     "last_night": -35,
+     "nights5_avg": 22,
+     "ret5d": 145,
+     "vol20d": 340,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -48,
+     "nights5_avg": 90,
+     "ret5d": 843,
+     "vol20d": 530,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -1199,
+     "nights5_avg": -187,
+     "ret5d": -659,
+     "vol20d": 709,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 23,
+    "nights5_avg": 20,
+    "ret5d": 129,
+    "vol20d": 114
+   }
+  }
+ },
+ "S12": {
+  "block": 2,
+  "regime": "stressed",
+  "labels": [
+   "SNDK",
+   "GEV",
+   "AMD",
+   "CRWV",
+   "MU",
+   "LRCX",
+   "CAT",
+   "NBIS",
+   "SOFI",
+   "IREN",
+   "STX"
+  ],
+  "conditions": {
+   "SNDK": "Ordinary",
+   "GEV": "Ordinary",
+   "AMD": "Ordinary",
+   "CRWV": "Ordinary",
+   "MU": "Ordinary",
+   "LRCX": "Ordinary",
+   "CAT": "ExtremeDown",
+   "NBIS": "Ordinary",
+   "SOFI": "Earnings",
+   "IREN": "Earnings",
+   "STX": "Ordinary"
+  },
+  "rows": {
+   "SNDK": {
+    "last_night": 122,
+    "nights5_avg": 84,
+    "ret5d": 588,
+    "vol20d": 592,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -63,
+    "nights5_avg": 19,
+    "ret5d": -87,
+    "vol20d": 225,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 95,
+    "nights5_avg": -63,
+    "ret5d": -806,
+    "vol20d": 387,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 99,
+    "nights5_avg": -77,
+    "ret5d": -674,
+    "vol20d": 614,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -164,
+    "nights5_avg": -29,
+    "ret5d": -101,
+    "vol20d": 373,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 8,
+    "nights5_avg": 3,
+    "ret5d": 752,
+    "vol20d": 414,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -327,
+    "nights5_avg": -60,
+    "ret5d": -425,
+    "vol20d": 198,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": -100,
+    "nights5_avg": 48,
+    "ret5d": -363,
+    "vol20d": 487,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -44,
+    "nights5_avg": 12,
+    "ret5d": -214,
+    "vol20d": 172,
+    "earnings_tonight": true
+   },
+   "IREN": {
+    "last_night": 76,
+    "nights5_avg": 9,
+    "ret5d": 533,
+    "vol20d": 570,
+    "earnings_tonight": true
+   },
+   "STX": {
+    "last_night": -121,
+    "nights5_avg": -10,
+    "ret5d": -579,
+    "vol20d": 470,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -20,
+    "nights5_avg": -16,
+    "ret5d": 10,
+    "vol20d": 80
+   },
+   "stressed": {
+    "last_night": 135,
+    "nights5_avg": 22,
+    "ret5d": 597,
+    "vol20d": 266
+   }
+  },
+  "stressed_m": 2.7749832718119642,
+  "stressed_sign": 1,
+  "cx_type": 3,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "SNDK": {
+     "last_night": 122,
+     "nights5_avg": 84,
+     "ret5d": 588,
+     "vol20d": 592,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -63,
+     "nights5_avg": 19,
+     "ret5d": -87,
+     "vol20d": 225,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 95,
+     "nights5_avg": -63,
+     "ret5d": -806,
+     "vol20d": 387,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 99,
+     "nights5_avg": -77,
+     "ret5d": -674,
+     "vol20d": 614,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -164,
+     "nights5_avg": -29,
+     "ret5d": -101,
+     "vol20d": 373,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 8,
+     "nights5_avg": 3,
+     "ret5d": 752,
+     "vol20d": 414,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -327,
+     "nights5_avg": -60,
+     "ret5d": -425,
+     "vol20d": 198,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": -100,
+     "nights5_avg": 48,
+     "ret5d": -363,
+     "vol20d": 487,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -44,
+     "nights5_avg": 12,
+     "ret5d": -214,
+     "vol20d": 172,
+     "earnings_tonight": true
+    },
+    "IREN": {
+     "last_night": 76,
+     "nights5_avg": 9,
+     "ret5d": 533,
+     "vol20d": 570,
+     "earnings_tonight": true
+    },
+    "STX": {
+     "last_night": -121,
+     "nights5_avg": -10,
+     "ret5d": -579,
+     "vol20d": 470,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 135,
+    "nights5_avg": 22,
+    "ret5d": 597,
+    "vol20d": 266
+   }
+  }
+ },
+ "S13": {
+  "block": 3,
+  "regime": "stressed",
+  "labels": [
+   "CAT",
+   "BE",
+   "INTC",
+   "ASML",
+   "LRCX",
+   "AMD",
+   "GEV",
+   "MU",
+   "IREN",
+   "TSM",
+   "SOFI"
+  ],
+  "conditions": {
+   "CAT": "ExtremeUp",
+   "BE": "Ordinary",
+   "INTC": "Ordinary",
+   "ASML": "Moderate",
+   "LRCX": "Ordinary",
+   "AMD": "Ordinary",
+   "GEV": "Ordinary",
+   "MU": "Ordinary",
+   "IREN": "Earnings",
+   "TSM": "Earnings",
+   "SOFI": "Moderate"
+  },
+  "rows": {
+   "CAT": {
+    "last_night": -78,
+    "nights5_avg": -52,
+    "ret5d": 3324,
+    "vol20d": 452,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": -467,
+    "nights5_avg": -71,
+    "ret5d": -797,
+    "vol20d": 994,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -222,
+    "nights5_avg": 7,
+    "ret5d": 158,
+    "vol20d": 647,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 274,
+    "nights5_avg": 64,
+    "ret5d": -145,
+    "vol20d": 242,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -85,
+    "nights5_avg": 92,
+    "ret5d": -290,
+    "vol20d": 420,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 82,
+    "nights5_avg": -62,
+    "ret5d": 315,
+    "vol20d": 603,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -251,
+    "nights5_avg": -11,
+    "ret5d": 743,
+    "vol20d": 506,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -26,
+    "nights5_avg": -2,
+    "ret5d": -78,
+    "vol20d": 429,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 265,
+    "nights5_avg": 77,
+    "ret5d": -1570,
+    "vol20d": 735,
+    "earnings_tonight": true
+   },
+   "TSM": {
+    "last_night": 108,
+    "nights5_avg": 6,
+    "ret5d": 7,
+    "vol20d": 252,
+    "earnings_tonight": true
+   },
+   "SOFI": {
+    "last_night": 333,
+    "nights5_avg": 28,
+    "ret5d": 81,
+    "vol20d": 383,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 43,
+    "nights5_avg": -17,
+    "ret5d": 106,
+    "vol20d": 92
+   },
+   "stressed": {
+    "last_night": -129,
+    "nights5_avg": -37,
+    "ret5d": -687,
+    "vol20d": 249
+   }
+  },
+  "stressed_m": 2.590465885184865,
+  "stressed_sign": -1,
+  "cx_type": 1,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "CAT": {
+     "last_night": -78,
+     "nights5_avg": -52,
+     "ret5d": 3324,
+     "vol20d": 452,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": -467,
+     "nights5_avg": -71,
+     "ret5d": -797,
+     "vol20d": 994,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -222,
+     "nights5_avg": 7,
+     "ret5d": 158,
+     "vol20d": 647,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 274,
+     "nights5_avg": 64,
+     "ret5d": -145,
+     "vol20d": 242,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": -85,
+     "nights5_avg": 92,
+     "ret5d": -290,
+     "vol20d": 420,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 82,
+     "nights5_avg": -62,
+     "ret5d": 315,
+     "vol20d": 603,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -251,
+     "nights5_avg": -11,
+     "ret5d": 743,
+     "vol20d": 506,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -26,
+     "nights5_avg": -2,
+     "ret5d": -78,
+     "vol20d": 429,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 265,
+     "nights5_avg": 77,
+     "ret5d": -1570,
+     "vol20d": 735,
+     "earnings_tonight": true
+    },
+    "TSM": {
+     "last_night": 108,
+     "nights5_avg": 6,
+     "ret5d": 7,
+     "vol20d": 252,
+     "earnings_tonight": true
+    },
+    "SOFI": {
+     "last_night": 333,
+     "nights5_avg": 28,
+     "ret5d": 81,
+     "vol20d": 383,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -129,
+    "nights5_avg": -37,
+    "ret5d": -687,
+    "vol20d": 249
+   }
+  }
+ },
+ "S14": {
+  "block": 3,
+  "regime": "calm",
+  "labels": [
+   "BE",
+   "IREN",
+   "ASML",
+   "SOFI",
+   "SNDK",
+   "NBIS",
+   "WDC",
+   "LRCX",
+   "MU",
+   "STX",
+   "GEV"
+  ],
+  "conditions": {
+   "BE": "Ordinary",
+   "IREN": "Moderate",
+   "ASML": "Moderate",
+   "SOFI": "Ordinary",
+   "SNDK": "ExtremeDown",
+   "NBIS": "Ordinary",
+   "WDC": "Ordinary",
+   "LRCX": "Moderate",
+   "MU": "Ordinary",
+   "STX": "Ordinary",
+   "GEV": "ExtremeUp"
+  },
+  "rows": {
+   "BE": {
+    "last_night": -172,
+    "nights5_avg": 62,
+    "ret5d": 802,
+    "vol20d": 504,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 168,
+    "nights5_avg": -7,
+    "ret5d": 1995,
+    "vol20d": 430,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 68,
+    "nights5_avg": 9,
+    "ret5d": 161,
+    "vol20d": 90,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 8,
+    "nights5_avg": 1,
+    "ret5d": 233,
+    "vol20d": 135,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -171,
+    "nights5_avg": 53,
+    "ret5d": -3947,
+    "vol20d": 559,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 23,
+    "nights5_avg": 32,
+    "ret5d": 622,
+    "vol20d": 335,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": 68,
+    "nights5_avg": 19,
+    "ret5d": -881,
+    "vol20d": 452,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 72,
+    "nights5_avg": 9,
+    "ret5d": -1562,
+    "vol20d": 376,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -79,
+    "nights5_avg": 7,
+    "ret5d": -8,
+    "vol20d": 333,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 131,
+    "nights5_avg": 92,
+    "ret5d": 761,
+    "vol20d": 435,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -42,
+    "nights5_avg": -10,
+    "ret5d": 2062,
+    "vol20d": 306,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 30,
+    "nights5_avg": -2,
+    "ret5d": 214,
+    "vol20d": 111
+   },
+   "stressed": {
+    "last_night": 138,
+    "nights5_avg": 25,
+    "ret5d": 807,
+    "vol20d": 249
+   }
+  },
+  "stressed_m": 2.5903464039323634,
+  "stressed_sign": 1,
+  "cx_type": 1,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "BE": {
+     "last_night": -172,
+     "nights5_avg": 62,
+     "ret5d": 802,
+     "vol20d": 504,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 168,
+     "nights5_avg": -7,
+     "ret5d": 1995,
+     "vol20d": 430,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 68,
+     "nights5_avg": 9,
+     "ret5d": 161,
+     "vol20d": 90,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 8,
+     "nights5_avg": 1,
+     "ret5d": 233,
+     "vol20d": 135,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": -171,
+     "nights5_avg": 53,
+     "ret5d": -3947,
+     "vol20d": 559,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 23,
+     "nights5_avg": 32,
+     "ret5d": 622,
+     "vol20d": 335,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": 68,
+     "nights5_avg": 19,
+     "ret5d": -881,
+     "vol20d": 452,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 72,
+     "nights5_avg": 9,
+     "ret5d": -1562,
+     "vol20d": 376,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -79,
+     "nights5_avg": 7,
+     "ret5d": -8,
+     "vol20d": 333,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 131,
+     "nights5_avg": 92,
+     "ret5d": 761,
+     "vol20d": 435,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -42,
+     "nights5_avg": -10,
+     "ret5d": 2062,
+     "vol20d": 306,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 30,
+    "nights5_avg": -2,
+    "ret5d": 214,
+    "vol20d": 111
+   }
+  }
+ },
+ "S15": {
+  "block": 3,
+  "regime": "calm",
+  "labels": [
+   "NBIS",
+   "AMAT",
+   "INTC",
+   "SNDK",
+   "SOFI",
+   "BE",
+   "CRWV",
+   "WDC",
+   "CAT",
+   "IREN",
+   "AMD"
+  ],
+  "conditions": {
+   "NBIS": "Ordinary",
+   "AMAT": "Moderate",
+   "INTC": "Ordinary",
+   "SNDK": "Ordinary",
+   "SOFI": "Moderate",
+   "BE": "Moderate",
+   "CRWV": "Earnings",
+   "WDC": "Earnings",
+   "CAT": "Ordinary",
+   "IREN": "Ordinary",
+   "AMD": "Ordinary"
+  },
+  "rows": {
+   "NBIS": {
+    "last_night": -81,
+    "nights5_avg": -23,
+    "ret5d": -92,
+    "vol20d": 256,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -224,
+    "nights5_avg": -18,
+    "ret5d": -459,
+    "vol20d": 270,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -38,
+    "nights5_avg": 38,
+    "ret5d": 677,
+    "vol20d": 326,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 87,
+    "nights5_avg": 38,
+    "ret5d": -801,
+    "vol20d": 438,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -280,
+    "nights5_avg": -57,
+    "ret5d": -651,
+    "vol20d": 244,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 566,
+    "nights5_avg": 128,
+    "ret5d": -357,
+    "vol20d": 608,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": -36,
+    "nights5_avg": -52,
+    "ret5d": 185,
+    "vol20d": 342,
+    "earnings_tonight": true
+   },
+   "WDC": {
+    "last_night": -29,
+    "nights5_avg": 84,
+    "ret5d": -862,
+    "vol20d": 475,
+    "earnings_tonight": true
+   },
+   "CAT": {
+    "last_night": -30,
+    "nights5_avg": 2,
+    "ret5d": -220,
+    "vol20d": 142,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 56,
+    "nights5_avg": 27,
+    "ret5d": 547,
+    "vol20d": 413,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": -10,
+    "nights5_avg": 49,
+    "ret5d": 395,
+    "vol20d": 239,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -50,
+    "nights5_avg": -3,
+    "ret5d": -123,
+    "vol20d": 102
+   },
+   "stressed": {
+    "last_night": -170,
+    "nights5_avg": -39,
+    "ret5d": -705,
+    "vol20d": 268
+   }
+  },
+  "stressed_m": 2.7869587835042444,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "NBIS": {
+     "last_night": -81,
+     "nights5_avg": -23,
+     "ret5d": -92,
+     "vol20d": 256,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -224,
+     "nights5_avg": -18,
+     "ret5d": -459,
+     "vol20d": 270,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -38,
+     "nights5_avg": 38,
+     "ret5d": 677,
+     "vol20d": 326,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 87,
+     "nights5_avg": 38,
+     "ret5d": -801,
+     "vol20d": 438,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -280,
+     "nights5_avg": -57,
+     "ret5d": -651,
+     "vol20d": 244,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 566,
+     "nights5_avg": 128,
+     "ret5d": -357,
+     "vol20d": 608,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": -36,
+     "nights5_avg": -52,
+     "ret5d": 185,
+     "vol20d": 342,
+     "earnings_tonight": true
+    },
+    "WDC": {
+     "last_night": -29,
+     "nights5_avg": 84,
+     "ret5d": -862,
+     "vol20d": 475,
+     "earnings_tonight": true
+    },
+    "CAT": {
+     "last_night": -30,
+     "nights5_avg": 2,
+     "ret5d": -220,
+     "vol20d": 142,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 56,
+     "nights5_avg": 27,
+     "ret5d": 547,
+     "vol20d": 413,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": -10,
+     "nights5_avg": 49,
+     "ret5d": 395,
+     "vol20d": 239,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -50,
+    "nights5_avg": -3,
+    "ret5d": -123,
+    "vol20d": 102
+   }
+  }
+ },
+ "S16": {
+  "block": 3,
+  "regime": "stressed",
+  "labels": [
+   "GEV",
+   "INTC",
+   "BE",
+   "WDC",
+   "AMAT",
+   "SOFI",
+   "MU",
+   "ASML",
+   "IREN",
+   "SNDK",
+   "AMD"
+  ],
+  "conditions": {
+   "GEV": "Earnings",
+   "INTC": "Ordinary",
+   "BE": "Earnings",
+   "WDC": "Ordinary",
+   "AMAT": "Ordinary",
+   "SOFI": "Moderate",
+   "MU": "Ordinary",
+   "ASML": "Earnings",
+   "IREN": "Ordinary",
+   "SNDK": "Ordinary",
+   "AMD": "ExtremeUp"
+  },
+  "rows": {
+   "GEV": {
+    "last_night": -88,
+    "nights5_avg": -37,
+    "ret5d": 188,
+    "vol20d": 336,
+    "earnings_tonight": true
+   },
+   "INTC": {
+    "last_night": -235,
+    "nights5_avg": -5,
+    "ret5d": -1088,
+    "vol20d": 600,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 323,
+    "nights5_avg": 136,
+    "ret5d": 730,
+    "vol20d": 816,
+    "earnings_tonight": true
+   },
+   "WDC": {
+    "last_night": -281,
+    "nights5_avg": -110,
+    "ret5d": -771,
+    "vol20d": 563,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -55,
+    "nights5_avg": -32,
+    "ret5d": 592,
+    "vol20d": 664,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 140,
+    "nights5_avg": 7,
+    "ret5d": -1587,
+    "vol20d": 349,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -54,
+    "nights5_avg": 49,
+    "ret5d": -706,
+    "vol20d": 576,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 37,
+    "nights5_avg": -51,
+    "ret5d": 51,
+    "vol20d": 243,
+    "earnings_tonight": true
+   },
+   "IREN": {
+    "last_night": 306,
+    "nights5_avg": 129,
+    "ret5d": -302,
+    "vol20d": 710,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -61,
+    "nights5_avg": 16,
+    "ret5d": 370,
+    "vol20d": 793,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 1514,
+    "nights5_avg": 284,
+    "ret5d": 1009,
+    "vol20d": 720,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -42,
+    "nights5_avg": -5,
+    "ret5d": -116,
+    "vol20d": 106
+   },
+   "stressed": {
+    "last_night": -186,
+    "nights5_avg": -36,
+    "ret5d": -629,
+    "vol20d": 245
+   }
+  },
+  "stressed_m": 2.551927497192035,
+  "stressed_sign": -1,
+  "cx_type": 2,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "GEV": {
+     "last_night": -88,
+     "nights5_avg": -37,
+     "ret5d": 188,
+     "vol20d": 336,
+     "earnings_tonight": true
+    },
+    "INTC": {
+     "last_night": -235,
+     "nights5_avg": -5,
+     "ret5d": -1088,
+     "vol20d": 600,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 323,
+     "nights5_avg": 136,
+     "ret5d": 730,
+     "vol20d": 816,
+     "earnings_tonight": true
+    },
+    "WDC": {
+     "last_night": -281,
+     "nights5_avg": -110,
+     "ret5d": -771,
+     "vol20d": 563,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -55,
+     "nights5_avg": -32,
+     "ret5d": 592,
+     "vol20d": 664,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 140,
+     "nights5_avg": 7,
+     "ret5d": -1587,
+     "vol20d": 349,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -54,
+     "nights5_avg": 49,
+     "ret5d": -706,
+     "vol20d": 576,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 37,
+     "nights5_avg": -51,
+     "ret5d": 51,
+     "vol20d": 243,
+     "earnings_tonight": true
+    },
+    "IREN": {
+     "last_night": 306,
+     "nights5_avg": 129,
+     "ret5d": -302,
+     "vol20d": 710,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": -61,
+     "nights5_avg": 16,
+     "ret5d": 370,
+     "vol20d": 793,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 1514,
+     "nights5_avg": 284,
+     "ret5d": 1009,
+     "vol20d": 720,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -186,
+    "nights5_avg": -36,
+    "ret5d": -629,
+    "vol20d": 245
+   }
+  }
+ },
+ "S17": {
+  "block": 3,
+  "regime": "stressed",
+  "labels": [
+   "INTC",
+   "TSM",
+   "GEV",
+   "STX",
+   "SOFI",
+   "AMAT",
+   "CAT",
+   "SNDK",
+   "ASML",
+   "AMD",
+   "NBIS"
+  ],
+  "conditions": {
+   "INTC": "Ordinary",
+   "TSM": "Ordinary",
+   "GEV": "Ordinary",
+   "STX": "Ordinary",
+   "SOFI": "Ordinary",
+   "AMAT": "ExtremeUp",
+   "CAT": "Ordinary",
+   "SNDK": "Ordinary",
+   "ASML": "Earnings",
+   "AMD": "Moderate",
+   "NBIS": "Moderate"
+  },
+  "rows": {
+   "INTC": {
+    "last_night": -13,
+    "nights5_avg": -143,
+    "ret5d": 96,
+    "vol20d": 765,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": -33,
+    "nights5_avg": 12,
+    "ret5d": -442,
+    "vol20d": 313,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -18,
+    "nights5_avg": -4,
+    "ret5d": -1251,
+    "vol20d": 568,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 278,
+    "nights5_avg": -50,
+    "ret5d": -1572,
+    "vol20d": 756,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -149,
+    "nights5_avg": -27,
+    "ret5d": 421,
+    "vol20d": 329,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 827,
+    "nights5_avg": 148,
+    "ret5d": 645,
+    "vol20d": 437,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -111,
+    "nights5_avg": -60,
+    "ret5d": -162,
+    "vol20d": 284,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -269,
+    "nights5_avg": -143,
+    "ret5d": -936,
+    "vol20d": 666,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": -8,
+    "nights5_avg": -46,
+    "ret5d": 579,
+    "vol20d": 347,
+    "earnings_tonight": true
+   },
+   "AMD": {
+    "last_night": 51,
+    "nights5_avg": -65,
+    "ret5d": 2045,
+    "vol20d": 600,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 632,
+    "nights5_avg": 145,
+    "ret5d": 1560,
+    "vol20d": 551,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 14,
+    "nights5_avg": 10,
+    "ret5d": 179,
+    "vol20d": 94
+   },
+   "stressed": {
+    "last_night": -177,
+    "nights5_avg": -36,
+    "ret5d": -834,
+    "vol20d": 199
+   }
+  },
+  "stressed_m": 2.074968066746507,
+  "stressed_sign": -1,
+  "cx_type": 3,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "INTC": {
+     "last_night": -13,
+     "nights5_avg": -143,
+     "ret5d": 96,
+     "vol20d": 765,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": -33,
+     "nights5_avg": 12,
+     "ret5d": -442,
+     "vol20d": 313,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -18,
+     "nights5_avg": -4,
+     "ret5d": -1251,
+     "vol20d": 568,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 278,
+     "nights5_avg": -50,
+     "ret5d": -1572,
+     "vol20d": 756,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -149,
+     "nights5_avg": -27,
+     "ret5d": 421,
+     "vol20d": 329,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 827,
+     "nights5_avg": 148,
+     "ret5d": 645,
+     "vol20d": 437,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -111,
+     "nights5_avg": -60,
+     "ret5d": -162,
+     "vol20d": 284,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": -269,
+     "nights5_avg": -143,
+     "ret5d": -936,
+     "vol20d": 666,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": -8,
+     "nights5_avg": -46,
+     "ret5d": 579,
+     "vol20d": 347,
+     "earnings_tonight": true
+    },
+    "AMD": {
+     "last_night": 51,
+     "nights5_avg": -65,
+     "ret5d": 2045,
+     "vol20d": 600,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 632,
+     "nights5_avg": 145,
+     "ret5d": 1560,
+     "vol20d": 551,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -177,
+    "nights5_avg": -36,
+    "ret5d": -834,
+    "vol20d": 199
+   }
+  }
+ },
+ "S18": {
+  "block": 3,
+  "regime": "calm",
+  "labels": [
+   "WDC",
+   "LRCX",
+   "AMAT",
+   "SOFI",
+   "MU",
+   "INTC",
+   "CRWV",
+   "TSM",
+   "GEV",
+   "ASML",
+   "STX"
+  ],
+  "conditions": {
+   "WDC": "Ordinary",
+   "LRCX": "ExtremeUp",
+   "AMAT": "Ordinary",
+   "SOFI": "Moderate",
+   "MU": "Ordinary",
+   "INTC": "Earnings",
+   "CRWV": "ExtremeUp",
+   "TSM": "Ordinary",
+   "GEV": "Ordinary",
+   "ASML": "Ordinary",
+   "STX": "Earnings"
+  },
+  "rows": {
+   "WDC": {
+    "last_night": -154,
+    "nights5_avg": 75,
+    "ret5d": 379,
+    "vol20d": 380,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 495,
+    "nights5_avg": 127,
+    "ret5d": 758,
+    "vol20d": 230,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 53,
+    "nights5_avg": 36,
+    "ret5d": 279,
+    "vol20d": 180,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 252,
+    "nights5_avg": 23,
+    "ret5d": -3,
+    "vol20d": 221,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -12,
+    "nights5_avg": -65,
+    "ret5d": 577,
+    "vol20d": 350,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 96,
+    "nights5_avg": -35,
+    "ret5d": 359,
+    "vol20d": 287,
+    "earnings_tonight": true
+   },
+   "CRWV": {
+    "last_night": 1133,
+    "nights5_avg": 83,
+    "ret5d": 447,
+    "vol20d": 512,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": -34,
+    "nights5_avg": 2,
+    "ret5d": 102,
+    "vol20d": 130,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -11,
+    "nights5_avg": -8,
+    "ret5d": 65,
+    "vol20d": 143,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 32,
+    "nights5_avg": 12,
+    "ret5d": 22,
+    "vol20d": 166,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 48,
+    "nights5_avg": -8,
+    "ret5d": -308,
+    "vol20d": 277,
+    "earnings_tonight": true
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 38,
+    "nights5_avg": 21,
+    "ret5d": -40,
+    "vol20d": 106
+   },
+   "stressed": {
+    "last_night": -162,
+    "nights5_avg": -29,
+    "ret5d": -644,
+    "vol20d": 216
+   }
+  },
+  "stressed_m": 2.2510563447277616,
+  "stressed_sign": -1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "WDC": {
+     "last_night": -154,
+     "nights5_avg": 75,
+     "ret5d": 379,
+     "vol20d": 380,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 495,
+     "nights5_avg": 127,
+     "ret5d": 758,
+     "vol20d": 230,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 53,
+     "nights5_avg": 36,
+     "ret5d": 279,
+     "vol20d": 180,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 252,
+     "nights5_avg": 23,
+     "ret5d": -3,
+     "vol20d": 221,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -12,
+     "nights5_avg": -65,
+     "ret5d": 577,
+     "vol20d": 350,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 96,
+     "nights5_avg": -35,
+     "ret5d": 359,
+     "vol20d": 287,
+     "earnings_tonight": true
+    },
+    "CRWV": {
+     "last_night": 1133,
+     "nights5_avg": 83,
+     "ret5d": 447,
+     "vol20d": 512,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": -34,
+     "nights5_avg": 2,
+     "ret5d": 102,
+     "vol20d": 130,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -11,
+     "nights5_avg": -8,
+     "ret5d": 65,
+     "vol20d": 143,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 32,
+     "nights5_avg": 12,
+     "ret5d": 22,
+     "vol20d": 166,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 48,
+     "nights5_avg": -8,
+     "ret5d": -308,
+     "vol20d": 277,
+     "earnings_tonight": true
+    }
+   },
+   "QQQ": {
+    "last_night": 38,
+    "nights5_avg": 21,
+    "ret5d": -40,
+    "vol20d": 106
+   }
+  }
+ },
+ "S19": {
+  "block": 4,
+  "regime": "calm",
+  "labels": [
+   "INTC",
+   "WDC",
+   "AMAT",
+   "AMD",
+   "LRCX",
+   "CAT",
+   "SNDK",
+   "NBIS",
+   "TSM",
+   "CRWV",
+   "MU"
+  ],
+  "conditions": {
+   "INTC": "Moderate",
+   "WDC": "Ordinary",
+   "AMAT": "Ordinary",
+   "AMD": "ExtremeUp",
+   "LRCX": "ExtremeDown",
+   "CAT": "Earnings",
+   "SNDK": "Ordinary",
+   "NBIS": "Ordinary",
+   "TSM": "Ordinary",
+   "CRWV": "ExtremeDown",
+   "MU": "Ordinary"
+  },
+  "rows": {
+   "INTC": {
+    "last_night": 31,
+    "nights5_avg": -16,
+    "ret5d": 1555,
+    "vol20d": 368,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -201,
+    "nights5_avg": 10,
+    "ret5d": -313,
+    "vol20d": 492,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -52,
+    "nights5_avg": -27,
+    "ret5d": 89,
+    "vol20d": 164,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": -37,
+    "nights5_avg": -17,
+    "ret5d": 2441,
+    "vol20d": 331,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 1,
+    "nights5_avg": -25,
+    "ret5d": -1750,
+    "vol20d": 271,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -46,
+    "nights5_avg": 13,
+    "ret5d": -293,
+    "vol20d": 133,
+    "earnings_tonight": true
+   },
+   "SNDK": {
+    "last_night": -165,
+    "nights5_avg": -11,
+    "ret5d": -635,
+    "vol20d": 407,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": -147,
+    "nights5_avg": -8,
+    "ret5d": -804,
+    "vol20d": 370,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": -1,
+    "nights5_avg": -22,
+    "ret5d": -150,
+    "vol20d": 125,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": -935,
+    "nights5_avg": -298,
+    "ret5d": -270,
+    "vol20d": 479,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 122,
+    "nights5_avg": -36,
+    "ret5d": -182,
+    "vol20d": 304,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 33,
+    "nights5_avg": -9,
+    "ret5d": -189,
+    "vol20d": 124
+   },
+   "stressed": {
+    "last_night": 174,
+    "nights5_avg": 39,
+    "ret5d": 821,
+    "vol20d": 228
+   }
+  },
+  "stressed_m": 2.374832877714561,
+  "stressed_sign": 1,
+  "cx_type": 1,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "INTC": {
+     "last_night": 31,
+     "nights5_avg": -16,
+     "ret5d": 1555,
+     "vol20d": 368,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -201,
+     "nights5_avg": 10,
+     "ret5d": -313,
+     "vol20d": 492,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -52,
+     "nights5_avg": -27,
+     "ret5d": 89,
+     "vol20d": 164,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": -37,
+     "nights5_avg": -17,
+     "ret5d": 2441,
+     "vol20d": 331,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 1,
+     "nights5_avg": -25,
+     "ret5d": -1750,
+     "vol20d": 271,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -46,
+     "nights5_avg": 13,
+     "ret5d": -293,
+     "vol20d": 133,
+     "earnings_tonight": true
+    },
+    "SNDK": {
+     "last_night": -165,
+     "nights5_avg": -11,
+     "ret5d": -635,
+     "vol20d": 407,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": -147,
+     "nights5_avg": -8,
+     "ret5d": -804,
+     "vol20d": 370,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": -1,
+     "nights5_avg": -22,
+     "ret5d": -150,
+     "vol20d": 125,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": -935,
+     "nights5_avg": -298,
+     "ret5d": -270,
+     "vol20d": 479,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 122,
+     "nights5_avg": -36,
+     "ret5d": -182,
+     "vol20d": 304,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 33,
+    "nights5_avg": -9,
+    "ret5d": -189,
+    "vol20d": 124
+   }
+  }
+ },
+ "S20": {
+  "block": 4,
+  "regime": "calm",
+  "labels": [
+   "CRWV",
+   "AMD",
+   "CAT",
+   "MU",
+   "INTC",
+   "NBIS",
+   "SOFI",
+   "STX",
+   "BE",
+   "GEV",
+   "LRCX"
+  ],
+  "conditions": {
+   "CRWV": "Ordinary",
+   "AMD": "Ordinary",
+   "CAT": "Ordinary",
+   "MU": "Ordinary",
+   "INTC": "ExtremeUp",
+   "NBIS": "Ordinary",
+   "SOFI": "Ordinary",
+   "STX": "Moderate",
+   "BE": "Moderate",
+   "GEV": "ExtremeUp",
+   "LRCX": "Ordinary"
+  },
+  "rows": {
+   "CRWV": {
+    "last_night": -15,
+    "nights5_avg": -68,
+    "ret5d": -540,
+    "vol20d": 351,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": -108,
+    "nights5_avg": 24,
+    "ret5d": -738,
+    "vol20d": 361,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -5,
+    "nights5_avg": -21,
+    "ret5d": 18,
+    "vol20d": 156,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 24,
+    "nights5_avg": 28,
+    "ret5d": 162,
+    "vol20d": 225,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 20,
+    "nights5_avg": -6,
+    "ret5d": 5108,
+    "vol20d": 780,
+    "earnings_tonight": false
+   },
+   "NBIS": {
+    "last_night": 181,
+    "nights5_avg": -58,
+    "ret5d": -798,
+    "vol20d": 449,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 15,
+    "nights5_avg": 13,
+    "ret5d": 134,
+    "vol20d": 85,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": 148,
+    "nights5_avg": 7,
+    "ret5d": -2204,
+    "vol20d": 696,
+    "earnings_tonight": false
+   },
+   "BE": {
+    "last_night": 83,
+    "nights5_avg": -68,
+    "ret5d": 1633,
+    "vol20d": 376,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 45,
+    "nights5_avg": 16,
+    "ret5d": 1745,
+    "vol20d": 242,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -64,
+    "nights5_avg": 26,
+    "ret5d": 313,
+    "vol20d": 371,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 42,
+    "nights5_avg": -21,
+    "ret5d": 47,
+    "vol20d": 99
+   },
+   "stressed": {
+    "last_night": -126,
+    "nights5_avg": -31,
+    "ret5d": -729,
+    "vol20d": 249
+   }
+  },
+  "stressed_m": 2.594232789206832,
+  "stressed_sign": -1,
+  "cx_type": 1,
+  "e7_kind": "AN",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "CRWV": {
+     "last_night": -15,
+     "nights5_avg": -68,
+     "ret5d": -540,
+     "vol20d": 351,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": -108,
+     "nights5_avg": 24,
+     "ret5d": -738,
+     "vol20d": 361,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -5,
+     "nights5_avg": -21,
+     "ret5d": 18,
+     "vol20d": 156,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 24,
+     "nights5_avg": 28,
+     "ret5d": 162,
+     "vol20d": 225,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 20,
+     "nights5_avg": -6,
+     "ret5d": 5108,
+     "vol20d": 780,
+     "earnings_tonight": false
+    },
+    "NBIS": {
+     "last_night": 181,
+     "nights5_avg": -58,
+     "ret5d": -798,
+     "vol20d": 449,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 15,
+     "nights5_avg": 13,
+     "ret5d": 134,
+     "vol20d": 85,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": 148,
+     "nights5_avg": 7,
+     "ret5d": -2204,
+     "vol20d": 696,
+     "earnings_tonight": false
+    },
+    "BE": {
+     "last_night": 83,
+     "nights5_avg": -68,
+     "ret5d": 1633,
+     "vol20d": 376,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 45,
+     "nights5_avg": 16,
+     "ret5d": 1745,
+     "vol20d": 242,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": -64,
+     "nights5_avg": 26,
+     "ret5d": 313,
+     "vol20d": 371,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 42,
+    "nights5_avg": -21,
+    "ret5d": 47,
+    "vol20d": 99
+   }
+  }
+ },
+ "S21": {
+  "block": 4,
+  "regime": "stressed",
+  "labels": [
+   "TSM",
+   "STX",
+   "GEV",
+   "INTC",
+   "BE",
+   "CAT",
+   "IREN",
+   "LRCX",
+   "WDC",
+   "AMAT",
+   "SNDK"
+  ],
+  "conditions": {
+   "TSM": "Ordinary",
+   "STX": "Ordinary",
+   "GEV": "Ordinary",
+   "INTC": "Earnings",
+   "BE": "Ordinary",
+   "CAT": "Ordinary",
+   "IREN": "Ordinary",
+   "LRCX": "Ordinary",
+   "WDC": "Ordinary",
+   "AMAT": "Earnings",
+   "SNDK": "Ordinary"
+  },
+  "rows": {
+   "TSM": {
+    "last_night": -81,
+    "nights5_avg": -42,
+    "ret5d": -169,
+    "vol20d": 197,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -18,
+    "nights5_avg": 71,
+    "ret5d": 1082,
+    "vol20d": 718,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 12,
+    "nights5_avg": -4,
+    "ret5d": 88,
+    "vol20d": 260,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": -180,
+    "nights5_avg": 96,
+    "ret5d": 769,
+    "vol20d": 628,
+    "earnings_tonight": true
+   },
+   "BE": {
+    "last_night": 262,
+    "nights5_avg": -109,
+    "ret5d": -1006,
+    "vol20d": 773,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": 10,
+    "nights5_avg": 57,
+    "ret5d": -498,
+    "vol20d": 273,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -97,
+    "nights5_avg": 127,
+    "ret5d": -1210,
+    "vol20d": 768,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -63,
+    "nights5_avg": -45,
+    "ret5d": -519,
+    "vol20d": 327,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -344,
+    "nights5_avg": -97,
+    "ret5d": -276,
+    "vol20d": 824,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 159,
+    "nights5_avg": 4,
+    "ret5d": -372,
+    "vol20d": 388,
+    "earnings_tonight": true
+   },
+   "SNDK": {
+    "last_night": 89,
+    "nights5_avg": 124,
+    "ret5d": 804,
+    "vol20d": 743,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": 7,
+    "nights5_avg": -19,
+    "ret5d": -216,
+    "vol20d": 101
+   },
+   "stressed": {
+    "last_night": 170,
+    "nights5_avg": 28,
+    "ret5d": 682,
+    "vol20d": 279
+   }
+  },
+  "stressed_m": 2.9048621667993215,
+  "stressed_sign": 1,
+  "cx_type": 2,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "TSM": {
+     "last_night": -81,
+     "nights5_avg": -42,
+     "ret5d": -169,
+     "vol20d": 197,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -18,
+     "nights5_avg": 71,
+     "ret5d": 1082,
+     "vol20d": 718,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 12,
+     "nights5_avg": -4,
+     "ret5d": 88,
+     "vol20d": 260,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": -180,
+     "nights5_avg": 96,
+     "ret5d": 769,
+     "vol20d": 628,
+     "earnings_tonight": true
+    },
+    "BE": {
+     "last_night": 262,
+     "nights5_avg": -109,
+     "ret5d": -1006,
+     "vol20d": 773,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": 10,
+     "nights5_avg": 57,
+     "ret5d": -498,
+     "vol20d": 273,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -97,
+     "nights5_avg": 127,
+     "ret5d": -1210,
+     "vol20d": 768,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": -63,
+     "nights5_avg": -45,
+     "ret5d": -519,
+     "vol20d": 327,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -344,
+     "nights5_avg": -97,
+     "ret5d": -276,
+     "vol20d": 824,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 159,
+     "nights5_avg": 4,
+     "ret5d": -372,
+     "vol20d": 388,
+     "earnings_tonight": true
+    },
+    "SNDK": {
+     "last_night": 89,
+     "nights5_avg": 124,
+     "ret5d": 804,
+     "vol20d": 743,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 170,
+    "nights5_avg": 28,
+    "ret5d": 682,
+    "vol20d": 279
+   }
+  }
+ },
+ "S22": {
+  "block": 4,
+  "regime": "stressed",
+  "labels": [
+   "BE",
+   "SNDK",
+   "CAT",
+   "GEV",
+   "LRCX",
+   "IREN",
+   "CRWV",
+   "ASML",
+   "SOFI",
+   "AMAT",
+   "AMD"
+  ],
+  "conditions": {
+   "BE": "ExtremeUp",
+   "SNDK": "Ordinary",
+   "CAT": "Ordinary",
+   "GEV": "Moderate",
+   "LRCX": "Ordinary",
+   "IREN": "Ordinary",
+   "CRWV": "ExtremeUp",
+   "ASML": "Ordinary",
+   "SOFI": "Ordinary",
+   "AMAT": "Ordinary",
+   "AMD": "Ordinary"
+  },
+  "rows": {
+   "BE": {
+    "last_night": -113,
+    "nights5_avg": -122,
+    "ret5d": 6763,
+    "vol20d": 1006,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": -292,
+    "nights5_avg": 11,
+    "ret5d": 1296,
+    "vol20d": 619,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": 2,
+    "nights5_avg": -6,
+    "ret5d": 551,
+    "vol20d": 259,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": 43,
+    "nights5_avg": -1,
+    "ret5d": -1024,
+    "vol20d": 280,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": 30,
+    "nights5_avg": 15,
+    "ret5d": 17,
+    "vol20d": 346,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": 115,
+    "nights5_avg": 11,
+    "ret5d": -303,
+    "vol20d": 575,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 1058,
+    "nights5_avg": 301,
+    "ret5d": 406,
+    "vol20d": 512,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": 81,
+    "nights5_avg": -4,
+    "ret5d": 146,
+    "vol20d": 245,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": 58,
+    "nights5_avg": 27,
+    "ret5d": 186,
+    "vol20d": 178,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -48,
+    "nights5_avg": -6,
+    "ret5d": -513,
+    "vol20d": 248,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": -95,
+    "nights5_avg": 44,
+    "ret5d": 80,
+    "vol20d": 323,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -29,
+    "nights5_avg": 14,
+    "ret5d": 205,
+    "vol20d": 112
+   },
+   "stressed": {
+    "last_night": 168,
+    "nights5_avg": 38,
+    "ret5d": 658,
+    "vol20d": 209
+   }
+  },
+  "stressed_m": 2.174433397144983,
+  "stressed_sign": 1,
+  "cx_type": 2,
+  "e7_kind": "AN",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "BE": {
+     "last_night": -113,
+     "nights5_avg": -122,
+     "ret5d": 6763,
+     "vol20d": 1006,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": -292,
+     "nights5_avg": 11,
+     "ret5d": 1296,
+     "vol20d": 619,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": 2,
+     "nights5_avg": -6,
+     "ret5d": 551,
+     "vol20d": 259,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": 43,
+     "nights5_avg": -1,
+     "ret5d": -1024,
+     "vol20d": 280,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": 30,
+     "nights5_avg": 15,
+     "ret5d": 17,
+     "vol20d": 346,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": 115,
+     "nights5_avg": 11,
+     "ret5d": -303,
+     "vol20d": 575,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 1058,
+     "nights5_avg": 301,
+     "ret5d": 406,
+     "vol20d": 512,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": 81,
+     "nights5_avg": -4,
+     "ret5d": 146,
+     "vol20d": 245,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": 58,
+     "nights5_avg": 27,
+     "ret5d": 186,
+     "vol20d": 178,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -48,
+     "nights5_avg": -6,
+     "ret5d": -513,
+     "vol20d": 248,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": -95,
+     "nights5_avg": 44,
+     "ret5d": 80,
+     "vol20d": 323,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 168,
+    "nights5_avg": 38,
+    "ret5d": 658,
+    "vol20d": 209
+   }
+  }
+ },
+ "S23": {
+  "block": 4,
+  "regime": "calm",
+  "labels": [
+   "ASML",
+   "SNDK",
+   "AMD",
+   "AMAT",
+   "GEV",
+   "CRWV",
+   "INTC",
+   "IREN",
+   "TSM",
+   "STX",
+   "MU"
+  ],
+  "conditions": {
+   "ASML": "Ordinary",
+   "SNDK": "Moderate",
+   "AMD": "Ordinary",
+   "AMAT": "ExtremeDown",
+   "GEV": "Ordinary",
+   "CRWV": "Ordinary",
+   "INTC": "Ordinary",
+   "IREN": "ExtremeDown",
+   "TSM": "Moderate",
+   "STX": "Ordinary",
+   "MU": "Ordinary"
+  },
+  "rows": {
+   "ASML": {
+    "last_night": 16,
+    "nights5_avg": -39,
+    "ret5d": 372,
+    "vol20d": 175,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 120,
+    "nights5_avg": -73,
+    "ret5d": 1416,
+    "vol20d": 374,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 78,
+    "nights5_avg": 12,
+    "ret5d": -87,
+    "vol20d": 158,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": -73,
+    "nights5_avg": -26,
+    "ret5d": -3401,
+    "vol20d": 429,
+    "earnings_tonight": false
+   },
+   "GEV": {
+    "last_night": -53,
+    "nights5_avg": -21,
+    "ret5d": -359,
+    "vol20d": 172,
+    "earnings_tonight": false
+   },
+   "CRWV": {
+    "last_night": 42,
+    "nights5_avg": 19,
+    "ret5d": 901,
+    "vol20d": 469,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 170,
+    "nights5_avg": 73,
+    "ret5d": 718,
+    "vol20d": 371,
+    "earnings_tonight": false
+   },
+   "IREN": {
+    "last_night": -863,
+    "nights5_avg": -140,
+    "ret5d": -422,
+    "vol20d": 452,
+    "earnings_tonight": false
+   },
+   "TSM": {
+    "last_night": -58,
+    "nights5_avg": 21,
+    "ret5d": 999,
+    "vol20d": 206,
+    "earnings_tonight": false
+   },
+   "STX": {
+    "last_night": -144,
+    "nights5_avg": 80,
+    "ret5d": -316,
+    "vol20d": 454,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": -11,
+    "nights5_avg": -35,
+    "ret5d": -45,
+    "vol20d": 253,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -23,
+    "nights5_avg": 0,
+    "ret5d": -130,
+    "vol20d": 79
+   },
+   "stressed": {
+    "last_night": 165,
+    "nights5_avg": 23,
+    "ret5d": 796,
+    "vol20d": 240
+   }
+  },
+  "stressed_m": 2.49837401990953,
+  "stressed_sign": 1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": true,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "ASML": {
+     "last_night": 16,
+     "nights5_avg": -39,
+     "ret5d": 372,
+     "vol20d": 175,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 120,
+     "nights5_avg": -73,
+     "ret5d": 1416,
+     "vol20d": 374,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 78,
+     "nights5_avg": 12,
+     "ret5d": -87,
+     "vol20d": 158,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": -73,
+     "nights5_avg": -26,
+     "ret5d": -3401,
+     "vol20d": 429,
+     "earnings_tonight": false
+    },
+    "GEV": {
+     "last_night": -53,
+     "nights5_avg": -21,
+     "ret5d": -359,
+     "vol20d": 172,
+     "earnings_tonight": false
+    },
+    "CRWV": {
+     "last_night": 42,
+     "nights5_avg": 19,
+     "ret5d": 901,
+     "vol20d": 469,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 170,
+     "nights5_avg": 73,
+     "ret5d": 718,
+     "vol20d": 371,
+     "earnings_tonight": false
+    },
+    "IREN": {
+     "last_night": -863,
+     "nights5_avg": -140,
+     "ret5d": -422,
+     "vol20d": 452,
+     "earnings_tonight": false
+    },
+    "TSM": {
+     "last_night": -58,
+     "nights5_avg": 21,
+     "ret5d": 999,
+     "vol20d": 206,
+     "earnings_tonight": false
+    },
+    "STX": {
+     "last_night": -144,
+     "nights5_avg": 80,
+     "ret5d": -316,
+     "vol20d": 454,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": -11,
+     "nights5_avg": -35,
+     "ret5d": -45,
+     "vol20d": 253,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": -23,
+    "nights5_avg": 0,
+    "ret5d": -130,
+    "vol20d": 79
+   }
+  }
+ },
+ "S24": {
+  "block": 4,
+  "regime": "stressed",
+  "labels": [
+   "IREN",
+   "SNDK",
+   "LRCX",
+   "ASML",
+   "AMAT",
+   "MU",
+   "SOFI",
+   "CAT",
+   "AMD",
+   "INTC",
+   "WDC"
+  ],
+  "conditions": {
+   "IREN": "Ordinary",
+   "SNDK": "Ordinary",
+   "LRCX": "ExtremeUp",
+   "ASML": "ExtremeDown",
+   "AMAT": "Ordinary",
+   "MU": "Ordinary",
+   "SOFI": "Ordinary",
+   "CAT": "Ordinary",
+   "AMD": "Ordinary",
+   "INTC": "Ordinary",
+   "WDC": "ExtremeDown"
+  },
+  "rows": {
+   "IREN": {
+    "last_night": 174,
+    "nights5_avg": -13,
+    "ret5d": -759,
+    "vol20d": 675,
+    "earnings_tonight": false
+   },
+   "SNDK": {
+    "last_night": 212,
+    "nights5_avg": -8,
+    "ret5d": -1420,
+    "vol20d": 678,
+    "earnings_tonight": false
+   },
+   "LRCX": {
+    "last_night": -60,
+    "nights5_avg": -35,
+    "ret5d": 3974,
+    "vol20d": 537,
+    "earnings_tonight": false
+   },
+   "ASML": {
+    "last_night": -472,
+    "nights5_avg": -164,
+    "ret5d": -84,
+    "vol20d": 275,
+    "earnings_tonight": false
+   },
+   "AMAT": {
+    "last_night": 206,
+    "nights5_avg": 48,
+    "ret5d": 929,
+    "vol20d": 489,
+    "earnings_tonight": false
+   },
+   "MU": {
+    "last_night": 172,
+    "nights5_avg": -47,
+    "ret5d": -351,
+    "vol20d": 481,
+    "earnings_tonight": false
+   },
+   "SOFI": {
+    "last_night": -14,
+    "nights5_avg": -13,
+    "ret5d": -367,
+    "vol20d": 247,
+    "earnings_tonight": false
+   },
+   "CAT": {
+    "last_night": -9,
+    "nights5_avg": -17,
+    "ret5d": 286,
+    "vol20d": 205,
+    "earnings_tonight": false
+   },
+   "AMD": {
+    "last_night": 201,
+    "nights5_avg": 15,
+    "ret5d": -296,
+    "vol20d": 505,
+    "earnings_tonight": false
+   },
+   "INTC": {
+    "last_night": 195,
+    "nights5_avg": -9,
+    "ret5d": -872,
+    "vol20d": 832,
+    "earnings_tonight": false
+   },
+   "WDC": {
+    "last_night": -1589,
+    "nights5_avg": -285,
+    "ret5d": -2715,
+    "vol20d": 725,
+    "earnings_tonight": false
+   }
+  },
+  "qqq": {
+   "calm": {
+    "last_night": -56,
+    "nights5_avg": -24,
+    "ret5d": -250,
+    "vol20d": 122
+   },
+   "stressed": {
+    "last_night": 152,
+    "nights5_avg": 25,
+    "ret5d": 839,
+    "vol20d": 231
+   }
+  },
+  "stressed_m": 2.410622189813595,
+  "stressed_sign": 1,
+  "cx_type": 3,
+  "e7_kind": "LD",
+  "e8": false,
+  "state": {
+   "schema": 2,
+   "date": "20261013",
+   "book": "long these names overnight: buy at the close auction, sell at the next open auction; moves in basis points",
+   "names": {
+    "IREN": {
+     "last_night": 174,
+     "nights5_avg": -13,
+     "ret5d": -759,
+     "vol20d": 675,
+     "earnings_tonight": false
+    },
+    "SNDK": {
+     "last_night": 212,
+     "nights5_avg": -8,
+     "ret5d": -1420,
+     "vol20d": 678,
+     "earnings_tonight": false
+    },
+    "LRCX": {
+     "last_night": -60,
+     "nights5_avg": -35,
+     "ret5d": 3974,
+     "vol20d": 537,
+     "earnings_tonight": false
+    },
+    "ASML": {
+     "last_night": -472,
+     "nights5_avg": -164,
+     "ret5d": -84,
+     "vol20d": 275,
+     "earnings_tonight": false
+    },
+    "AMAT": {
+     "last_night": 206,
+     "nights5_avg": 48,
+     "ret5d": 929,
+     "vol20d": 489,
+     "earnings_tonight": false
+    },
+    "MU": {
+     "last_night": 172,
+     "nights5_avg": -47,
+     "ret5d": -351,
+     "vol20d": 481,
+     "earnings_tonight": false
+    },
+    "SOFI": {
+     "last_night": -14,
+     "nights5_avg": -13,
+     "ret5d": -367,
+     "vol20d": 247,
+     "earnings_tonight": false
+    },
+    "CAT": {
+     "last_night": -9,
+     "nights5_avg": -17,
+     "ret5d": 286,
+     "vol20d": 205,
+     "earnings_tonight": false
+    },
+    "AMD": {
+     "last_night": 201,
+     "nights5_avg": 15,
+     "ret5d": -296,
+     "vol20d": 505,
+     "earnings_tonight": false
+    },
+    "INTC": {
+     "last_night": 195,
+     "nights5_avg": -9,
+     "ret5d": -872,
+     "vol20d": 832,
+     "earnings_tonight": false
+    },
+    "WDC": {
+     "last_night": -1589,
+     "nights5_avg": -285,
+     "ret5d": -2715,
+     "vol20d": 725,
+     "earnings_tonight": false
+    }
+   },
+   "QQQ": {
+    "last_night": 152,
+    "nights5_avg": 25,
+    "ret5d": 839,
+    "vol20d": 231
+   }
+  }
+ }
+}
