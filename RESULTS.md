@@ -3982,3 +3982,89 @@ As information:
 annualised with √252 on a monthly series, about 4.6× too high. It now uses
 √12. The t-statistics, taken across months, were right, and no section
 quoted the Sharpe.
+
+---
+
+## 31. Cheap compute on free filings: a leak-free event layer, and no material edge — `edgar_events.py`, `event_test.py`
+
+The owner asked to put cheap compute to work for an edge. Computing power is
+not an edge by itself, since anyone can rent the same GPUs and tokens. It
+becomes one when pointed at something too slow or too costly before. SEC
+EDGAR is free, timestamped to the second, and covers every company. It was
+used to test, leak-free, whether event information public **before the
+15:30 ET decision** improves the hedged book (§29), across the wide panel
+(§30) from 1999 to 2026.
+
+**Built.**
+- **`edgar_events.py`** fetched about 54,000 free SEC requests at ≤ 8 per
+  second and cached them in `data/edgar/` (gitignored, about 2 GB).
+- **The CIK map** is keyed by (ticker, year).
+- **Every event is placed by its true SEC acceptance time.** A filing counts
+  for night D only if it was accepted before 15:20 ET on D.
+- **`event_test.py`** declares six hypotheses, a placebo, a shuffle control
+  and leak canaries in its header. That region is pinned by sha256
+  (`05c682bc…`) and refused if edited. A noise-only dry run checked the
+  machinery.
+
+**Declared result** (beta in bps per flagged name-night against QQQ, with
+night fixed effects, t clustered two ways; Holm over H1–H6):
+
+| | Event known before the decision | Expected | Name-nights flagged | beta | t | Holm |
+|---|---|---|---|---|---|---|
+| H1 | earnings expected tonight (364-day rule) | + | 42,178 | +3.44 | +1.60 | keep |
+| H2 | bad-news 8-K items (1.03, 2.05, 2.06, 3.01, 4.01, 4.02) | − | 13,491 | −4.09 | −3.27 | **reject** |
+| H3 | late-filing notice | − | 2,553 | +11.10 | +2.43 | keep (wrong sign) |
+| H4 | common-equity supply visible | − | 26,151 | +5.54 | +4.84 | keep (wrong sign) |
+| H5 | initial 13D, company is subject | + | 2,644 | +2.55 | +0.86 | keep |
+| H6 | insider open-market purchase | + | 38,227 | +1.81 | +2.07 | keep |
+| P0 | placebo: shareholder-vote 8-K | 0 | 33,129 | −0.45 | −0.57 | pass |
+
+**As pre-registered, nothing is supported.**
+- **H2** is the only Holm rejection, but it fails its own declared shuffle
+  control. The declared shuffle held night effects fixed but not name
+  effects. H4 and H6 fail the same control.
+
+An adversarial review confirmed ten findings, all fixed:
+- the universe was chosen on the decision month's own volume;
+- the CIK map was built with hindsight, so it under-covers firms that later
+  died;
+- the replica basket was not the traded object;
+- there were no name fixed effects;
+- gaps beyond 40% were censored from the outcome;
+- the leak-canary rule was asymmetric.
+
+The corrected numbers were computed after the results were seen, so they
+are **not evidence**:
+- **H2** holds at −4.1 bps (t −3.3), and the shuffle is now centred. It is a
+  credible regularity on the wide panel.
+- **H1, the premise of `guard.py`'s earnings-skip control**, falls to +0.9
+  (t 0.4).
+
+**What it is worth to the traded basket**, as `xsec_live` trades it (6,658
+nights, 13 names a night):
+- **The H2 veto** adds +0.09 bps/night (t 2.4), about 2% of the +4.9 edge.
+  65% of that is one stock: SMCI's late-2024 auditor and Nasdaq notices. The
+  t clustered by name is 1.6, and without SMCI it is 1.8.
+- **Skipping earnings nights costs** 0.13–0.20 bps/night, for almost no
+  reduction in variance.
+
+**What the timing discipline was worth.** Placing events by filing date
+instead of acceptance time would have invented three effects: a −6 bps
+equity-supply veto (t −4.7), a +20 bps 13D effect (t +5.2), and an insider
+effect six times too large. The canaries caught all three.
+
+**Reading.**
+- **No material edge.** The compute did what it should: a large, leak-free
+  history test for almost no money. Its answer is that public filing events
+  known before the decision carry no material edge for this book.
+- **A free logged column at most.** H2 is the only filter worth even a free
+  logged column. Resolving +0.1 bps/night would take about 34 years of
+  forward nights, so it is not presented as a test that can confirm
+  anything.
+- **The decider redesign is not built.** Its news-driven per-name skips
+  belong to the same family of event vetoes, worth a few percent of the edge
+  at best.
+- **The cheap-compute lever left is the basket itself.** The live book's
+  volatility comes from one theme held eleven times (§19, §29), and the wide
+  panel (§30) is now on disk to test a broader, theme-capped basket.
+

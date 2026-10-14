@@ -32,3 +32,6 @@ data/opra/
 data/opra_daily.parquet
 data/stack_daily.csv
 data/overlay_daily.csv
+
+# SEC EDGAR cache (free public data; re-downloadable, never commit)
+data/edgar/
