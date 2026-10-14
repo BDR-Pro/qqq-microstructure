@@ -155,9 +155,10 @@ def main():
                   f'{r["months"]:>3} mo  {r["mean"]:+7.2f} bps/d  t '
                   f'{r["t"]:+5.2f}  {r["pos_months"]:.0%} mo+  IC '
                   f'{r["ic"]:+.3f}'))
-    print('(names out of sample, months not: evidence about the mapping, not '
-          'a forward test;\n RESULTS 19\'s verdict and the traded book are '
-          'untouched)')
+    print('(names AND months out of sample: forward, but few months; '
+          if a.after else '(names out of sample, months not: evidence about '
+          'the mapping, not a forward test; ')
+    print(' RESULTS 19\'s verdict and the traded book are untouched)')
     return res
 
 
