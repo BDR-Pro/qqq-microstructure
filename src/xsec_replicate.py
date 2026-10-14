@@ -116,7 +116,7 @@ def report_subset(name, rows, full_n=0):
     # missing edge
     weak = full_n and len(ls) < 0.6 * full_n
     print(f'  {name:<14} {ls.mean():+6.2f} bps/day  t={t:+5.2f}  '
-          f'Sharpe {ls.mean()/ls.std()*np.sqrt(252):+5.2f}  '
+          f'Sharpe {ls.mean()/ls.std()*np.sqrt(12):+5.2f}  '   # monthly obs
           f'{(ls > 0).mean()*100:3.0f}% mo+  IC {ic.mean():+.3f}  '
           f'({rows.ticker.nunique()} names, {len(ls)} mo)'
           + ('  UNDERPOWERED' if weak else ''))
