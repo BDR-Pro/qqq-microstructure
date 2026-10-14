@@ -4068,3 +4068,224 @@ effect six times too large. The canaries caught all three.
   volatility comes from one theme held eleven times (§19, §29), and the wide
   panel (§30) is now on disk to test a broader, theme-capped basket.
 
+
+## 32. A broader, theme-capped basket: tested before any change — `basket_study.py`
+
+The traded hedged book (§29) has been one theme eleven times live: memory, storage, semiconductors and AI infrastructure. Its live risk is far above the backtest's:
+- overnight beta of about 2.4 to QQQ;
+- tilt sd of about 151 bps/night, against the backtest's ~66.
+
+The wide panel (§30) showed that the overnight edge holds far beyond the top 150. The question was whether a broader basket, a basket capped per theme, or both would give a better hedged book after realistic costs at the $500k target. Better means one of two things: a similar net mean at much lower risk, or a higher risk-adjusted return.
+
+**The answer, under the rule declared before any return was computed: the current basket stands.** Four corrections found by review afterwards do not change it. The traded book, the frozen model and §19's clock are untouched, and nothing is proposed.
+
+### What was declared, before any return
+
+`basket_study.py` carries its declarations in a header pinned by sha256 (`561af434…`). Every run prints the hash and refuses to run if the header was edited, as `event_test.py` does.
+
+**Formation, exactly as `xsec_live` forms the live basket:**
+- For trade month T, the universe is the wide panel's names ranked by month T−1's dollar volume, minus the frozen ETF list.
+- Features are `build_table`'s, ranked within that universe.
+- Nothing from month T enters.
+
+**Two scores on the same names:**
+- the frozen model (`models/xsec_on_lgbm.txt`), as traded;
+- the model-free on_12m rule (`xsec_replicate`).
+
+**The grid, and nothing else:**
+- universe: top 150, 300, 500 or 1,000;
+- basket: 11, 20 or 40 names;
+- cap: none, or cap3, at most 3 names per cluster. Clusters come from the 63 trading days before T, with average linkage, merging at correlation ≥ 0.6.
+
+That is 24 configurations for each score. The current book is top150/11/none/MODEL.
+
+**The book:**
+- The basket is held every night of the month: buy at the close, sell at the next open.
+- It is hedged short QQQ 1:1, in whole shares, against the long actually bought.
+- Costs at $500,000 are IBKR Tiered through `paper_bench.order_cost`, on whole shares at each night's prices, for both legs, with the 2027 FINRA TAF.
+- §15's 1.5 bps censoring is charged per dollar of long.
+
+**Windows:**
+- SELECTION: 2001–2015.
+- CONFIRMATION: 2016-01 to 2026-09.
+- RECENT (2024-01 to 2026-09) and FORWARD (2026-04 to 2026-09) are reported as information.
+
+**The rule (the frozen-model configurations decide):**
+- **S1:** a candidate's SELECTION net is at least 80% of the current book's, and its sd at most 85% of it.
+- **S2:** pick the candidate with the best SELECTION Sharpe.
+- **S3:** propose it only if, in CONFIRMATION, its Sharpe is at least the current book's and its max drawdown and p1 night are no worse.
+
+The same rule on the on_12m configurations is a model-free check and decides nothing.
+
+**The replica reproduces the live book:**
+- Its Q5 overlaps the live registry 8 of 10 names in 2026-08, 10 of 11 in 2026-09 and 11 of 11 in 2026-10.
+- Its tilt correlates +0.99 with the paper log over 26 common nights.
+
+### The declared result
+
+The table gives net bps/night of the $500k capital, nightly sd, Sharpe (√252 on the nightly series) and max drawdown at fixed notional.
+
+| Configuration | SELECTION net / sd / Sharpe | CONFIRMATION net / sd / Sharpe / maxDD | FORWARD net / sd / Sharpe |
+|---|---|---|---|
+| **top150/11/none/MODEL (current)** | +5.79 / 64.4 / 1.43 | +5.37 / 66.7 / 1.28 / −15.3% | +10.86 / 144 / 1.20 |
+| top150/11/cap3/MODEL | +5.40 / 59.1 / 1.45 | +5.25 / 64.0 / 1.30 / −13.0% | +5.94 / 117 / 0.81 |
+| top150/20/cap3/MODEL | +1.19 / 44.8 / 0.42 | +1.56 / 44.5 / 0.56 / −14.7% | +5.34 / 61 / 1.38 |
+| top300/11/none/MODEL | +6.42 / 80.9 / 1.26 | +2.78 / 81.6 / 0.54 / −42.1% | +25.64 / 198 / 2.06 |
+| top500/11/none/MODEL | +8.49 / 89.0 / 1.51 | +2.06 / 95.3 / 0.34 / −59.0% | +24.31 / 232 / 1.66 |
+| top1000/11/none/MODEL | +8.02 / 97.4 / 1.31 | −3.17 / 105.2 / −0.48 / −132.1% | +15.53 / 208 / 1.19 |
+| top150/11/none/RULE (rule baseline) | −0.66 / 58.7 / −0.18 | +0.66 / 65.6 / 0.16 / −36.1% | +15.22 / 156 / 1.55 |
+| top1000/40/cap3/RULE (rule pick) | +2.98 / 48.4 / 0.98 | −2.19 / 58.4 / −0.59 / −81.9% | +11.00 / 114 / 1.53 |
+
+- **MODEL family (decides).** S1 needs a net of at least +4.63 with an sd of at most 54.8. No configuration clears both, so **the current basket stands.**
+- **RULE family (model-free check).** S1 admits top500/40/cap3 and top1000/40/cap3, and S2 picks top1000/40/cap3. That pick fails S3 on Sharpe (−0.59 against +0.16) and on drawdown (−81.9% against −36.1%), so the current basket stands here too.
+- **The best Sharpe moves from window to window**, which is the selection effect the rule exists to absorb:
+  - SELECTION: top1000/11/cap3/RULE;
+  - CONFIRMATION: top150/11/cap3/MODEL;
+  - RECENT: the current book;
+  - FORWARD: top300/20/cap3/RULE.
+
+### The review: five defects, corrected after the result, so not evidence
+
+An adversarial review reported six findings; one was the same defect reported twice. All five defects reproduced. The declaration was not edited. The declared run stands as printed, and each correction runs after it as a labelled POST-HOC variant that changes only that one thing.
+
+**1. The nightly P&L was a log-return proxy.**
+
+The declared gross averages each name's overnight log return. The book's dollar P&L is the sum of q × (open − close) over the shares actually held. The proxy is low by about half of each name's overnight variance, so it costs volatile names more. The dollar P&L adds this much to the net, in bps/night:
+
+| | SELECTION | CONFIRMATION | RECENT | FORWARD |
+|---|---|---|---|---|
+| current (top150/11) | +1.45 | +1.42 | +2.67 | +4.33 |
+| top300/11/MODEL | +2.04 | +1.81 | +2.85 | +5.74 |
+| top500/11/MODEL | +2.45 | +2.13 | +3.26 | +6.74 |
+| top1000/11/MODEL | +2.96 | +2.73 | +3.55 | +6.06 |
+
+So the current book's backtest net is about 25% above the declared figure. The proxy was biased against breadth by 0.4 to 1.5 bps/night.
+
+**2. The frozen ETF list let exchange-traded products into the wider universes.**
+
+The list was built for the top 150. Below it, baskets held:
+- leveraged, inverse and volatility products: FNGU, NVDX, TVIX, UGAZ, DGAZ, SKF, SRS;
+- cash and index funds: SGOV, VWO, IEMG;
+- QQQM, which tracks the same index as the short.
+
+They were 0.3% of the current book's basket name-months and 2.2% of top1000/11's.
+
+A screen of 432 tickers was built in three steps:
+- a return signature, applied by hand: 364 tickers had a correlation of at least 0.95 with another panel name, or a daily sd under 30 bps, in at least 30% of their months, and each was classified by hand;
+- the SEC fund lists and the EDGAR map already on disk;
+- a hand pass over every basket ticker.
+
+The screen applies only from the month a product existed, where a symbol first belonged to a company: Tandy was TAN, Seagram VO, Hercules Offshore HERO. The current book is kept as traded. Screening moves top1000/11 in CONFIRMATION from −3.17 to −2.32, and its drawdown from −132% to −103%.
+
+**3. The commission rate holds only below 300,000 shares a month.**
+
+`paper_bench` charges Tiered's first band, $0.0035 a share. IBKR charges $0.0020 between 300k and 3M shares a month, and $0.0015 above that.
+
+At $500k the current book traded a median of 1.2M shares a month in 2001–2015, when share prices were low, and about 200k in 2024–26. Applying the monthly cumulative tiers lowers the cost per night by:
+- for the current book: 1.45 bps in SELECTION, 0.14 in CONFIRMATION, 0 in RECENT;
+- for top1000/11: 4.95 bps in SELECTION, 1.96 in CONFIRMATION.
+
+**4. The FORWARD months are not point-in-time for the model.**
+
+They were rebuilt from Yahoo, which back-adjusts prices for every split up to its download date.
+- 19 names gap by a split ratio at the HF/Yahoo seam, among them BKNG (1/25) and KLAC (1/10). The model's price input can therefore carry a split that happened later.
+- 86 candidate tickers had already vanished from Yahoo by the build date.
+- The rule's signal does not depend on price level, so it is unaffected.
+
+For an upper bound, assume every split came after formation. Then 68 of the 144 MODEL baskets in 2026-05 to 2026-10 change:
+- the current book's FORWARD net moves from +10.86 to +12.24;
+- top300/11's moves from +25.64 to +24.72.
+
+The FORWARD ordering survives.
+
+**5. The model is in-sample for most of CONFIRMATION.**
+
+The frozen model was trained on top-150 name-months through trade month 2026-03. That makes 123 of CONFIRMATION's 129 months in-sample for the MODEL family, which the build's reading had called out of sample. The model's lift over the rule is concentrated in the universe it was fitted on, as the paired table below shows.
+
+### The rule under each correction
+
+| Variant | MODEL family (decides) | RULE family (check) |
+|---|---|---|
+| declared | no S1 candidate (net ≥ +4.63, sd ≤ 54.8): stands | pick top1000/40/cap3 fails S3 (Sharpe, drawdown) |
+| P1 dollar P&L | no S1 candidate (≥ +5.80, ≤ 55.2): stands | pick top1000/40/cap3 fails S3 (Sharpe, drawdown) |
+| P2 volume tiers | no S1 candidate (≥ +5.79, ≤ 54.8): stands | pick top1000/40/cap3 fails S3 (Sharpe, drawdown) |
+| P3 ETP screen | no S1 candidate (≥ +4.63, ≤ 54.8): stands | pick top500/40/cap3 fails S3 (Sharpe, drawdown) |
+| P4 all three | no S1 candidate (≥ +6.95, ≤ 55.2): stands | pick top500/40/cap3 fails S3 (Sharpe, drawdown) |
+
+**The verdict survives every correction.** The nearest miss is under P4: top1000/40/cap3/MODEL clears the mean floor (+7.02 against +6.95) but not the sd cap (57.4 against 55.2).
+
+P4, with all three corrections applied. These numbers are not evidence.
+
+| Configuration | SELECTION net / sd / Sharpe | CONFIRMATION net / sd / Sharpe / maxDD | FORWARD net / sd / Sharpe |
+|---|---|---|---|
+| **current** | +8.69 / 64.9 / 2.12 | +6.93 / 66.9 / 1.64 / −12.4% | +15.19 / 146 / 1.66 |
+| top150/11/cap3/MODEL | +8.11 / 64.1 / 2.01 | +6.77 / 64.2 / 1.67 / −11.3% | +14.77 / 121 / 1.93 |
+| top150/20/cap3/MODEL | +3.35 / 48.9 / 1.09 | +2.62 / 43.9 / 0.95 / −10.1% | +7.09 / 61 / 1.83 |
+| top300/11/none/MODEL | +10.76 / 85.9 / 1.99 | +4.55 / 81.6 / 0.89 / −26.1% | +29.06 / 196 / 2.36 |
+| top500/11/none/MODEL | +14.36 / 98.7 / 2.31 | +4.67 / 97.0 / 0.76 / −40.0% | +29.47 / 239 / 1.96 |
+| top150/11/none/RULE | +1.86 / 58.4 / 0.51 | +2.00 / 65.5 / 0.49 / −30.3% | +19.63 / 158 / 1.98 |
+| top300/11/none/RULE | +7.77 / 74.3 / 1.66 | +3.05 / 76.9 / 0.63 / −25.0% | +28.24 / 185 / 2.42 |
+
+### Breadth, like for like
+
+Each cell compares two configurations on the nights both hold. It gives the mean difference in bps/night with its t in parentheses, first on the declared measure and then on P4.
+
+| | SELECTION | CONFIRMATION to 2026-03 | FORWARD |
+|---|---|---|---|
+| gross, MODEL − RULE, top150/11 | +6.92 (9.8) \| +7.17 (10.1) | +5.37 (7.5) \| +5.56 (7.7) | −4.28 (−1.0) \| −4.36 (−1.0) |
+| gross, MODEL − RULE, top300/11 | +3.94 (4.0) \| +4.10 (4.2) | +2.09 (2.1) \| +2.08 (2.2) | +2.70 (0.6) \| +0.97 (0.2) |
+| net, top300/11/MODEL − current | +0.62 (0.7) \| +2.07 (2.2) | −3.43 (−3.6) \| −3.17 (−3.4) | +14.78 (1.8) \| +13.86 (1.7) |
+| net, top300/11/RULE − top150/11/RULE | +4.77 (5.7) \| +5.92 (6.9) | +0.37 (0.5) \| +0.68 (0.9) | +7.87 (1.4) \| +8.61 (1.5) |
+| net, cap3 − none, top150/11/MODEL | −0.40 (−0.9) \| −0.58 (−1.2) | +0.11 (0.4) \| −0.15 (−0.4) | −4.92 (−1.2) \| −0.43 (−0.1) |
+
+The MODEL − RULE rows measure the model's lift over the rule on the same universe.
+- Inside the top 150, where the model was fitted, the lift is +5 to +7 bps/night before the cutoff. That is larger than the current book's whole SELECTION net.
+- After the cutoff it turns negative (−4.3, t −1.0). §15 put the honest out-of-sample increment near +1 bps/day.
+- Outside the top 150, the lift is 0 to +4 bps/night.
+
+### Reading
+
+**What is evidence.** Only the declared verdict: under the rule written before any return, the current basket stands, and the four corrections leave that unchanged. Nothing in this grid is proposed.
+
+**Lower risk costs mean.** No configuration gives a similar net at much lower risk.
+- Lower sd comes only from holding more names, and it costs at least half the net. At N = 20 the sd falls 15–35% while the net halves or worse. In CONFIRMATION under P4, top150/20/cap3 nets +2.62 at sd 43.9, against the current book's +6.93 at sd 66.9.
+- Wider universes earn more gross but carry more sd: top500/11 has an sd of 97 against 67. Breadth by universe does not reduce risk.
+
+**The cap is nearly free, and does little at N = 11.** On the current book:
+- It keeps the CONFIRMATION net and Sharpe (P4: +6.77 and 1.67, against +6.93 and 1.64).
+- It slightly trims the drawdown (−11.3% against −12.4%) and the beta (0.27 against 0.32).
+- It cuts the FORWARD sd from 146 to 121.
+- In SELECTION it cuts the sd by only 1–8%, far short of the 15% S1 asks for.
+
+It does split the theme. In October 2026 it would have swapped 7 of the 11 names: NBIS, IREN, LRCX, WDC, AMAT, INTC and CAT out, and BA, UBER, NVDA, GS, BAC, MSTR and AVGO in.
+
+**On breadth, the clean evidence leans toward top300/11, and it is noise.**
+- The MODEL comparison in CONFIRMATION is in-sample and says nothing about breadth.
+- The like-for-like RULE comparison shows top300/11 beating top150/11 by:
+  - +4.8 (t 5.7) in 2001–15;
+  - +0.4 (t 0.5) from 2016 to 2026-03;
+  - +7.9 (t 1.4) in the six forward months.
+- In those forward months the model's own top300/11 beat the current book by +14.8 (t 1.8).
+
+That is 125 nights. A gap of 14.8 would reach t 2 in about 150 nights. A gap of 3 bps/night would need about 15 years.
+
+**The live risk comes from the regime, not from the grid.**
+- The replica's sd is 67 in CONFIRMATION, 99 in RECENT and 146 in FORWARD, close to the live ~151.
+- Every N = 11 configuration rose the same way: FORWARD sd 117–239, with a residual beta to QQQ of 1.0–2.0 even after the 1:1 hedge. The current book's is 1.18 in FORWARD, against 0.32 over 2016–26.
+- Only more names bring it down. At N = 40, the FORWARD sd is 36 and the beta about 0, but the net is near zero.
+
+A hedge sized to the basket's beta was not in this grid.
+
+**What the study cannot say.**
+- Costs are commissions and fees only, with no auction impact and no spread. Each name's slice is at most 0.08% of its day's volume.
+- Dividends and QQQ borrow are not included.
+- The FORWARD window is 125 nights, from Yahoo data.
+- The frozen model is in-sample before 2026-04.
+
+### What the owner decides, and when
+
+- **Nothing now.** Under the declared rule the current basket stands, so there is no proposal to decide. §19's first (weak) read in November goes ahead on the current book.
+- **If the breadth question is to be answered, only forward nights can answer it.** The clean evidence leans toward top300/11, as MODEL or as rule. It could be logged as a non-binding shadow column in the monthly ritual, declared and pinned before its first month, and read at §19's 12-month row in August 2027. That would be a new pre-registration, not part of this one.
+- **Any future re-freeze to a wider universe** would be its own dated decision after the November read. It would need the ETP screen, the dollar accounting and the tiered costs built here, plus a model validated on the wider universe.
+
+`python src/basket_study.py` prints the declared run, then the POST-HOC block. It caches in `data/_work_basket/` and takes about 2 minutes warm. `tests/test_basket_study.py` has 26 tests. They pin the declaration, the point-in-time formation and the cost arithmetic against `paper_bench.order_cost`, and test each correction.
