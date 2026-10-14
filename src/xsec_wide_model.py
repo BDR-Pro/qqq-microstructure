@@ -27,7 +27,14 @@
 # Q5-Q1 overnight spread is positive with t > 2 in BOTH never-core tiers;
 # PARTIAL iff positive in both but a t is <= 2; DOES NOT GENERALISE otherwise.
 #
-#   python src/xsec_wide_model.py [--dir data/xsec1000]
+# FORWARD MODE (--after 2026-03): the same scoring restricted to trade months
+# after the model's training cutoff -- months built by xsec_extend_wide.py from
+# Yahoo, after the HF source stopped. Then the names AND the months are out of
+# sample: the one forward, broad readout the frozen model can get today. Its
+# verdict uses the same rule; few months make it noisy, and it is
+# non-binding beside RESULTS 19's replay.
+#
+#   python src/xsec_wide_model.py [--dir data/xsec1000] [--after 2026-03]
 
 import os, sys, argparse
 import numpy as np, pandas as pd
@@ -56,11 +63,14 @@ def tiers(df):
     return {'CORE': core, 'MID': mid, 'DEEP': deep}
 
 
-def score_tier(df, names, booster):
+def score_tier(df, names, booster, after=None):
     """The frozen model's Q5-Q1 overnight series and monthly IC inside one
-    tier, the tier being its own universe."""
+    tier, the tier being its own universe; with `after`, only trade months
+    after it (features still use the 12 months before each)."""
     sub = df[df.ticker.isin(names)]
     t = build_table(sub)
+    if after:
+        t = t[t.tmonth > after]
     if t.empty:
         return None
     pred = pd.Series(booster.predict(t[FEATS]), index=t.index)
@@ -92,19 +102,23 @@ def verdict(res):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dir', default='data/xsec1000')
+    ap.add_argument('--after', default=None, metavar='YYYY-MM',
+                    help='score only trade months after this one (forward)')
     a = ap.parse_args()
     path = a.dir if os.path.isabs(a.dir) else os.path.join(ROOT, a.dir)
     df = load_panel(path)
     booster = lgb.Booster(model_file=MODEL)
     tr = tiers(df)
-    print(f'frozen model on the wide panel: {df.month.nunique()} months, '
+    print(('FORWARD: trade months after ' + a.after + ' only\n'
+           if a.after else '') +
+          f'frozen model on the wide panel: {df.month.nunique()} months, '
           f'{df.ticker.nunique()} names; tiers CORE {len(tr["CORE"])}, '
           f'MID {len(tr["MID"])}, DEEP {len(tr["DEEP"])}')
     print(f'  {"tier":<6}{"names":>7}{"months":>8}{"L/S bps/d":>11}{"t":>8}'
           f'{"months+":>9}{"IC":>8}{"Q5 bps/d":>10}')
     res = {}
     for lab, names in tr.items():
-        r = res[lab] = score_tier(df, names, booster)
+        r = res[lab] = score_tier(df, names, booster, a.after)
         if r is None:
             print(f'  {lab:<6} did not score (too few names a month)')
             continue
