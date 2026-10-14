@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from xsec_backtest import load_panel, stats
 from xsec_ml import build_table, portfolio, monthly_ic, FEATS
 from xsec_wide import monthly_rank, CORE_N
+from xsec_replicate import signal_rows, ls_series
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL = os.path.join(ROOT, 'models', 'xsec_on_lgbm.txt')
@@ -88,6 +89,24 @@ def score_tier(df, names, booster, after=None):
                 q5=float(ls.q5.mean()))
 
 
+def rule_tiers(df, tiers_, after=None):
+    """The persistence rule (no model), computed exactly as xsec_wide.py
+    does -- signal rows on the whole panel, ranked within each tier -- for
+    the same trade months, so the forward readout shows the phenomenon and
+    the frozen model side by side. Monthly spreads; t across months."""
+    rows = signal_rows(df, 'on_12m')
+    if after:
+        rows = rows[rows.tmonth > after]
+    out = {}
+    for lab, names in tiers_.items():
+        ls, ic = ls_series(rows[rows.ticker.isin(names)])
+        out[lab] = None if len(ls) < 2 else dict(
+            months=len(ls), mean=float(ls.mean()),
+            t=float(ls.mean() / (ls.std() / np.sqrt(len(ls)))),
+            pos_months=float((ls > 0).mean()), ic=float(ic.mean()))
+    return out
+
+
 def verdict(res):
     oou = [res.get('MID'), res.get('DEEP')]
     if any(r is None for r in oou):
@@ -128,9 +147,18 @@ def main():
               + ('   (in-sample names: reference only)' if lab == 'CORE'
                  else ''))
     print(f'VERDICT: {verdict(res)}')
-    print('(names out of sample, months not: evidence about the mapping, not '
-          'a forward test;\n RESULTS 19\'s verdict and the traded book are '
-          'untouched)')
+    if a.after:
+        print(f'the persistence rule (no model), same tiers and months '
+              f'(information; monthly spreads):')
+        for lab, r in rule_tiers(df, tr, a.after).items():
+            print(f'  {lab:<6}' + ('did not score' if r is None else
+                  f'{r["months"]:>3} mo  {r["mean"]:+7.2f} bps/d  t '
+                  f'{r["t"]:+5.2f}  {r["pos_months"]:.0%} mo+  IC '
+                  f'{r["ic"]:+.3f}'))
+    print('(names AND months out of sample: forward, but few months; '
+          if a.after else '(names out of sample, months not: evidence about '
+          'the mapping, not a forward test; ')
+    print(' RESULTS 19\'s verdict and the traded book are untouched)')
     return res
 
 

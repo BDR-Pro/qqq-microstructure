@@ -3799,3 +3799,186 @@ The tests use a fake `ib_insync` and never touch a broker. They check:
 - `main --submit` end to end;
 - the declared rule on hand-made cost curves;
 - R5's schedule against the rule itself at every rate.
+
+---
+
+## 30. More from each night, and from names the model never saw — `xsec_readout.py`, `xsec_wide.py`, `xsec_wide_model.py`
+
+The owner asked how much computing power could stand in for the little data
+there is. Mostly it cannot. The precision of an average return grows with
+the number of nights that have actually happened, and no computation makes
+future nights arrive sooner. On the 34 live nights, proving a 4.9 bps/night
+edge at t = 2 would need:
+
+| What is measured | Nightly sd | Nights for t = 2 |
+|---|---|---|
+| The raw basket | 205 bps | ~7,000 (28 years) |
+| The tilt (the hedged book, §29) | 151 | ~3,800 (15 years) |
+| The basket minus 1.42 × QQQ | 133 | ~3,000 (12 years) |
+| §19's binding L/S replay, at backtest volatility (12.2 bps edge, sd ~61) | 61 | ~100 (5 months) |
+
+The last row is why the forward test was built on the universe-wide
+long-minus-short spread.
+
+Computing power helps in two ways:
+- **It can take noise out of each night.**
+- **It can test breadth instead of time**, by asking whether the edge holds
+  on names outside the model's universe.
+
+Both were done, with their rules written before any result.
+
+### 1. Readouts with less noise per night (non-binding, declared 2026-10-14)
+
+`xsec_readout.py` runs in the monthly ritual after grading and writes
+`reports/xsec_readout.csv`. It reads the paper log four ways:
+- **raw:** the basket alone;
+- **tilt:** the basket minus QQQ, which is the hedged book;
+- **two residuals:** the basket minus a beta times QQQ, where the beta is
+  never fitted on the nights being read. One uses the backtest's total
+  overnight beta of 1.42 (§21). The other uses a trailing 60-night beta
+  taken strictly from earlier nights, as §19 proposed.
+
+A residual estimates the selection return beyond what the market explains,
+so it is compared with the backtest's alpha (+4.63 after censoring), not
+with the tilt.
+
+The first reading, on 34 nights, gives nightly sd:
+- 205 raw;
+- 151 tilt;
+- 133 with the fixed beta;
+- 117 with the trailing beta, which has 14 nights so far.
+
+The means are all far from significant, as they must be at this length.
+§19's replay remains the verdict.
+
+### 2. The wide panel, built here
+
+The panel is the top 1,000 US tickers by each month's own dollar volume,
+1999-03 to 2026-03:
+- 325 months, 6,832 names, 6.62 million ticker-days;
+- from the same public minute source as the core panel;
+- survivorship-free in the same way, since each month's universe is chosen
+  from that month.
+
+`xsec_extract_fast.py` collapses a month about 5× faster than
+`xsec_extract.py`, which is unchanged, and returns the reference's rows:
+- checked on two real months, 2010-06 and 2003-01, and on synthetic minute
+  data run through the reference itself (DST, a NaN first open, a short
+  session, the top-N cut);
+- `dollar_vol` agrees to 1e-15 relative (summation order), and every other
+  column exactly.
+
+The first full run lost 32 months to downloads cut off early and left three
+workers stalled for 15 minutes. The downloader now checks the bytes received
+against the server's length and retries, and the second pass completed all
+325 months.
+
+### 3. The overnight edge, out of universe — `xsec_wide.py`
+
+`xsec_wide.py` runs the persistence rule (rank by trailing 12-month overnight
+mean, Q5 − Q1, no model) separately inside each tier. Tiers are set by each
+month's dollar-volume rank:
+- **CORE:** ever in the top 150;
+- **MID:** never in the top 150 in any month, median rank ≤ 400;
+- **DEEP:** never in the top 150, deeper.
+
+Its verdict rule has been in its header since it was written; this is the
+first run.
+
+| Tier | Names | Months | L/S bps/day | t | Months positive | IC |
+|---|---|---|---|---|---|---|
+| CORE (reference) | 1,154 | 312 | +13.92 | 16.96 | 88% | +0.172 |
+| MID | 31 | — | too few to report | | | |
+| **DEEP** (never core) | **1,708** | 312 | **+10.53** | **13.26** | 85% | +0.146 |
+
+**Verdict: REPLICATES OUT OF UNIVERSE.** The overnight persistence the model
+exploits is not a quirk of the mega-cap tier. It is as strong, gross, in
+1,708 names that never shared a month with the core panel.
+
+### 4. The frozen model, on names it never saw — `xsec_wide_model.py`
+
+The frozen model (`models/xsec_on_lgbm.txt`) is loaded and never refitted.
+It scores each tier as its own universe, so its month-ranked features mean
+what they meant in training. The verdict rule was declared in the header
+before the first run: GENERALISES only if both never-core tiers are positive
+with t > 2.
+
+| Tier | Names | Months | L/S bps/day | t | Months positive | IC | Q5 bps/day |
+|---|---|---|---|---|---|---|---|
+| CORE (trained on, reference) | 1,355 | 312 | +14.56 | 16.45 | 88% | +0.190 | +11.61 |
+| MID | 124 | — | did not score (too few names a month) | | | | |
+| **DEEP** (never seen) | **5,353** | 312 | **+9.38** | **11.63** | 80% | +0.144 | +7.31 |
+
+**Verdict, as declared: "too thin to judge".**
+- The rule required both never-core tiers to score, and the MID tier is
+  structurally small. Over 27 years, few names stay out of the top 150 in
+  every month yet hold a median rank inside 400.
+- That is a flaw in how the rule was written. It is recorded as one, and the
+  rule is not rewritten now that its result is known.
+- As information only: on 5,353 names it never saw, the frozen model sorts
+  overnight returns at +9.4 bps/day, t 11.6.
+
+**What sections 3 and 4 do and do not show.**
+- **The names are out of sample; the months are not.** 1999–2026 overlaps
+  the training window, so this is evidence about the mechanism and the
+  learned mapping, not forward evidence. §19's verdict is untouched.
+- **The spreads are gross.** Below the top 150, auction spreads and per-share
+  costs are larger, so these are not tradeable numbers there.
+- **The traded universe is unchanged.** It stays the top 150; a universe
+  change would be a re-freeze (§20).
+- **What it does settle.** §22 showed the edge is broad inside the top 150.
+  This carries it beyond the top 150: the edge is not a mega-cap tier
+  artifact, and neither is the frozen model's ranking.
+
+### 5. The forward months
+
+The HF minute source stops at 2026-03, the frozen model's cutoff.
+`xsec_extend_wide.py` runs `xsec_extend.py` unchanged against the wide
+panel, rebuilding 2026-04 to 2026-09 from Yahoo.
+
+**Validated first, on 2026-03**, a month HF has, comparing Yahoo's rebuild
+with the HF panel:
+- **Universe overlap:** 93%, 931 of the top 999.
+- **Closes:** median 1.8 bps apart, p95 14.9.
+- **First-hour prices:** median 2.3, p95 15.2.
+- **Opens:** median 0.0, p95 30.
+
+That passes the bar the tool declares: at least 90% overlap and a few bps.
+About 6% of candidate names failed to download (Yahoo refuses some bulk
+requests with "Invalid Crumb"), and the overlap figure already includes
+that. Open noise falls on the long and the short side alike, so it blurs
+the spread rather than biasing it.
+
+Six trade months, **names and months both out of sample**:
+
+| Tier | Frozen model: L/S bps/day | t (daily) | Rule: L/S bps/day | t (monthly) | Months positive |
+|---|---|---|---|---|---|
+| CORE (ever top-150) | +17.76 | 1.06 | +16.84 | 2.35 | 5 of 6 |
+| MID | did not score | | did not score | | |
+| **DEEP** (never core) | **+16.70** | 1.33 | **+16.10** | 2.53 | 5 of 6 |
+
+**Verdict, as declared: "too thin to judge"**, because the MID tier cannot
+score again.
+
+As information:
+- **Both agree.** The frozen model and the rule are positive in names the
+  model never saw, over months after its cutoff, and in the core-type names.
+- **The evidence is weak.** Six months is not much: the model's daily t is
+  1.3, the rule's monthly t is 2.5.
+
+**How this sits beside the paper log.**
+- **The two disagree in sign.** Over its 34 nights (2026-08-21 to
+  2026-10-09, overlapping only the last two of these months), the 11-name
+  paper log reads −6.8 bps/night of tilt (§29). The spread across thousands
+  of names is positive over April to September.
+- **The basket is one theme, eleven times.** The broad spread is the
+  phenomenon. That is why §19 made the universe-wide long-minus-short replay
+  binding, not the paper log.
+- **The CORE row is not that replay.** It uses a different universe and a
+  different data path. The replay's own number comes from the owner's
+  monthly run, and since §29 it lands in `reports/xsec_replay.csv`.
+
+**A side fix.** `xsec_replicate.report_subset` printed a "Sharpe"
+annualised with √252 on a monthly series, about 4.6× too high. It now uses
+√12. The t-statistics, taken across months, were right, and no section
+quoted the Sharpe.

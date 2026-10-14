@@ -75,6 +75,37 @@ def collapse(t, m, top_n):
     return out
 
 
+def download(url, dest, tries=4, timeout=60):
+    """The month file, whole or not at all. A connection the far side cuts
+    early ends like a normal EOF, so the bytes received are checked against
+    Content-Length, and a stalled read times out instead of hanging a
+    worker (both happened on the first full run: 32 truncated months and
+    three workers stuck for 15 minutes)."""
+    import time
+    for i in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent':
+                                                       'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=timeout) as r, \
+                    open(dest, 'wb') as f:
+                want = int(r.headers.get('Content-Length') or -1)
+                got = 0
+                while True:
+                    chunk = r.read(1 << 22)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    got += len(chunk)
+            if want < 0 or got == want:
+                return got
+            err = f'truncated: {got:,} of {want:,} bytes'
+        except Exception as ex:
+            err = f'{type(ex).__name__}: {ex}'
+        if i < tries - 1:
+            time.sleep(5 * 2 ** i)
+    raise IOError(f'{url}: {err} after {tries} tries')
+
+
 def one_month(args):
     """Download one month, collapse it, write it; resumable like the
     reference (an existing HF-built month is never redone)."""
@@ -88,16 +119,8 @@ def one_month(args):
             return m, -1
     os.makedirs(xe.TMP, exist_ok=True)
     tmp = os.path.join(xe.TMP, f'f{m}.{os.getpid()}.parquet')
-    req = urllib.request.Request(xe.URL.format(m=m),
-                                 headers={'User-Agent': 'Mozilla/5.0'})
     try:
-        with urllib.request.urlopen(req, timeout=300) as r, \
-                open(tmp, 'wb') as f:
-            while True:
-                chunk = r.read(1 << 22)
-                if not chunk:
-                    break
-                f.write(chunk)
+        download(xe.URL.format(m=m), tmp)
         rows = collapse(pd.read_parquet(tmp, columns=COLS), m, top_n)
         part = dest + f'.part{os.getpid()}'
         rows.to_parquet(part, index=False)
