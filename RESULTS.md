@@ -3521,3 +3521,281 @@ fixed. Among them:
 The 20 tests check planted Kelly truth, financing and day counts, commission
 parity with `paper_bench`, the margin-call rule, and that every proxy table
 carries its banner.
+
+---
+
+## 29. The traded book becomes the hedged book, and the capital it needs — `orders.py`, `capital.py`
+
+On 2026-10-14 the owner decided two things:
+1. **The traded book becomes the QQQ-hedged book.** Until today `orders.py`
+   held the Q5 basket long overnight, unhedged.
+2. **The capital target is delegated to us**, to be set by a rule declared
+   before anything was computed.
+
+Nothing here touches the forward test. This section changes what the paper
+account trades, and at what size.
+
+### The hedged book, and why this object
+
+Every night the book is:
+- long the frozen model's Q5 basket at the close (BUY MOC, then SELL MOO at
+  the next open);
+- short QQQ over the same night (SELL MOC, then BUY MOO), 1:1 in dollars
+  against the long notional actually bought.
+
+That is §21's **NEU**:
+- **Alpha** +3.79 bps/night at t 5.25, against the long-only book's +4.13.
+  Total overnight beta is 0.42 instead of 1.42, so 93% of the return is
+  alpha.
+- **Measured independently (§20):** NEU 1:1 +4.17, t 5.24, Sharpe 1.10, max
+  drawdown −31.7%. A trailing-beta hedge (NEUb) came out at +3.40, t 4.85.
+- **Robustness (§16/§24):** +4.09 net at t 5.22, with 9%/yr volatility. It
+  breaks even at 2.7× the assumed cost, the thinnest margin in the table.
+- **Its gross night is the paper log's own metric**, `tilt_bps` = Q5 − QQQ
+  overnight: +6.4 gross in the backtest, +4.9 after §15's 1.5 bps censoring.
+
+**Chosen from the backtest, not from the live nights.** On the live nights:
+- a 1:1 hedge cut the nightly sd from 207 to 152 bps (§27);
+- a hedge at the in-sample live beta (2.37) would have cut it to 115.
+
+That beta was fitted on the very nights being read, one theme eleven times,
+so it was not used. The ratio is §21's 1:1 dollar hedge, the object with the
+published alpha. §20 already established that the forward metrics do not
+depend on the configuration, so this is a sizing choice, not evidence.
+
+### What changes in the pipe
+
+- **`orders.py`** trades the hedged book. The hedge is a dated constant,
+  `HEDGE = ('QQQ', 1.0)`, not a flag.
+  - **Close leg.** The basket's BUY MOC orders go in first. The short is then
+    sized as round(long notional IBKR accepted / QQQ price) to the nearest
+    share, from the same price snapshot, and sent as a plain SELL MOC. A
+    failure can leave the old unhedged book, never a naked short.
+  - **Re-runs.** A re-run tops up the short and never doubles it.
+  - **Open leg.** Every long is sold, as before, and every short is covered
+    with a BUY MKT/OPG.
+  - **Checks before any order.** Reg T is checked against the account's
+    NetLiquidation. Only QQQ is ever shorted, and a basket containing QQQ, or
+    an account long QQQ, is refused.
+  - **Refusals are never silent.** No QQQ price, Reg T, an account long QQQ,
+    or TWS unreachable: each is logged and pushed to Telegram, naming any
+    short still open.
+  - **Telegram** reports what reached paper, not the dry sizing.
+  - **Logs.** The hedge orders get their own log,
+    `reports/orders_hedge_log.csv`. `orders_log.csv` keeps its header and
+    meaning.
+- **`fills.py`** pairs each QQQ cover with the latest earlier short, and
+  grades hedged nights on `tilt_bps`.
+- **`paper_bench.py`** prices the QQQ pair beside the long book. It closes the
+  hedged night's identity against `tilt_bps` exactly, with three hedge terms:
+  slippage, ratio and data.
+- **`roi_year.py`** gains `--hedge RATIO`. Its default is now the traded
+  book's 1.0, and `--hedge 0` reproduces §26 byte for byte.
+- **`capital.py`** (new) applies the capital rule below.
+
+### What does not change
+
+- **The forward test.** §19's pre-registered replay (`xsec_replay.py`, the
+  L/S book) and its GO/KILL table are untouched. The paper log's `tilt_bps`
+  already is the hedged book's gross, so the log now grades the traded object
+  directly.
+- **The frozen path.** `models/`, the scoring code and the `reports/*.csv`
+  history are untouched.
+- **Live submission is still not implemented.** `--submit` reaches IBKR paper
+  only ('D' accounts).
+- **The decider's hedge question is now moot.**
+  - Each afternoon `guard.py` asks whether to hedge the basket 1:1 with QQQ
+    tonight. The traded book is now hedged every night, whatever the answer,
+    so the answer no longer corresponds to anything the account does.
+  - `guard.py`'s pre-declared grading is left exactly as it is. Its record
+    still grades the shadow book against the frozen, unhedged book, as
+    declared. Changing a declared gate now would void it.
+  - If a decider ever passes its gate, its hedge half will need a new question
+    the hedged book can act on, declared in a dated commit with a fresh
+    record.
+
+### The capital rule, declared before computing
+
+The numbers research wrote this rule into the header of its ladder script
+before any hedged-book cost was computed. `capital.py` reproduces it
+unchanged, and only this rule decides:
+
+- **R0** IBKR Pro Tiered. Fixed is printed for reference only.
+- **R1** The cost is the whole nightly bill: BUY MOC + SELL MOO for each
+  basket name bought, plus the QQQ SELL MOC and BUY OPG. It is priced by
+  `paper_bench.order_cost` with the FINRA TAF on (the 2027 schedule), in bps
+  of capital.
+- **R2** The edge is the corrected tilt, +4.9 bps/night.
+- **R3 TARGET** The smallest rung of $10k…$500k where every name is bought
+  and the cost is ≤ 1.3 bps/night (§26's level).
+- **R4 MINIMUM** The smallest rung where every name is bought and the cost is
+  ≤ 2.45, half the edge. Below it, there is no live hedged book.
+- **R5** The TARGET must also pass R3 with an assumed QQQ borrow of 0.30%/yr
+  (Actual/360, 1.45 calendar days a night). Otherwise, the next rung up.
+
+**A second pass changed the rule after the October outcome was known.** It
+moved R4 to 2.34 (the backtest's own NEU cost) and R5's input to the measured
+0.40% borrow less IBKR's interest on short-sale proceeds, and added a $1M
+rung. Both verdict numbers moved with it, to $250k and $75k. Review caught
+this. Those changes are kept as **proposed amendments A1–A3**:
+- they are printed beside the verdict;
+- they decide nothing;
+- they would bind only from the first basket emitted after the owner accepts
+  them.
+
+### The ladder, the target and the minimum
+
+October basket at the 2026-10-13 closes, Tiered, 2027 fees
+(`python src/capital.py`):
+
+```
+  capital  deployed  QQQ sh  long-only  QQQ leg  HEDGED  % of edge  + R5 borrow  equity to hold
+   10,000    70%*        9      6.63     0.87     7.50     153%        7.58          7,203
+   25,000    87%        29      3.45     0.50     3.95      81%        4.06         22,794
+   50,000    95%        64      1.97     0.38     2.36      48%        2.47         49,973
+   75,000    96%        97      1.51     0.34     1.85      38%        1.97         75,794
+  100,000    98%       131      1.28     0.34     1.62      33%        1.74        102,600
+  150,000    98%       199      1.07     0.35     1.41      29%        1.53        155,600
+  250,000    99%       332      0.90     0.35     1.25      25%        1.37        259,910
+  500,000    99%       667      0.81     0.35     1.16      24%        1.28        522,049
+  bps of capital per night; * 2 names unbought
+```
+
+- **TARGET $500,000.** R3 is first met at $250k (1.25, 0.05 inside), but R5's
+  borrow takes $250k to 1.37. $500k passes at 1.28, **0.02 inside**.
+- **MINIMUM $50,000** (2.36 ≤ 2.45, 0.09 inside).
+- The research's own run on the 2026-10-12 closes gave the same answer.
+
+**Neither number is solid, and the line that states them says so.**
+- **R5's one input decides the target.** That input is the net financing rate
+  on the short: the borrow fee, less any interest on short proceeds.
+  - Up to 0.13%/yr, the target is $250k. Up to 0.35%/yr, it is $500k. Above
+    that, no rung on the ladder qualifies.
+  - IBKR's public feed showed a 0.40% borrow on 2026-10-12 (13-week range
+    0.3–0.5).
+  - IBKR's pricing pages say short proceeds above $100k earn BM − 1.25%
+    (2.63%). If this account is paid that, the net rate is negative and $250k
+    would pass. Without it, 0.40% leaves no rung.
+  - The owner can read both rates in TWS for free. Under the declared rule
+    that reading is information; adopting it is amendment A2.
+- **The 1.3 bar sits near this book's cost floor**, about 1.1–1.25 bps/night.
+  The floor is set by per-share fees on low-priced names and the SEC fee on
+  two sales a night.
+  - About 0.1 bps of carry moves the target a whole rung.
+  - In 150 draws of 10% per-name price noise, the target left $500k 51 times.
+- **The minimum is steadier.** It held at $50k in all 150 draws. A threshold
+  choice moves it, not prices: under A1's 2.34, $50k misses by 0.02 and the
+  minimum becomes $75k.
+- **Re-apply the rule** each time a month's basket is emitted.
+
+**The crontab moves to the target.** It passed `--capital 25000`: 3.95
+bps/night, 81% of the edge, below the minimum. Paper capital is free (§25),
+so the paper leg moves to the target, and the crontab lines are updated with
+this section.
+
+### Reg T
+
+- **No offset between legs.** Reg T charges 50% of each leg at IBKR's
+  end-of-day check, and a stock basket does not offset a QQQ short (12 CFR
+  220.12). A 1:1 book at capital C needs about C of equity, half the long-only
+  book's ceiling.
+- **At the target:** long $495,932 + short 667 QQQ ($495,961) = $991,893
+  gross, 1.98× capital. The Reg T floor is $495,947. `orders.py --submit` uses
+  that line only to 95%, so it refuses below **$522,049 of NetLiquidation**.
+- **The account type.** The short needs a non-IRA margin account; a cash
+  account or an IRA rejects it. The order is a plain SELL: IBKR marks it short
+  and handles the locate. IBKR's default $1M paper account clears the equity.
+- **Maintenance** (25% on a 9+ name basket, ~30% on the short) leaves room for
+  a one-night loss of about 45% of equity. The worst live hedged night was
+  −5.7%.
+
+### Costs
+
+At $500k the nightly bill is certain:
+- the long book costs 0.81 bps/night;
+- the QQQ pair costs 0.35, about 0.2 of it the SEC fee on the short sale;
+- that is 1.16 in all, 24% of the edge;
+- adding R5's borrow (0.12) and the QQQ dividend the short owes (0.414%/yr,
+  0.16) gives **1.44 bps/night all-in**: about $72 a night, or 3.6%/yr of
+  capital.
+
+At $25k the same book costs 3.95 (4.20 all-in).
+
+What these books do not see:
+- **Dividends.** `xsec_live.py` grades on unadjusted prices, which credit the
+  short with QQQ's ex-dividend drop. A real account therefore trails the tilt
+  by about 0.17 bps/night, partly offset by the basket's own dividends.
+- **Paper flatters both.** IBKR paper processes no dividends, and whether it
+  charges borrow is unconfirmed.
+
+### What to expect, in each world
+
+- **Method.** Net per night at $500k is deployed × world − all-in, in bps of
+  capital. Per year it is 252 nights at a fixed notional.
+- **An approximation.** The volatility columns are a normal approximation, not
+  the block-bootstrap fan. That fan needs the walk-forward series, which
+  exists only on the owner's machine:
+  `python src/roi_year.py --capital 500000 --plan tiered`, which now defaults
+  to the hedged book.
+
+```
+  $500,000, 252 nights          net/night   per year   P(loss), backtest vol (9%/yr)   P(loss), live vol (152 bps/night ~ 24%/yr)
+  as backtested (+4.93 gross)     +3.45       +8.7%              ~17%                                ~36%
+  half the edge (+2.61)           +1.15       +2.9%              ~37%                                ~45%
+  no edge, beta only (+0.30)      -1.14       -2.9%              ~63%                                ~55%
+  QQQ held, §26 (for scale)                   median +15%, p5 -17%, P(loss) 24%
+```
+
+- **This book is almost pure alpha.** With no edge it simply loses its costs,
+  about −2.9% a year. The long-only book at least kept the overnight beta
+  premium.
+- **At backtest volatility it is a calm book:** 9%/yr against QQQ's ~20%. As
+  backtested it earns about +9% a year, at under half of QQQ's risk.
+- **At the live volatility its risk is about QQQ's own,** 24%/yr. In the
+  half-the-edge world, the one a GO verdict leaves most plausible, it expects
+  about +3% a year for that risk, and a losing year is close to a coin flip.
+- **The live record so far settles nothing.** On 34 graded nights the tilt
+  averaged −6.83 bps (sd 151, t −0.26). The first readable row of §19's table
+  arrives around 2026-11-21.
+- **No live money moves before a GO verdict** (§19). What this section sets
+  is what paper rehearses, and at what size.
+
+### Known gaps, stated now
+
+- **Rule 201.** After QQQ falls 10% from the prior close, a short MOC does not
+  take part in a cross priced at or below the national best bid, for the rest
+  of that day and all of the next.
+  - The long then fills unhedged, on the most volatile nights.
+  - QQQ has been under Rule 201 on 2 days on record, most recently
+    2020-03-17.
+  - A stand-aside rule is the owner's to declare.
+- **Shorting in paper is unverified.** Before the first `--submit`, a 1-share
+  `whatIfOrder` on a QQQ SELL MOC should be accepted at about 31.5% initial
+  margin.
+- **One account, one book.** `live_momentum.py` trades QQQ from 10:31 to 15:58
+  and flattens whatever QQQ the account holds at 15:58. It must not run in the
+  account `orders.py` trades.
+- **Cron does not read `~/.profile`.** Without it, `--submit` dials 7497
+  instead of the Gateway's 4002, and no alert can reach Telegram. The updated
+  crontab lines source it.
+
+**Reviewed.** Three adversarial reviews (mechanics, integrity, numbers)
+confirmed 14 findings, and all were addressed.
+- **The most serious:** the capital rule had been amended after its outcome
+  was known. It is now applied as declared, with the amendments shown as
+  proposals.
+- **The others included:**
+  - an order IBKR had rejected in an earlier run still counted as working,
+    which blocked the retry and inflated the hedge base;
+  - refusals exited without a log line or an alert;
+  - the Telegram reported the sized hedge, not what was sent;
+  - the verdict line hid its margins and the input that decides it.
+
+The tests use a fake `ib_insync` and never touch a broker. They check:
+- the hedge sizing and the order of the legs;
+- topping up without doubling, and the covers;
+- Reg T;
+- rejected and late order statuses;
+- `main --submit` end to end;
+- the declared rule on hand-made cost curves;
+- R5's schedule against the rule itself at every rate.

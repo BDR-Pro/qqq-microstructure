@@ -4,7 +4,10 @@
 # coverage + data, and prices commissions before a single order exists. A
 # benchmark that is wrong is worse than none, so: the split must add up
 # exactly and match hand arithmetic, the fee model must hit every branch of
-# the schedule, and the pre-trade sizing must be the order code's own.
+# the schedule, and the pre-trade sizing must be the order code's own. Since
+# the book is hedged (2026-10-14), the QQQ short must pair as a short, leave
+# the long split untouched, and close the hedged night's identity against
+# tilt_bps with three more terms.
 #
 # Run: python -m pytest tests -q     (or: python tests/test_paper_bench.py)
 
@@ -153,6 +156,148 @@ def test_end_to_end_on_files(capsys):
     assert 'REALIZED vs GRADED: 1 paper night' in out
     live = r.graded + r.weighting + r.coverage + r.data - r.comm
     assert f'LIVE-EQUIVALENT net' in out and f'{live:+.2f}' in out
+
+
+def test_the_hedge_pair_costs_a_short_sale_and_a_cover():
+    """One SELL MOC short + one BUY OPG cover of QQQ. order_cost keys the
+    exchange fee as BUY = MOC, SELL = MOO; the hedge reverses that, and the
+    sum is the same because the two rates only swap."""
+    t, reg = pb.FEES['tiered'], pb.REG
+    q, p = 134, 746.04
+    comm = max(t['min'], t['per_share'] * q) * (1 + t['passthru'])
+    hand = (2 * comm + q * (0.0016 + 0.0015 + 2 * t['clearing']
+                            + 2 * reg['cat']) + reg['sec_rate'] * q * p)
+    assert math.isclose(pb.hedge_cost('tiered', q, p), hand)
+    assert pb.hedge_cost('tiered', 0, p) == 0.0
+
+
+def test_pretrade_prints_long_only_and_hedged_side_by_side(capsys):
+    names = ['A', 'B', 'C', 'D']
+    px = {'A': 100.0, 'B': 3000.0, 'C': 50.0, 'D': 20.0, 'QQQ': 740.0}
+    book = pb.pretrade(names, px, 10_000, ['tiered'], sweep=(10e3, 50e3))
+    out = capsys.readouterr().out
+    long_ = pb.night_cost('tiered', book)
+    q = orders.hedge_shares(book.notional.sum(), 740.0)
+    hedged = long_ + pb.hedge_cost('tiered', q, 740.0)
+    assert q == round(book.notional.sum() / 740.0)
+    assert 'long-only vs HEDGED' in out
+    assert f'${long_:,.2f} = {long_ / 1e4 * 1e4:.2f}' in out
+    assert f'${hedged:,.2f} = {hedged / 1e4 * 1e4:.2f}' in out
+    assert f'{-q:>8}' in out and 'not priced: QQQ borrow' in out
+    assert 'tiered+H' in out
+    # the long book's own numbers are unchanged by the hedge
+    assert list(book.shares) == [q for _, _, q, _ in
+                                 orders.size(names, px, 10_000)[0]]
+    # no QQQ price: the long book is still priced, the hedge says so
+    pb.pretrade(names, {k: v for k, v in px.items() if k != 'QQQ'}, 10_000,
+                ['tiered'], sweep=(10e3,))
+    out = capsys.readouterr().out
+    assert 'the hedge is not priced' in out and 'HEDGED' not in out
+
+
+def _hedged_fills(qqq_qty=8):
+    """_night()'s three long round trips, plus the QQQ short on the same
+    night: sold 10c above the official close, covered 50c above the
+    official open, at a ratio h < 1."""
+    legs, basket, prints = _night()
+    D, Dn = '20260902', '20260903'
+    prints[('QQQ', D)] = (601.0, 600.0)
+    prints[('QQQ', Dn)] = (597.0, 598.0)
+    rows = []
+    for l in legs:
+        rows.append(dict(exec_id=f'b{l["sym"]}', time_et='', date=l['night'],
+                         symbol=l['sym'], side='BOT', qty=l['qty'],
+                         price=l['buy_px'], commission=1.0))
+        rows.append(dict(exec_id=f's{l["sym"]}', time_et='',
+                         date=l['sell_date'], symbol=l['sym'], side='SLD',
+                         qty=l['qty'], price=l['sell_px'], commission=1.0))
+    rows.append(dict(exec_id='sq', time_et='', date=D, symbol='QQQ',
+                     side='SLD', qty=qqq_qty, price=600.10, commission=1.0))
+    rows.append(dict(exec_id='bq', time_et='', date=Dn, symbol='QQQ',
+                     side='BOT', qty=qqq_qty, price=597.50, commission=1.0))
+    return pd.DataFrame(rows), legs, basket, prints
+
+
+def test_the_hedge_is_paired_as_a_short_and_kept_out_of_the_long_legs():
+    from fills import pair_legs, pair_hedge
+    fills, legs, _, _ = _hedged_fills()
+    long_only = fills[fills.symbol != 'QQQ']
+    assert pair_legs(fills, quiet=True) == pair_legs(long_only, quiet=True)
+    # two consecutive nights: each short pairs with ITS next-morning cover,
+    # never with the previous morning's (a buy-then-sell reading would)
+    more = pd.DataFrame([
+        dict(exec_id='s2', time_et='', date='20260903', symbol='QQQ',
+             side='SLD', qty=9, price=599.0, commission=1.0),
+        dict(exec_id='b2', time_et='', date='20260904', symbol='QQQ',
+             side='BOT', qty=9, price=601.0, commission=1.0)])
+    h = pair_hedge(pd.concat([fills, more]), quiet=True)
+    assert [(x['night'], x['cover_date'], x['qty']) for x in h] == \
+        [('20260902', '20260903', 8), ('20260903', '20260904', 9)]
+    assert math.isclose(h[0]['bps'], np.log(600.10 / 597.50) * 1e4)
+    assert math.isclose(h[1]['notional'], 9 * 599.0)
+    assert h[1]['bps'] < 0                       # QQQ rose: the short lost
+
+
+def test_a_hedged_night_adds_up_against_tilt(capsys):
+    fills, legs, basket, prints = _hedged_fills()
+    D, Dn = '20260902', '20260903'
+    graded = 5.0
+    qo = np.log(597.0 / 600.0) * 1e4             # QQQ overnight, official
+    tilt = graded - (qo + 0.21)                  # QQQ revised by 0.21 bps
+    daily = pd.DataFrame([dict(date=D, q5_on_bps=graded,
+                               qqq_on_bps=qo + 0.21, tilt_bps=tilt)])
+    paper = pd.DataFrame([dict(month='2026-09', q5=';'.join(basket))])
+    t = pb.realized_section(fills, paper, daily, lambda *a: prints,
+                            ['fixed'])
+    r = t.iloc[0]
+    # the long split is exactly what it is without the QQQ fills
+    t0 = pb.realized_section(fills[fills.symbol != 'QQQ'], paper, daily,
+                             lambda *a: prints, ['fixed'])
+    for c in ('realized', 'gap', 'slippage', 'weighting', 'coverage', 'data',
+              'comm'):
+        assert math.isclose(r[c], t0.iloc[0][c], abs_tol=1e-12)
+    # the hedge terms, by hand
+    L = sum(l['notional'] for l in legs)
+    h = 8 * 600.10 / L
+    s = np.log(600.10 / 597.50) * 1e4            # the short's return
+    assert math.isclose(r.h, h)
+    assert math.isclose(r.hedged, r.realized + h * s)
+    assert math.isclose(r.slip_short, h * np.log(600.0 / 600.10) * 1e4)
+    assert math.isclose(r.slip_cover, h * np.log(597.50 / 597.0) * 1e4)
+    assert math.isclose(r.hslip, -(r.slip_short + r.slip_cover))
+    assert math.isclose(r.hratio, (h - 1) * -qo)
+    assert math.isclose(r.hdata, 0.21, abs_tol=1e-9)
+    assert math.isclose(r.hcomm, 2.0 / L * 1e4)
+    # the identity, extended: hedged - tilt = long gap + three hedge terms
+    assert math.isclose(r.hgap, r.hedged - tilt)
+    assert math.isclose(r.gap + r.hslip + r.hratio + r.hdata, r.hgap,
+                        abs_tol=1e-9)
+    out = capsys.readouterr().out
+    assert 'HEDGE LEG: QQQ short 1.00:1, 1 night' in out
+    live = (r.tilt + r.weighting + r.coverage + r.data + r.hratio + r.hdata
+            - r.comm - r.hcomm)
+    assert 'LIVE-EQUIVALENT hedged net' in out and f'{live:+.2f}' in out
+
+
+def test_a_hedge_without_a_grade_or_a_long_leg_is_reported_not_split(capsys):
+    fills, legs, basket, prints = _hedged_fills()
+    paper = pd.DataFrame([dict(month='2026-09', q5=';'.join(basket))])
+    # a daily log from before tilt was logged: the long split still runs
+    daily = pd.DataFrame([dict(date='20260902', q5_on_bps=5.0)])
+    t = pb.realized_section(fills, paper, daily, lambda *a: prints,
+                            ['fixed'])
+    assert 'gap' in t and t.iloc[0].hwhy == 'not graded yet'
+    # a short on a night with no long leg is named, never averaged
+    naked = pd.DataFrame([
+        dict(exec_id='s9', time_et='', date='20260910', symbol='QQQ',
+             side='SLD', qty=5, price=600.0, commission=1.0),
+        dict(exec_id='b9', time_et='', date='20260911', symbol='QQQ',
+             side='BOT', qty=5, price=601.0, commission=1.0)])
+    t = pb.realized_section(pd.concat([fills, naked]), paper, daily,
+                            lambda *a: prints, ['fixed'])
+    row = t[t.night == '20260910'].iloc[0]
+    assert 'naked short' in row.why and pd.isna(row.get('gap'))
+    assert len(t.dropna(subset=['gap'])) == 1
 
 
 def test_panel_parity_matches_on_the_next_day_and_names_the_source(capsys):

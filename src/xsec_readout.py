@@ -1,6 +1,6 @@
 # Part of qqq-microstructure.
 #
-# Non-binding readouts of the paper log, declared 2026-10-14 (RESULTS 29)
+# Non-binding readouts of the paper log, declared 2026-10-14 (RESULTS 30)
 # before the nights they will read. The forward test's verdict is RESULTS 19's
 # replay and nothing here changes it. These answer a narrower question: how
 # much does each night of the paper log tell us, and can it tell us more?
