@@ -129,6 +129,12 @@ python src/live_momentum.py --dry-run
    Socket Clients**, socket port **7497**, and add `127.0.0.1` to trusted IPs.
 4. Untick *Read-Only API*.
 
+**Not in the overnight book's account.** Since 2026-10-14 the overnight book
+(`orders.py`) shorts QQQ every night as its hedge (RESULTS 29), and
+`live_momentum.py` trades QQQ from 10:31 and flattens whatever QQQ the account
+holds at 15:58. Run them in separate paper accounts, or the two will trade
+against each other's QQQ.
+
 Then, with TWS running:
 
 ```bash

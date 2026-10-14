@@ -8,6 +8,7 @@
 #   1. xsec_extend        build newly completed panel months from Yahoo
 #   2. xsec_replay        frozen-model verdict on everything past the cutoff
 #   3. xsec_live          pre-register this month's basket, grade elapsed days
+#   3b. xsec_readout      non-binding, variance-reduced readouts of that log
 #   4. opra_pull --yes    extend the options record (~$0.50/month; skipped
 #      + opra_value       unless DATABENTO_API_KEY is set)
 #
@@ -105,7 +106,8 @@ def keep_replay(out, run_date, txt=REPLAY_TXT, csv=REPLAY_CSV):
 def main():
     steps = [('extend', ['xsec_extend.py']),
              ('replay', ['xsec_replay.py']),
-             ('live', ['xsec_live.py'])]
+             ('live', ['xsec_live.py']),
+             ('readout', ['xsec_readout.py'])]
     if os.environ.get('DATABENTO_API_KEY'):
         steps += [('opra_pull', ['opra_pull.py', '--yes']),
                   ('opra_value', ['opra_value.py'])]

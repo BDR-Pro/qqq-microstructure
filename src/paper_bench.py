@@ -4,14 +4,18 @@
 # account makes the money the graded record says the strategy makes -- and if
 # not, exactly where does it go?
 #
-# The chain, from what the backtest promises to what an account keeps:
+# The traded book, since 2026-10-14 (orders.py's HEDGE, RESULTS 29), is the
+# QQQ-HEDGED one: long the Q5 basket overnight, short QQQ 1:1 against the
+# long bought. Its gross IS the tilt below. The chain, from what the backtest
+# promises to what an account keeps:
 #
 #   backtest      RESULTS 15/19: the Q5 tilt, +6.4 bps/night gross over QQQ
 #      |          (~+4.9 after the censoring correction in RESULTS 15)
 #   graded        reports/xsec_paper_daily.csv: the emitted basket at the
 #      |          official auction prints, equal weight, friction-free
-#   realized      reports/fills.csv: what the paper account actually filled
-#      |
+#      |          (q5_on_bps); the hedged book's grade is tilt_bps = Q5 - QQQ
+#   realized      reports/fills.csv: what the paper account actually filled,
+#      |          the basket legs plus the QQQ short
 #   net           realized minus commissions and fees
 #
 # graded vs backtest is the forward test (RESULTS 19) and is not re-judged
@@ -29,6 +33,16 @@
 #   data        the basket recomputed at official prints minus the logged
 #               grade (a data revision between grading and now)
 #
+# That split is the LONG leg's, against q5_on_bps, and it is unchanged by the
+# hedge. The QQQ leg adds three terms that close the hedged night's identity
+# against tilt_bps exactly (h = short notional / long notional):
+#
+#   hedge slip  h x (short fill vs D's official close + cover fill vs D+1's
+#               official open), + = earned, as the long slippage
+#   hedge ratio (h - 1) x the official short return: whole shares and the
+#               notional actually bought make h differ from 1
+#   hedge data  the logged qqq_on_bps minus QQQ recomputed at official prints
+#
 # What IBKR paper can and cannot tell you (IBKR's paper-trading guide and API
 # docs, read 2026-10-11): paper trades never reach an exchange; fills are
 # simulated from the top of the book, not from the opening or closing
@@ -43,11 +57,17 @@
 #
 # And before a single order exists, the PRE-TRADE benchmark: at this capital
 # and this commission plan, what do minimums, integer shares and fees cost
-# per night, against the edge they are paid out of?
+# per night, against the edge they are paid out of? It prices the long-only
+# book and the hedged book (plus one SELL MOC and one BUY OPG of QQQ) side by
+# side. Not priced: the QQQ borrow fee (general collateral, ~0.3-0.4%/yr,
+# charged every calendar day under T+1: ~0.12-0.16 bps of the short a night)
+# and the dividends the short owes (~0.17 bps/night, partly offset by the
+# basket's own); the pre-trade table says so.
 #
 #   python src/paper_bench.py --capital 25000                 # both plans
 #   python src/paper_bench.py --capital 25000 --plan tiered
 #   python src/paper_bench.py --prices prices.csv             # offline: SYM,price
+#                                                             # (include QQQ)
 #
 # Fee constants are IBKR's published schedules as researched and verified on
 # 2026-10-11 (see FEES and REG); change them there, not inline.
@@ -56,8 +76,8 @@ import os, sys, math, argparse
 import numpy as np, pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fills import pair_legs
-from orders import size
+from fills import pair_legs, pair_hedge
+from orders import size, hedge_shares, HEDGE
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORTS = os.path.join(ROOT, 'reports')
@@ -67,10 +87,13 @@ FILLS = os.path.join(REPORTS, 'fills.csv')
 OLOG = os.path.join(REPORTS, 'orders_log.csv')
 
 # What the backtest says the costs are paid out of, and what it assumed they
-# were. tilt: RESULTS 19's paper-log metric; tilt_cens: less RESULTS 15's
-# measured censoring bias; cost: research_report.base_cost('ON') at c = 1 bps
-# per crossing, i.e. one MOC buy plus one MOO sell per night.
-REF = dict(tilt=6.4, tilt_cens=4.9, cost=2.0)
+# were. tilt: RESULTS 19's paper-log metric, which is the hedged book's gross
+# return; tilt_cens: less RESULTS 15's measured censoring bias (the QQQ leg is
+# never censored, so all of it falls on this book); cost: the long-only
+# book's assumption, research_report.base_cost('ON') at c = 1 bps per
+# crossing, i.e. one MOC buy plus one MOO sell per night; cost_neu: the
+# hedged book's, stack_v2.py's NEU = basket - QQQ - 2c - QQQ_RT, 2 x 1 + 0.34.
+REF = dict(tilt=6.4, tilt_cens=4.9, cost=2.0, cost_neu=2.34)
 
 # Per-order costs, IBKR Pro, as published on 2026-10-11 (sources below; a
 # verifier re-read each one). Fixed bundles exchange and clearing fees and
@@ -149,14 +172,33 @@ def night_cost(plan, book):
                for r in book.itertuples() if r.price)
 
 
+def hedge_cost(plan, shares, price):
+    """Dollars for one night's hedge: a SELL MOC short and a BUY OPG cover.
+    order_cost keys the exchange fee by side on the basket's convention
+    (BUY = MOC, SELL = MOO); the hedge reverses it, but the two rates only
+    swap, so the pair costs the same. The SEC fee and the TAF fall on the
+    short sale, as they should."""
+    return order_cost(plan, shares, price, 'SELL') + \
+        order_cost(plan, shares, price, 'BUY')
+
+
+def hedge_of(book, px):
+    """orders.py's hedge for this long book: (symbol, price, shares)."""
+    sym = HEDGE[0]
+    return sym, px.get(sym), hedge_shares(float(book.notional.sum()),
+                                          px.get(sym))
+
+
 def pretrade(names, px, capital, plans, sweep=(10e3, 25e3, 50e3, 100e3,
                                                 250e3, 500e3, 1e6)):
     book, per = sizing(names, px, capital)
     k = len(names)
     dep = book.notional.sum()
     w = book.notional / dep if dep else book.notional * 0
+    hsym, hpx, hq = hedge_of(book, px)
     print(f'\n== PRE-TRADE: the current basket ({k} names) at '
-          f'${capital:,.0f} -> ${per:,.0f} per name ==')
+          f'${capital:,.0f} -> ${per:,.0f} per name, short {hsym} '
+          f'{HEDGE[1]:.2f}:1 ==')
     print(f'{"name":<7}{"price":>10}{"shares":>8}{"notional":>11}'
           f'{"weight":>8}{"vs 1/k":>8}' +
           ''.join(f'{p + " $/night":>17}' for p in plans))
@@ -168,6 +210,13 @@ def pretrade(names, px, capital, plans, sweep=(10e3, 25e3, 50e3, 100e3,
               f'{wi:>8.1%}{wi - 1 / k:>+8.1%}' +
               ''.join(f'{order_cost(p, r.shares, r.price, "BUY") + order_cost(p, r.shares, r.price, "SELL"):>17.2f}'
                       for p in plans))
+    if hpx:
+        print(f'{hsym:<7}{hpx:>10.2f}{-hq:>8}{-hq * hpx:>11,.0f}'
+              f'{"hedge":>8}{hq * hpx / dep if dep else 0:>7.3f}x' +
+              ''.join(f'{hedge_cost(p, hq, hpx):>17.2f}' for p in plans)
+              + '   SELL MOC short, BUY OPG cover')
+    else:
+        print(f'{hsym:<7}{"--":>10}   no price -- the hedge is not priced')
     zero = book[(book.shares == 0) & book.price.notna()].sym.tolist()
     print(f'deployed ${dep:,.0f} = {dep / capital:.0%} of capital'
           + (f'; {len(zero)} name(s) unbought, price above the slice: '
@@ -181,17 +230,39 @@ def pretrade(names, px, capital, plans, sweep=(10e3, 25e3, 50e3, 100e3,
               f'-- {bps / REF["cost"]:.1f}x the backtest\'s {REF["cost"]:.0f} '
               f'bps, {bps / REF["tilt_cens"]:.0%} of the corrected tilt edge '
               f'(+{REF["tilt_cens"]} bps)')
+    if hpx:
+        print(f'\n  long-only vs HEDGED (the traded book), per night:')
+        print(f'  {"plan":<8}{"long-only":>18}{"hedged":>18}{"QQQ pair":>10}'
+              f'   hedged vs NEU\'s {REF["cost_neu"]} / the +'
+              f'{REF["tilt_cens"]} edge')
+        for p in plans:
+            c = night_cost(p, book)
+            ch = c + hedge_cost(p, hq, hpx)
+            b0, b1 = c / capital * 1e4, ch / capital * 1e4
+            print(f'  {p:<8}{f"${c:,.2f} = {b0:.2f}":>18}'
+                  f'{f"${ch:,.2f} = {b1:.2f}":>18}{b1 - b0:>+10.2f}'
+                  f'   {b1 / REF["cost_neu"]:.1f}x / '
+                  f'{b1 / REF["tilt_cens"]:.0%}   (bps of capital)')
+        print(f'  not priced: QQQ borrow (~0.3-0.4%/yr, ~0.12-0.16 bps of '
+              f'the short a night) and the short\'s dividends (~0.17 '
+              f'bps/night, partly offset by the basket\'s own)')
 
     print(f'\n  commission drag by capital (bps of capital per night; the '
-          f'backtest assumed {REF["cost"]:.0f}):')
+          f'backtest assumed {REF["cost"]:.0f} long-only, '
+          f'{REF["cost_neu"]} hedged):')
     print(f'  {"capital":>11}{"deployed":>10}{"unbought":>10}' +
-          ''.join(f'{p:>10}' for p in plans))
+          ''.join(f'{p:>10}' + (f'{p + "+H":>10}' if hpx else '')
+                  for p in plans) + (f'{hsym + " sh":>8}' if hpx else ''))
     for cap in sweep:
         b, _ = sizing(names, px, cap)
         d = b.notional.sum()
+        _, _, q = hedge_of(b, px)
         print(f'  {cap:>11,.0f}{d / cap:>10.0%}'
               f'{int(((b.shares == 0) & b.price.notna()).sum()):>10}' +
-              ''.join(f'{night_cost(p, b) / cap * 1e4:>10.2f}' for p in plans))
+              ''.join(f'{night_cost(p, b) / cap * 1e4:>10.2f}' +
+                      (f'{(night_cost(p, b) + hedge_cost(p, q, hpx)) / cap * 1e4:>10.2f}'
+                       if hpx else '') for p in plans)
+              + (f'{q:>8}' if hpx else ''))
     return book
 
 
@@ -271,23 +342,75 @@ def decompose(legs, basket, graded, prints):
     return out
 
 
+def decompose_hedge(out, h, graded, tilt, prints):
+    """The hedge leg of one night, on top of decompose()'s long split `out`.
+    h: the night's pair_hedge() row; graded, tilt: the logged q5_on_bps and
+    tilt_bps (or None); prints: official (open, close) by (sym, date). Every
+    term is in bps of the LONG notional, as the long split is. With a grade
+    and the prints, hgap = gap + hslip + hratio + hdata exactly, where
+    hgap = realized hedged - tilt."""
+    L = out['notional']
+    r = h['notional'] / L
+    res = dict(h=r, hedge=r * h['bps'], hcomm=h['comm'] / L * 1e4,
+               hedged=out['realized'] + r * h['bps'], tilt=tilt)
+    if graded is None or tilt is None:
+        res['hwhy'] = 'not graded yet'
+        return res
+    if 'gap' not in out:
+        res['hwhy'] = 'long leg not split'
+        return res
+    D, Dc = h['night'], h['cover_date']
+    if out.get('sell_date') and Dc != out['sell_date']:
+        res['hwhy'] = f'covered {Dc}, not at the long exit {out["sell_date"]}'
+        return res
+    a, b = prints.get((h['sym'], D)), prints.get((h['sym'], Dc))
+    if a is None or b is None:
+        res['hwhy'] = 'official prints missing for the hedge'
+        return res
+    qo = float(np.log(b[0] / a[1]) * 1e4)       # QQQ overnight, official
+    if abs(h['bps'] + qo) > OUTLIER:
+        res['hwhy'] = (f'corporate action or simulator artefact: '
+                       f'{h["sym"]} short vs official {h["bps"] + qo:+.0f} bps')
+        return res
+    qqq = graded - tilt                         # the logged QQQ overnight
+    res.update(
+        slip_short=r * float(np.log(a[1] / h['short_px']) * 1e4),  # + = shorted below the close
+        slip_cover=r * float(np.log(h['cover_px'] / b[0]) * 1e4),  # + = covered above the open
+        hslip=r * (h['bps'] + qo),
+        hratio=(r - 1) * -qo,
+        hdata=qqq - qo)
+    res['hgap'] = res['hedged'] - tilt
+    # the long identity, extended to the hedged night
+    assert abs(out['gap'] + res['hslip'] + res['hratio'] + res['hdata']
+               - res['hgap']) < 1e-6
+    return res
+
+
 def realized_section(fills, paper, daily, prints_fn, plans):
     legs = pair_legs(fills, quiet=True)
+    hedges = {h['night']: h for h in pair_hedge(fills, quiet=True)}
     if not legs:
         print('\n== REALIZED: no completed buy->sell round trips in '
-              'reports/fills.csv ==')
+              'reports/fills.csv ==' +
+              (f'\n  ({len(hedges)} {HEDGE[0]} short round trip(s) with no '
+               f'long leg: naked short nights)' if hedges else ''))
         return None
     baskets = {r.month: r.q5.split(';') for r in paper.itertuples()}
     graded = dict(zip(daily.date, daily.q5_on_bps.astype(float)))
+    tilts = dict(zip(daily.date, daily.tilt_bps.astype(float))) \
+        if 'tilt_bps' in daily else {}
     by_night = {}
     for l in legs:
         by_night.setdefault(l['night'], []).append(l)
     names = sorted({n for b in baskets.values() for n in b} |
-                   {l['sym'] for l in legs})
-    nights = sorted(by_night)
+                   {l['sym'] for l in legs} |
+                   ({HEDGE[0]} if hedges else set()))
+    nights = sorted(set(by_night) | set(hedges))
     try:
         lo = pd.Timestamp(nights[0]) - pd.Timedelta(days=5)
-        hi = pd.Timestamp(max(l['sell_date'] for l in legs)) + pd.Timedelta(days=3)
+        hi = pd.Timestamp(max([l['sell_date'] for l in legs] +
+                              [h['cover_date'] for h in hedges.values()])) \
+            + pd.Timedelta(days=3)
         prints = prints_fn(names, lo.strftime('%Y-%m-%d'),
                            hi.strftime('%Y-%m-%d'))
     except Exception as ex:
@@ -297,8 +420,19 @@ def realized_section(fills, paper, daily, prints_fn, plans):
     rows = []
     for D in nights:
         m = f'{D[:4]}-{D[4:6]}'
-        rows.append(dict(night=D, **decompose(by_night[D], baskets.get(m, []),
-                                              graded.get(D), prints)))
+        if D not in by_night:
+            rows.append(dict(night=D, filled=0,
+                             basket=len(baskets.get(m, [])),
+                             why=f'a {HEDGE[0]} short with no long leg -- a '
+                                 f'naked short night'))
+            continue
+        o = decompose(by_night[D], baskets.get(m, []), graded.get(D), prints)
+        if D in hedges:
+            o.update(decompose_hedge(dict(o, sell_date=by_night[D][0]
+                                          ['sell_date']),
+                                     hedges[D], graded.get(D), tilts.get(D),
+                                     prints))
+        rows.append(dict(night=D, **o))
     t = pd.DataFrame(rows)
     print(f'\n== REALIZED vs GRADED: {len(t)} paper night(s) ==')
     cols = ['realized', 'graded', 'gap', 'slip_buy', 'slip_sell', 'weighting',
@@ -334,7 +468,50 @@ def realized_section(fills, paper, daily, prints_fn, plans):
         print(f'  LIVE-EQUIVALENT net (graded + weighting + coverage + data - '
               f'commissions): {live.mean():+.2f} bps/night vs graded '
               f'{g.graded.mean():+.2f}')
+    if hedges and 'h' in t:
+        hedge_section(t)
     return t
+
+
+def hedge_section(t):
+    """The hedged night against tilt_bps: the long split above plus the QQQ
+    leg's three terms. Columns in bps of the long notional."""
+    hs = t[t.h.notna()]
+    print(f'\n== HEDGE LEG: {HEDGE[0]} short {HEDGE[1]:.2f}:1, {len(hs)} '
+          f'night(s); the hedged night vs graded tilt_bps ==')
+    cols = ['h', 'hedged', 'tilt', 'hgap', 'slip_short', 'slip_cover',
+            'hratio', 'hdata', 'hcomm']
+    show = [c for c in cols if c in hs]
+    print(f'{"night":>10}' + ''.join(f'{c:>11}' for c in show))
+    for r in hs.itertuples():
+        print(f'{r.night:>10}' +
+              ''.join((f'{getattr(r, c):>11.3f}' if c == 'h' else
+                       f'{getattr(r, c):>+11.2f}')
+                      if pd.notna(getattr(r, c)) else f'{"--":>11}'
+                      for c in show)
+              + (f'   {r.hwhy}' if 'hwhy' in hs and isinstance(r.hwhy, str)
+                 else ''))
+    g = hs.dropna(subset=['hgap']) if 'hgap' in hs else hs.iloc[0:0]
+    if not len(g):
+        return
+    print(f'\n  over {len(g)} split hedged night(s), bps/night (mean): hgap '
+          f'{g.hgap.mean():+.2f} = long gap {g.gap.mean():+.2f} + hedge slip '
+          f'{g.hslip.mean():+.2f} (as costs: short {g.slip_short.mean():+.2f},'
+          f' cover {g.slip_cover.mean():+.2f}) + hedge ratio '
+          f'{g.hratio.mean():+.2f}'
+          f' + hedge data {g.hdata.mean():+.2f}; mean h {g.h.mean():.3f}')
+    print(f'  hedged net of commissions vs graded tilt: '
+          f'{(g.hedged - g.comm - g.hcomm).mean() - g.tilt.mean():+.2f} '
+          f'bps/night; commissions {(g.comm + g.hcomm).mean():.2f} '
+          f'({g.hcomm.mean():.2f} of it the {HEDGE[0]} pair) vs NEU\'s '
+          f'{REF["cost_neu"]}')
+    # as for the long legs: a live auction fill IS the official print, so
+    # the simulator's slippage on both legs is left out
+    live = (g.tilt + g.weighting + g.coverage + g.data + g.hratio + g.hdata
+            - g.comm - g.hcomm)
+    print(f'  LIVE-EQUIVALENT hedged net (tilt + weighting + coverage + data '
+          f'+ hedge ratio + hedge data - commissions): {live.mean():+.2f} '
+          f'bps/night vs graded tilt {g.tilt.mean():+.2f}')
 
 
 def panel_parity(daily, paper, df):
@@ -434,11 +611,12 @@ def main():
         px = dict(pd.read_csv(a.prices, header=None).values)
     else:
         import yfinance as yf
-        v = yf.download([n.replace('.', '-') for n in names], period='5d',
+        want = names + [HEDGE[0]]
+        v = yf.download([n.replace('.', '-') for n in want], period='5d',
                         interval='1d', auto_adjust=False, actions=False,
                         group_by='ticker', progress=False)
         px = {}
-        for n in names:
+        for n in want:
             try:
                 s = v[n.replace('.', '-')]['Close'].dropna()
                 if len(s):
