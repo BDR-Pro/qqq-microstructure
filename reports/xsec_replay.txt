@@ -1,4 +1,4 @@
-# xsec_replay.py, run 2026-10-27
+# xsec_replay.py, run 2026-10-28
 frozen 2026-08-20, trained through 2026-03; checking for new months...
 test symbols dropped from panel: ['TESTA', 'TESTB', 'TESTC', 'ZVZZ.T', 'ZVZZT', 'ZWZZ.T', 'ZWZZT', 'ZXZZ.T'] (2539 rows)
 panel: 331 months  1,033,027 ticker-days  1348 names  19990301 -> 20260930
